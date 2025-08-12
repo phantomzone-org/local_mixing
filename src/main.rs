@@ -1,5 +1,5 @@
 use local_mixing::{
-                temp::constants::{self, CONTROL_FUNC_TABLE},
+                rainbow::constants::{self, CONTROL_FUNC_TABLE},
                 circuit::{Circuit, Gate},
                 };
 

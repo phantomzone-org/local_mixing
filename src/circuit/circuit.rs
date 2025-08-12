@@ -1,4 +1,4 @@
-use crate::temp::constants::CONTROL_FUNC_TABLE;
+use crate::rainbow::constants::CONTROL_FUNC_TABLE;
 use rand::seq::IndexedRandom;
 use rand::Rng;
 use rand::rng;
@@ -88,7 +88,6 @@ impl Circuit{
         Self{num_wires, gates}
     }
     pub fn to_string(&self) -> String{
-        //to_string(&self.gates)
         let mut result = String::new();
         for wire in (0..self.num_wires) {
             result += &(wire.to_string() + "  --");
@@ -116,7 +115,6 @@ impl Circuit{
         result
     }
 
-    //THIS IS BUGGY
     pub fn probably_equal(&self, other_circuit: &Self, num_inputs: usize) -> Result<(), String> {
         if self.num_wires != other_circuit.num_wires {
             return Err("The circuits do not have the same number of wires".to_string());
@@ -126,7 +124,6 @@ impl Circuit{
                 .map(|_| rand::rng().random_bool(0.5)).collect())
             .collect();
         random_inputs.iter().try_for_each(|random_input| {
-            //THIS IS THE BUDDY PART
             if Gate::evaluate_gate_list(&self.gates, random_input) != Gate::evaluate_gate_list(&other_circuit.gates, random_input) {
                 return Err("Circuits are not equal".to_string());
             }
@@ -139,8 +136,14 @@ impl Circuit{
     //     let least_num_wires = min(self.num_wires, other_circuit.num_wires);
     //     if num_inputs > 
     // }
-}
 
+    pub fn len(circuit: Circuit) -> usize {
+        circuit.gates.len()
+    }
+
+    
+}
+// Alex's to_string based on gate inputs
 // pub fn to_string(circuit_gates: &Vec<Gate>) -> String {
 //     let mut wires: HashSet<usize> = HashSet::new();
 //     for gate in circuit_gates {
@@ -208,3 +211,4 @@ impl Circuit{
 //     result.push_str(&control_fn_strings.join(", "));
 //     result
 // }
+
