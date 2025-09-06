@@ -863,12 +863,13 @@ mod tests {
 
     #[test]
     fn test_from_string_brute() {
+        init(4);
         let mut c: Circuit = Circuit::from_string("0 1 2; 3 2 1; 0 2 1".to_string());
         println!("Circuit data: \n{}", c.to_string());
         let perm = c.permutation();
         println!("Permutation: \n{:?}", perm.data);
         c.canonicalize();
-        let canon = perm.brute_canonical();
+        let canon = perm.fast_canon();
         println!("Canonical perm: \n {:?}", canon.perm);
         println!("Shuffle: \n{:?}", canon.shuffle);
         println!("Canonical circuit: \n{}", c.to_string());
