@@ -254,7 +254,7 @@ impl Permutation {
     //             }
                 
     //             let mut passed: Vec<CandSet> = Vec::new();
-    //             let mut best_val = usize::MAX;
+    //             let mut best_val = -1;
     //             let mut best_x = 0;
 
     //             for &x in &p {
@@ -267,7 +267,7 @@ impl Permutation {
                     
 	// 		        // given an input of y and the candidate set, what is the
 	// 			    // minimum possible value we can achieve?
-
+    //                 println!("cand 2 is: {:?}. \n y is : {}", cand2, y);
     //                 let (val,mut m) = cand2.min_consistent(y);
     //                 if val < 0 {
     //                     continue;
@@ -282,11 +282,11 @@ impl Permutation {
     //                     best_val = val;
     //                     best_x = x;
     //                     passed = vec![m]; //reset
-    //                     if w == val {
+    //                     if w as isize == val {
     //                         identity = true;
     //                     }
     //                 } else if val == best_val {
-    //                     if w == val {
+    //                     if w as isize == val {
     //                         if identity {
     //                             passed.push(m);
     //                         } else {
@@ -411,67 +411,66 @@ impl Permutation {
 
     //Goal of fast canon is to produce small snippets of the best permutation (by lexi order) and determine which in canonical
     //If we can't decide between multiple, for now, we just ignore and will do brute force
-    //TODO: DEBUG
     pub fn fast_canon(&self) -> Canonicalization {
         let num_bits = self.bits();
         let mut candidates = CandSet::new(num_bits);
         let mut found_identity = false;
-        
+
         // Scratch buffer to avoid cloning every iteration
         let mut scratch = CandSet::new(num_bits);
 
+        // Pre-allocate viable_sets buffer to reuse
+        let mut viable_sets: Vec<CandSet> = Vec::with_capacity(4);
+
         for weight in 0..=num_bits/2 {
-            let index_words = index_set(weight, num_bits); //Vec<usize>
-            for &word in &index_words {
-                //determine which preimages are possible to determine which canon perms are possible
-                let preimages = candidates.preimages(word);
+            let index_words = index_set(weight, num_bits); // Vec<usize>
+
+            'word_loop: for &w in &index_words {
+                // Determine which preimages are possible
+                let preimages = candidates.preimages(w);
                 if preimages.is_empty() {
-                    //nothing was possible
                     return Canonicalization {
                         perm: Permutation { data: Vec::new() },
                         shuffle: Permutation { data: Vec::new() },
                     };
                 }
 
-                //which can be the next value in the canon perm?
-                let mut viable_sets: Vec<CandSet> = Vec::new();
-                let mut best_score = usize::MAX;
+                viable_sets.clear();
+                let mut best_score = -1;
 
                 for &pre_idx in &preimages {
                     let mapped_value = self.data[pre_idx];
-                    //need constant consistency checks
-                    if !candidates.consistent(pre_idx, weight) {
+
+                    if !candidates.consistent(pre_idx, w) {
                         continue;
                     }
 
-                    // Reset scratch instead of cloning every iteration
+                    // Reset scratch from candidates and enforce mapping
                     scratch.copy_from(&candidates);
+                    scratch.enforce(pre_idx, w);
 
-                    scratch.enforce(pre_idx, weight);
-
-                    // given an input of y and the candidate set, what is the
-                    // minimum possible value we can achieve?
+                    // Minimum possible value with current scratch
                     let (score, mut reduced_set) = scratch.min_consistent(mapped_value);
                     if score < 0 {
                         continue;
                     }
 
-                    //ensure we do not leave scope of possibilites
                     reduced_set.intersect(&candidates);
-                    if !reduced_set.consistent(pre_idx, weight) {
+                    if !reduced_set.consistent(pre_idx, w) {
                         continue;
                     }
 
-                    if best_score == usize::MAX || score < best_score {
+                    // Track best score and viable sets
+                    if best_score < 0 || score < best_score {
                         best_score = score;
                         viable_sets.clear();
+                        // Move reduced_set into the vector (no clone)
                         viable_sets.push(reduced_set);
-
-                        if weight == score {
+                        if w as isize == score {
                             found_identity = true;
                         }
                     } else if score == best_score {
-                        if weight == score {
+                        if w as isize == score {
                             if found_identity {
                                 viable_sets.push(reduced_set);
                             } else {
@@ -482,14 +481,12 @@ impl Permutation {
                         } else if !found_identity {
                             viable_sets.push(reduced_set);
                         }
-                    } else {
-                        continue;
                     }
                 }
 
                 match viable_sets.len() {
                     0 => continue,
-                    1 => candidates = viable_sets.remove(0), //don't need to worry about inefficiency of remove since len = 1
+                    1 => candidates = viable_sets.pop().unwrap(),
                     _ => {
                         return Canonicalization {
                             perm: Permutation { data: Vec::new() },
@@ -499,13 +496,15 @@ impl Permutation {
                 }
 
                 if candidates.complete() {
-                    break;
+                    break 'word_loop;
                 }
             }
+
             if candidates.complete() {
                 break;
             }
         }
+
         if candidates.unconstrained() {
             return Canonicalization {
                 perm: self.clone(),
@@ -523,7 +522,6 @@ impl Permutation {
         let final_shuffle = match candidates.output() {
             Some(v) => Permutation { data: v },
             None => {
-                // fallback if output is incomplete, maybe return identity or exit
                 eprintln!("CandSet output returned None!");
                 std::process::exit(1);
             }
@@ -534,7 +532,6 @@ impl Permutation {
             shuffle: final_shuffle,
         }
     }
-
 }
 
 
@@ -694,7 +691,7 @@ impl CandSet {
 
     // Find the minimum consistent mapping for x
     // returns the minimum value and a new candidate set
-    pub fn min_consistent(&self, x:usize) -> (usize, CandSet) {
+    pub fn min_consistent(&self, x:usize) -> (isize, CandSet) {
         let n = self.candidate.len();
         let mut c2 = self.clone();
 
@@ -704,16 +701,16 @@ impl CandSet {
             let i_from = c2.bits_pre(i);
 
             if i_from.is_empty() {
-                return (usize::MAX, CandSet{ candidate: Vec::new() }) //no valid mapping
+                return (-1, CandSet{ candidate: Vec::new() }) //no valid mapping
             }
 
             //try to make this bit zero. else, one
-            let mut max_zero = usize::MAX;
-            let j;
+            let mut max_zero:isize = -1;
+            let mut j:isize = -1;
 
             for &b in &i_from {
-                if (x&(1 << b) == 0) && (b > max_zero) {
-                    max_zero = b;
+                if (x&(1 << b) == 0) && ((b as isize) > max_zero) {
+                    max_zero = b as isize;
                 }
             }
 
@@ -721,16 +718,16 @@ impl CandSet {
                 j = max_zero;
             } else {
                 //look for min one. default is invalid
-                let mut min_one = n + 1;
+                let mut min_one = n as isize + 1;
                 for &b in &i_from {
-                    if (x&(1 << b) != 0) && (b < min_one) {
-                        min_one = b;
+                    if (x&(1 << b) != 0) && ((b as isize) < min_one) {
+                        min_one = b as isize;
                     }
                 }
 
                 //min_one should be valid
-                if min_one > n {
-                    return (usize::MAX, CandSet{ candidate: Vec::new() })
+                if min_one > n as isize{
+                    return (-1, CandSet{ candidate: Vec::new() })
                 }
 
                 j = min_one;
@@ -738,12 +735,12 @@ impl CandSet {
 
             //apply shuffle
             out |= ((x >> j) & 1) << i;
-            c2.fix_map(j, i);
+            c2.fix_map(j as usize, i);
         }
 
         let mut c3 = self.clone();
         c3.enforce(x,out);
-        (out, c3)
+        (out as isize, c3)
     }
 
     pub fn complete(&self) -> bool {
