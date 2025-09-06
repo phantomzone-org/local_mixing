@@ -1,28 +1,12 @@
-use crate::circuit::control_functions::Gate_Control_Func;
 use crate::circuit::circuit;
-use crate::{
-    rainbow::constants::{self, CONTROL_FUNC_TABLE},
-    circuit::{Circuit, Gate, Permutation},
-    rainbow::{Canonicalization, CandSet},
-    rainbow::canonical::PermStore,
-    rainbow::database::make_persist,
-};
-use crate::rainbow::canonical;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicI64, Ordering, AtomicBool};
-use std::sync::Arc;
+use crate::circuit::Circuit;
 use std::collections::HashMap;
-use dashmap::DashMap;
-use std::time::{Instant, Duration};
-use std::thread;
-use crossbeam::channel::{unbounded, Receiver};
 use std::cmp::min as std_min;
 use std::cmp::max as std_max;
-use crate::rainbow::database::{self, PersistPermStore, Persist};
+use crate::rainbow::database::Persist;
 
-use std::env;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::BufReader;
 
 pub fn gcd(a: isize, b:isize) -> usize {
     let mut a = a.abs();
@@ -68,14 +52,14 @@ pub fn subcircuits(circuit: &Circuit, sub_size: usize) -> Vec<Circuit> {
         panic!("Can't find subcircuit larger than the original circuit");
     }
     for i in 0..circuit.len() - sub_size{
-        let new_circ = Circuit::from_gates(circuit.gates[i..i+sub_size].to_vec());
+        let new_circ = Circuit::from_gates(&circuit.gates[i..i+sub_size].to_vec());
         list.push(new_circ);
     }
     list
 }
 
 //find lexicographically smallest way to write a vec
-pub fn min_rot(mut x: &Vec<usize>) -> Vec<usize> {
+pub fn min_rot(x: &Vec<usize>) -> Vec<usize> {
     let mut min = x.clone();
     let mut rotated = x.clone();
 
@@ -132,7 +116,7 @@ pub fn hamming_dist(x: usize, y: usize) -> usize {
 // }
 
 pub fn explore_db(n:usize, m:usize) {
-    let filename = format!("db/n{}m{}.bin", n, m);
+    let filename = format!("./db/n{}m{}.bin", n, m);
     let file = File::open(&filename).expect("Could not open file");
     let reader = BufReader::new(file);
     let persist: Persist = bincode::deserialize_from(reader).expect("Failed to decode file");

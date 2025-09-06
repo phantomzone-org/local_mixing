@@ -1,4 +1,4 @@
-use crate::circuit::control_functions::Gate_Control_Func;
+use crate::circuit::control_functions::GateControlFunc;
 
 //table consisting of all evaluations of a,b under the control functions
 // control_index  a  b     index            index_formula
@@ -20,7 +20,7 @@ pub const CONTROL_FUNC_TABLE: [bool; 64] = {
         //index has 6 bits. the least significant is b, next is a, then the next 4 will denote the control function
         let b = index & 1 == 1;
         let a = (index >> 1) & 1 == 1;
-        let control_function = Gate_Control_Func::from_u8((index >> 2) as _);
+        let control_function = GateControlFunc::from_u8((index >> 2) as _);
         table[index] = control_function.evaluate(a,b);
         index +=1;
     }

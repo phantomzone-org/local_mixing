@@ -1,8 +1,6 @@
-use std::error::Error;
-
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Gate_Control_Func {
+pub enum GateControlFunc {
     F = 0,     // false,
     AND = 1,   // a & b,
     ANDNB = 2, // a & (!b), this is r57
@@ -21,7 +19,7 @@ pub enum Gate_Control_Func {
     T = 15,    // true,
 }
 
-impl Gate_Control_Func {
+impl GateControlFunc {
     pub const fn from_u8(u: u8) -> Self {
         match u {
             0 => Self::F,

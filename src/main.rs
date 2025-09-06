@@ -2,7 +2,7 @@ use local_mixing::{
                 rainbow::constants::{self, CONTROL_FUNC_TABLE},
                 circuit::{Circuit, Gate, Permutation},
                 };
-use local_mixing::rainbow::rainbow::main_rainbow;
+use local_mixing::rainbow::rainbow::{main_rainbow_generate, main_rainbow_load};
 use local_mixing::rainbow::explore::explore_db;
 use clap::{Arg, Command};
 
@@ -71,12 +71,12 @@ fn main() {
         Some(("new", sub)) => {
             let n: usize = *sub.get_one("n").unwrap();
             let m: usize = *sub.get_one("m").unwrap();
-            main_rainbow(n, m, None, true);
+            main_rainbow_generate(n, m);
         }
         Some(("load", sub)) => {
             let n: usize = *sub.get_one("n").unwrap();
             let m: usize = *sub.get_one("m").unwrap();
-            main_rainbow(n, m, Some("./db".to_string()), true);
+            main_rainbow_load(n, m, "./db".to_string());
         }
         Some(("explore", sub)) => {
             let n: usize = *sub.get_one("n").unwrap();
