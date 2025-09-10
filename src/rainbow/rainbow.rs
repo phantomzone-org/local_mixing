@@ -1,33 +1,234 @@
-use crate::circuit::control_functions::Gate_Control_Func;
+// use crate::circuit::circuit;
+// use crate::{
+//     circuit::{Circuit, Gate, Permutation},
+//     rainbow::canonical::PermStore,
+// };
+// use crate::rainbow::canonical;
+// use crate::rainbow::database::{self, Persist};
+
+// use rayon::prelude::*;
+// use dashmap::DashMap;
+// use std::collections::HashMap;
+
+// use std::sync::{
+//     Arc,
+//     atomic::{AtomicBool, AtomicI64, Ordering},
+// };
+// use std::thread;
+// use std::time::{Duration, Instant};
+
+// // PR struct
+// #[derive(Clone)]
+// pub struct PR {
+//     p: Permutation,
+//     r: String,
+//     canonical: bool,
+// }
+
+// // Atomic counters
+// static N_PERMS: AtomicI64 = AtomicI64::new(0);
+// static CKT_CHECK: AtomicI64 = AtomicI64::new(0);
+// static SKIP_INV: AtomicI64 = AtomicI64::new(0);
+// static SKIP_ID: AtomicI64 = AtomicI64::new(0);
+// static OWN_INV_COUNT: AtomicI64 = AtomicI64::new(0);
+// static CKT_I: AtomicI64 = AtomicI64::new(0);
+
+// /// Parallel circuit builder returning a ParallelIterator of PR
+// pub fn build_circuit_rayon(
+//     n: usize,
+//     m: usize,
+//     circuits: impl ParallelIterator<Item = Vec<usize>> + Send,
+//     base_gates: Arc<Vec<Gate>>,
+// ) -> impl ParallelIterator<Item = PR> + Send {
+//     circuits.flat_map(move |cc| {
+//         CKT_CHECK.fetch_add(1, Ordering::Relaxed);
+
+//         let mut ckt_buffer = vec![Gate::default(); m];
+//         for (i, &g) in cc.iter().enumerate() {
+//             ckt_buffer[i] = base_gates[g].clone();
+//         }
+
+//         let mut c = Circuit::from_gates(&ckt_buffer);
+//         c.num_wires = n;
+//         c.canonicalize();
+
+//         if c.adjacent_id() {
+//             SKIP_ID.fetch_add(1, Ordering::Relaxed);
+//             return vec![].into_par_iter();
+//         }
+
+//         let per = c.permutation();
+//         let can_per = per.canonical();
+//         let is_canonical = per == can_per.perm;
+
+//         vec![PR { p: can_per.perm, r: c.repr(), canonical: is_canonical }].into_par_iter()
+//     })
+// }
+
+// /// Process a single PR and update DashMap store
+// fn process_pr(pr: PR, circuit_store: &DashMap<String, PermStore>) {
+//     CKT_I.fetch_add(1, Ordering::Relaxed);
+
+//     let p = &pr.p;
+//     let ph = p.repr();
+//     let ip = p.invert();
+//     let own_inv = *p == ip;
+
+//     if !own_inv && circuit_store.contains_key(&ip.repr()) {
+//         SKIP_INV.fetch_add(1, Ordering::Relaxed);
+//         return;
+//     }
+
+//     if own_inv { OWN_INV_COUNT.fetch_add(1, Ordering::Relaxed); }
+
+//     let mut store = circuit_store.entry(ph.clone())
+//         .or_insert_with(|| PermStore::NewPermStore(p.clone()));
+
+//     if pr.canonical {
+//         if store.contains_canonical { store.add_circuit(&pr.r); }
+//         else { store.replace(&pr.r); }
+//         store.contains_canonical = true;
+//     } else if !store.contains_any_circuit { store.add_circuit(&pr.r); }
+//     else { store.increment(); }
+//     store.contains_any_circuit = true;
+
+//     N_PERMS.fetch_add(1, Ordering::Relaxed);
+// }
+
+// /// Convert DashMap into HashMap and save
+// fn save_circuit_store(n: usize, m: usize, circuit_store: &DashMap<String, PermStore>) {
+//     let mut save_map = HashMap::new();
+//     for r in circuit_store.iter() {
+//         let v = r.value();
+//         save_map.insert(
+//             r.key().clone(),
+//             database::make_persist(v.perm.clone(), v.circuits.clone(), v.count)
+//         );
+//     }
+//     Persist::save(n, m, &save_map);
+
+//     println!("Canonical perms stored: {}", circuit_store.len());
+//     println!("Total circuits checked: {}", CKT_CHECK.load(Ordering::Relaxed));
+//     println!("Skipped trivial ID circuits: {}", SKIP_ID.load(Ordering::Relaxed));
+//     println!("Skipped inverse circuits: {}", SKIP_INV.load(Ordering::Relaxed));
+//     println!("Circuits that are own inverse: {}", OWN_INV_COUNT.load(Ordering::Relaxed));
+// }
+
+// /// Spawn a thread to track progress
+// fn spawn_progress_tracker(total_circuits: i64, done: Arc<AtomicI64>) {
+//     thread::spawn(move || {
+//         let start = Instant::now();
+//         let mut last_count = 0;
+//         loop {
+//             thread::sleep(Duration::from_secs(1));
+//             if done.load(Ordering::Relaxed) != 0 { break; }
+
+//             let elapsed = start.elapsed().as_secs_f64();
+//             let ci = CKT_I.load(Ordering::Relaxed) as f64;
+//             if elapsed < 1.0 || ci < 10.0 || last_count == 0 { last_count = ci as i64; continue; }
+
+//             let kper_second = ci / elapsed / 1000.0;
+//             let now_kper = (ci - last_count as f64) / 1000.0;
+//             let eta = ((total_circuits as f64 - ci) / kper_second / 1000.0) as i32;
+
+//             println!(
+//                 "@ {:.2}M circuits, now {:.2}k/s, avg {:.2}k/s ETA: {} sec",
+//                 ci / 1_000_000.0,
+//                 now_kper,
+//                 kper_second,
+//                 eta
+//             );
+
+//             last_count = ci as i64;
+//         }
+//     });
+// }
+
+// /// Main entry for generating new circuits
+// pub fn main_rainbow_generate(n: usize, m: usize) {
+//     assert!(n >= 3 && m >= 1, "Invalid circuit size");
+
+//     let base_gates = Arc::new(
+//         circuit::base_gates(n)
+//             .into_iter()
+//             .enumerate()
+//             .map(|(i,b)| Gate { pins: b, control_function: 2, id: i })
+//             .collect::<Vec<_>>()
+//     );
+
+//     canonical::init(n);
+
+//     let total_circuits = (base_gates.len() as i64) * ((base_gates.len() - 1) as i64).pow((m-1) as u32);
+//     let circuits = circuit::par_all_circuits(n, m);
+
+//     let circuit_store: Arc<DashMap<String, PermStore>> = Arc::new(DashMap::new());
+//     let done = Arc::new(AtomicI64::new(0));
+
+//     spawn_progress_tracker(total_circuits, Arc::clone(&done));
+
+//     build_circuit_rayon(n, m, circuits, base_gates)
+//         .for_each(|pr| process_pr(pr, &circuit_store));
+
+//     done.store(1, Ordering::Relaxed);
+
+//     save_circuit_store(n, m, &circuit_store);
+// }
+
+// /// Main entry for loading existing circuits
+// pub fn main_rainbow_load(n: usize, m: usize, load: &str) {
+//     assert!(n >= 3 && m >= 1, "Invalid circuit size");
+
+//     let base_gates = Arc::new(
+//         circuit::base_gates(n)
+//             .into_iter()
+//             .enumerate()
+//             .map(|(i,b)| Gate { pins: b, control_function: 2, id: i })
+//             .collect::<Vec<_>>()
+//     );
+
+//     canonical::init(n);
+
+//     // Load existing database
+//     let store = Persist::load(n, m);
+//     let store_arc = Arc::new(store);
+//     let prev_count: i64 = store_arc.values().map(|p| p.circuits.len() as i64).sum();
+//     let total_circuits = 2 * prev_count * (base_gates.len() as i64);
+
+//     let circuits = circuit::build_from(n, m, &store_arc);
+
+//     let circuit_store: Arc<DashMap<String, PermStore>> = Arc::new(DashMap::new());
+//     let done = Arc::new(AtomicI64::new(0));
+
+//     spawn_progress_tracker(total_circuits, Arc::clone(&done));
+
+//     build_circuit_rayon(n, m, circuits, base_gates)
+//         .for_each(|pr| process_pr(pr, &circuit_store));
+
+//     done.store(1, Ordering::Relaxed);
+
+//     save_circuit_store(n, m, &circuit_store);
+// }
+
 use crate::circuit::circuit;
 use crate::{
-            rainbow::constants::{self, CONTROL_FUNC_TABLE},
-            circuit::{Circuit, Gate, Permutation},
-            rainbow::{Canonicalization, CandSet},
-            rainbow::canonical::PermStore,
-            rainbow::database::make_persist,
-            };
+    circuit::{Circuit, Gate, Permutation},
+    rainbow::canonical::PermStore,
+};
 use crate::rainbow::canonical;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicI64, Ordering, AtomicBool};
-use std::sync::{Arc};
-use std::collections::HashMap;
+use crate::rainbow::database::{self, Persist};
+
+use rayon::prelude::*;
 use dashmap::DashMap;
-use std::time::{Instant, Duration};
+use std::collections::HashMap;
+
+use std::sync::{
+    Arc,
+    atomic::{AtomicI64, Ordering},
+};
 use std::thread;
-use crossbeam::channel::{unbounded, Receiver};
-use std::cmp::min;
-use crate::rainbow::database::{self, PersistPermStore, Persist};
+use std::time::{Duration, Instant};
 
-const MEMORY_FRACTION: f64 = 0.5;
-
-static N_PERMS: AtomicI64 = AtomicI64::new(0);
-static CKT_CHECK: AtomicI64 = AtomicI64::new(0);
-static SKIP_INV: AtomicI64 = AtomicI64::new(0);
-static CKT_I: AtomicI64 = AtomicI64::new(0);
-static SKIP_ID: AtomicI64 = AtomicI64::new(0);
-static OWN_INV_COUNT: AtomicI64 = AtomicI64::new(0);
-
+// PR struct
 #[derive(Clone)]
 pub struct PR {
     p: Permutation,
@@ -35,198 +236,187 @@ pub struct PR {
     canonical: bool,
 }
 
-// Take as input a bunch of circuits and output a batch of permutations
-pub fn build_circuit(n: usize, m: usize, workers: usize, circuit_ch: Receiver<Vec<usize>>, base_gates: Arc<Vec<Gate>>) -> Receiver<Vec<PR>> {
-    const BATCH_SIZE: usize = 16384;
-    let (perm_tx, perm_rx) = unbounded(); 
-    let ckt_ch = Arc::new(circuit_ch);
-    println!("{} perm workers launching", workers);
-    for _ in 0..workers {
-        let tx = perm_tx.clone();
-        let ckt_ch = Arc::clone(&ckt_ch);
-        let base_gates = Arc::clone(&base_gates);
+// Atomic counters
+static N_PERMS: AtomicI64 = AtomicI64::new(0);
+static CKT_CHECK: AtomicI64 = AtomicI64::new(0);
+static SKIP_INV: AtomicI64 = AtomicI64::new(0);
+static SKIP_ID: AtomicI64 = AtomicI64::new(0);
+static OWN_INV_COUNT: AtomicI64 = AtomicI64::new(0);
+static CKT_I: AtomicI64 = AtomicI64::new(0);
 
-        thread::spawn(move || {
-            let mut batch = Vec::with_capacity(BATCH_SIZE);
-            let mut ckt_buffer = vec![Gate::default(); m];
-            for cc in ckt_ch.iter() {
-                CKT_I.fetch_add(1, Ordering::SeqCst);
-                for (i, &g) in cc.iter().enumerate() {
-                    ckt_buffer[i] = base_gates[g].clone();
-                }
-                let mut c = Circuit::from_gates(ckt_buffer.clone());
-                c.num_wires = n; //check on this later
-                c.canonicalize();
-                if c.adjacent_id() {
-                    SKIP_ID.fetch_add(1, Ordering::SeqCst);
-                    continue;
-                }
+/// Parallel circuit builder returning a ParallelIterator of PR
+pub fn build_circuit_rayon(
+    n: usize,
+    m: usize,
+    circuits: impl ParallelIterator<Item = Vec<usize>> + Send,
+    base_gates: Arc<Vec<Gate>>,
+) -> impl ParallelIterator<Item = PR> + Send {
+    circuits.flat_map(move |cc| {
+        CKT_CHECK.fetch_add(1, Ordering::Relaxed);
 
-                let per = c.permutation();
-                let can_per = per.canonical();
-                let is_canonical = (per == can_per.perm);
+        let mut ckt_buffer = vec![Gate::default(); m];
+        for (i, &g) in cc.iter().enumerate() {
+            ckt_buffer[i] = base_gates[g].clone();
+        }
 
-                batch.push(PR {
-                    p: can_per.perm,
-                    r: c.repr(),
-                    canonical: is_canonical,
-                });
+        let mut c = Circuit::from_gates(&ckt_buffer);
+        c.num_wires = n;
+        c.canonicalize();
 
-                if batch.len() >= BATCH_SIZE {
-                    tx.send(batch.clone()).unwrap();
-                    batch.clear();
-                }
-            }
-            if !batch.is_empty() {
-                tx.send(batch).unwrap();
-            }
-        });
-    }
-    perm_rx
+        if c.adjacent_id() {
+            SKIP_ID.fetch_add(1, Ordering::Relaxed);
+            return vec![].into_par_iter();
+        }
+
+        let per = c.permutation();
+        let can_per = per.canonical();
+        let is_canonical = per == can_per.perm;
+
+        vec![PR { p: can_per.perm, r: c.repr(), canonical: is_canonical }].into_par_iter()
+    })
 }
 
-pub fn main_rainbow(n: usize, m: usize, load: Option<String>, fresh: bool) {
-    if load.is_some() == fresh {
-        panic!("Specify one of --load or --new but not both");
+/// Process a single PR and update DashMap store
+fn process_pr(pr: PR, circuit_store: &DashMap<String, PermStore>) {
+    CKT_I.fetch_add(1, Ordering::Relaxed);
+
+    let p = &pr.p;
+    let ph = p.repr();
+    let ip = p.invert();
+    let own_inv = *p == ip;
+
+    if !own_inv && circuit_store.contains_key(&ip.repr()) {
+        SKIP_INV.fetch_add(1, Ordering::Relaxed);
+        return;
     }
 
-    if n<3 || m < 1 {
-        panic!("Invalid circuit size");
+    if own_inv { OWN_INV_COUNT.fetch_add(1, Ordering::Relaxed); }
+
+    let mut store = circuit_store.entry(ph.clone())
+        .or_insert_with(|| PermStore::NewPermStore(p.clone()));
+
+    if pr.canonical {
+        if store.contains_canonical { store.add_circuit(&pr.r); }
+        else { store.replace(&pr.r); }
+        store.contains_canonical = true;
+    } else if !store.contains_any_circuit { store.add_circuit(&pr.r); }
+    else { store.increment(); }
+    store.contains_any_circuit = true;
+
+    N_PERMS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Convert DashMap into HashMap and save
+fn save_circuit_store(n: usize, m: usize, circuit_store: &DashMap<String, PermStore>) {
+    let mut save_map = HashMap::new();
+    for r in circuit_store.iter() {
+        let v = r.value();
+        save_map.insert(
+            r.key().clone(),
+            database::make_persist(v.perm.clone(), v.circuits.clone(), v.count)
+        );
     }
+    Persist::save(n, m, &save_map);
 
-    let base_gates_vec = circuit::base_gates(n)
-        .into_iter()
-        .enumerate()
-        .map(|(i,b)| Gate{ pins: b, control_function: 2, id: i})
-        .collect::<Vec<_>>();
+    println!("Canonical perms stored: {}", circuit_store.len());
+    println!("Total circuits checked: {}", CKT_CHECK.load(Ordering::Relaxed));
+    println!("Skipped trivial ID circuits: {}", SKIP_ID.load(Ordering::Relaxed));
+    println!("Skipped inverse circuits: {}", SKIP_INV.load(Ordering::Relaxed));
+    println!("Circuits that are own inverse: {}", OWN_INV_COUNT.load(Ordering::Relaxed));
+}
 
-    let base_gates = Arc::new(base_gates_vec);
+/// Spawn a thread to track progress
+fn spawn_progress_tracker(total_circuits: i64, done: Arc<AtomicI64>) {
+    thread::spawn(move || {
+        let start = Instant::now();
+        let mut last_count = 0;
+        loop {
+            thread::sleep(Duration::from_secs(1));
+            if done.load(Ordering::Relaxed) != 0 { break; }
+
+            let elapsed = start.elapsed().as_secs_f64();
+            let ci = CKT_I.load(Ordering::Relaxed) as f64;
+            if elapsed < 1.0 || ci < 10.0 || last_count == 0 { last_count = ci as i64; continue; }
+
+            let kper_second = ci / elapsed / 1000.0;
+            let now_kper = (ci - last_count as f64) / 1000.0;
+            let eta = ((total_circuits as f64 - ci) / kper_second / 1000.0) as i32;
+
+            println!(
+                "@ {:.2}M circuits, now {:.2}k/s, avg {:.2}k/s ETA: {} sec",
+                ci / 1_000_000.0,
+                now_kper,
+                kper_second,
+                eta
+            );
+
+            last_count = ci as i64;
+        }
+    });
+}
+
+/// Main entry for generating new circuits
+pub fn main_rainbow_generate(n: usize, m: usize) {
+    assert!(n >= 3 && m >= 1, "Invalid circuit size");
+
+    let base_gates = Arc::new(
+        circuit::base_gates(n)
+            .into_iter()
+            .enumerate()
+            .map(|(i,b)| Gate { pins: b, control_function: 2, id: i })
+            .collect::<Vec<_>>()
+    );
+
     canonical::init(n);
 
-    let generate_new = load.is_none();
-    let total_circuits: i64;
-    let ch = if generate_new {
-        total_circuits = (base_gates.len() as i64) * ((base_gates.len() - 1) as i64).pow((m-1) as u32);
-        circuit::par_all_circuits(n,m)
-    } else {
-        println!("Loading existing database: {:?}", load.as_ref().unwrap());
-        let store = Persist::load(n,m, load.as_ref().unwrap());
-        let store = Arc::new(store);
-        let ch = circuit::build_from(n,m,&store);
-        let prev_count: i64 = store.values().map(|p| p.circuits.len() as i64).sum();
-        total_circuits = 2*prev_count*(base_gates.len() as i64);
-        ch
-    };
+    let total_circuits = (base_gates.len() as i64) * ((base_gates.len() - 1) as i64).pow((m-1) as u32);
+    let circuits = circuit::par_all_circuits(n, m);
 
-    let circuit_store: Arc<Mutex<HashMap<String, PermStore>>> = Arc::new(Mutex::new(HashMap::new()));
-    let done = Arc::new(AtomicBool::new(false));
+    let circuit_store: Arc<DashMap<String, PermStore>> = Arc::new(DashMap::new());
+    let done = Arc::new(AtomicI64::new(0));
 
-    {
-        let done: Arc<AtomicBool> = Arc::clone(&done);
-        thread::spawn(move || {
-            let start = Instant::now();
-            let mut last_count: i64 = 0;
-            loop {
-                thread::sleep(Duration::from_secs(1));
-                if done.load(Ordering::SeqCst) {
-                    break;
-                }
+    spawn_progress_tracker(total_circuits, Arc::clone(&done));
 
-                let elapsed = start.elapsed().as_secs_f64();
-                let ci = CKT_I.load(Ordering::SeqCst) as f64;
-                if elapsed < 1.0 || ci < 10.0 || last_count == 0 {
-                    last_count = ci as i64;
-                    continue;
-                }
+    // Parallel processing
+    build_circuit_rayon(n, m, circuits, base_gates)
+        .for_each(|pr| process_pr(pr, &circuit_store));
 
-                let kper_second = ci/elapsed/1000.0;
-                let now_kper = (ci - last_count as f64) / 1000.0;
-                let eta = ((total_circuits as f64 - ci) / kper_second / 1000.0) as i32;
+    done.store(1, Ordering::Relaxed);
 
-                println!(
-                    "@ {:.1}M, now {:.1}k/s, avg {:.1}k/s ETA: {} sec",
-                    ci / 1_000_000.0,
-                    now_kper,
-                    kper_second,
-                    eta
-                );
-
-                last_count = ci as i64
-            }
-        });
-    }
-
-    //build permtutations
-    let perm_ch = build_circuit(n, m, num_cpus::get().saturating_sub(3).min(64), ch, base_gates);
-    let work_count = 2;
-    println!("{} verification workers launching", work_count);
-    let mut handles = vec![];
-
-    for _ in 0..work_count {
-        let perm_ch = perm_ch.clone();
-        let circuit_store: Arc<Mutex<HashMap<String, PermStore>>> = Arc::clone(&circuit_store);
-
-        let handle = thread::spawn(move || {
-            for batch in perm_ch.iter() {
-                for pr in batch {
-                    CKT_CHECK.fetch_add(1, Ordering::SeqCst);
-
-                    let p = &pr.p;
-                    if p.data.is_empty() {
-                        println!("nil perm");
-                        continue;
-                    }
-
-                    let ph = p.repr();
-                    let ip = p.invert();
-                    let own_inv = *p == ip;
-
-                    if !own_inv {
-                        let iph = ip.repr();
-                        let store_guard = circuit_store.lock().unwrap();
-                        if store_guard.contains_key(&iph) {
-                            SKIP_INV.fetch_add(1, Ordering::SeqCst);
-                            continue;
-                        }
-                    } else {
-                        OWN_INV_COUNT.fetch_add(1, Ordering::SeqCst);
-                    }
-
-                    let mut store_guard = circuit_store.lock().unwrap();
-                    let store = store_guard.entry(ph.clone())
-                        .or_insert_with(|| PermStore::NewPermStore(p.clone()));
-
-                    if pr.canonical {
-                        if store.contains_canonical {
-                            store.add_circuit(&pr.r);
-                        } else {
-                            store.replace(&pr.r);
-                        }
-                        store.contains_canonical = true;
-                    } else if !store.contains_any_circuit {
-                        store.add_circuit(&pr.r);
-                    } else {
-                        store.increment();
-                    }
-                    store.contains_any_circuit = true;
-                }
-            }
-        });
-        handles.push(handle);
-    }
-    
-    for handle in handles {
-        handle.join().unwrap();
-    }
-
-    done.store(true, Ordering::SeqCst);
-
-    let mut save_map = HashMap::new();
-    for (k,v) in circuit_store.lock().unwrap().iter() {
-        save_map.insert(k.clone(), database::make_persist(v.perm.clone(),v.circuits.clone(), v.count));
-    }
-
-    println!("Saving...");
-    Persist::save(n,m,&save_map);
-
+    save_circuit_store(n, m, &circuit_store);
 }
+
+/// Main entry for loading existing circuits
+pub fn main_rainbow_load(n: usize, m: usize, load: &str) {
+    assert!(n >= 3 && m >= 1, "Invalid circuit size");
+
+    let base_gates = Arc::new(
+        circuit::base_gates(n)
+            .into_iter()
+            .enumerate()
+            .map(|(i,b)| Gate { pins: b, control_function: 2, id: i })
+            .collect::<Vec<_>>()
+    );
+
+    canonical::init(n);
+
+    let store = Persist::load(n, m);
+    let store_arc = Arc::new(store);
+    let prev_count: i64 = store_arc.values().map(|p| p.circuits.len() as i64).sum();
+    let total_circuits = 2 * prev_count * (base_gates.len() as i64);
+
+    let circuits = circuit::build_from(n, m, &store_arc);
+
+    let circuit_store: Arc<DashMap<String, PermStore>> = Arc::new(DashMap::new());
+    let done = Arc::new(AtomicI64::new(0));
+
+    spawn_progress_tracker(total_circuits, Arc::clone(&done));
+
+    build_circuit_rayon(n, m, circuits, base_gates)
+        .for_each(|pr| process_pr(pr, &circuit_store));
+
+    done.store(1, Ordering::Relaxed);
+
+    save_circuit_store(n, m, &circuit_store);
+}
+

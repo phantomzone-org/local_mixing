@@ -1,23 +1,18 @@
 //Basic implementation for circuit, gate, and permutations
-
-use crate::rainbow::constants::CONTROL_FUNC_TABLE;
-use crate::circuit::control_functions::Gate_Control_Func;
+use crate::circuit::control_functions::GateControlFunc;
 use crate::rainbow::database::PersistPermStore;
 
-use crossbeam::channel::{unbounded, Receiver};
-use itertools::max;
-use rand::{seq::SliceRandom, Rng, thread_rng};
+// use crossbeam::channel::{unbounded, Receiver};
+use rand::{seq::SliceRandom, Rng};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max as std_max,
     collections::{HashSet, HashMap},
-    fmt::{self, Write},
-    path::Path,
     sync::Arc,
-    thread,
 };
-
+use rayon::prelude::*;
+use smallvec::SmallVec;
 
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -49,7 +44,7 @@ impl Gate {
     }
     
     //currenlty doesn't use n
-    pub fn repr(&self, n: usize) -> String {
+    pub fn repr(&self, _n: usize) -> String {
         // Convert the gate id to a char if valid, otherwise fallback
         std::char::from_u32(self.id as u32)
             .map(|c| c.to_string())
@@ -123,7 +118,7 @@ impl Gate {
 
     pub fn bottom(&self) -> usize {
         // println!("bottom is {}", std_max((std_max(self.pins[0], self.pins[1])), self.pins[2]));
-        std_max((std_max(self.pins[0], self.pins[1])), self.pins[2])
+        std_max(std_max(self.pins[0], self.pins[1]), self.pins[2])
     }
 }
 
@@ -137,11 +132,11 @@ impl Circuit{
         let mut gates = Vec::with_capacity(num_gates);
         let mut last = usize::MAX;
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _ in 0..num_gates {
             let mut j = last;
             while j == last{
-                j = rng.gen_range(0..base_gates.len());
+                j = rng.random_range(0..base_gates.len());
             }
             let g = base_gates[j];
             gates.push(Gate { pins: g, control_function: 2, id: j});
@@ -194,7 +189,7 @@ impl Circuit{
            
         let control_fn_strings: Vec<String> = self.gates
             .iter()
-            .map(|gate| Gate_Control_Func::from_u8(gate.control_function).to_string())
+            .map(|gate| GateControlFunc::from_u8(gate.control_function).to_string())
             .collect();
         result.push_str("\ncfs: ");
         result.push_str(&control_fn_strings.join(", "));
@@ -207,12 +202,12 @@ impl Circuit{
             return Err("The circuits do not have the same number of wires".to_string());
         }
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mask = (1 << self.num_wires) - 1;
 
         for _ in 0..num_inputs {
             // generate u64, then mask to get the lower num_wires bits
-            let random_input = (rng.r#gen::<u64>() as usize) & mask;
+            let random_input = (rng.random::<u64>() as usize) & mask;
 
             let self_output = Gate::evaluate_gate_list(&self.gates, random_input);
             let other_output = Gate::evaluate_gate_list(&other_circuit.gates,random_input);
@@ -246,12 +241,12 @@ impl Circuit{
         Permutation { data: output }
     }
 
-    pub fn from_gates(gates: Vec<Gate>) -> Circuit {
+    pub fn from_gates(gates: &Vec<Gate>) -> Circuit {
         let mut w = 0;
-        for g in &gates {
+        for g in gates {
             w = std_max(w, g.bottom());
         }
-        Circuit { num_wires: w+1, gates, }
+        Circuit { num_wires: w+1, gates: gates.to_vec(), }
     }
 
     pub fn adjacent_id(&self) -> bool {
@@ -294,7 +289,7 @@ impl Circuit{
 
             gates.push(gate);
         }
-        Self::from_gates(gates)
+        Self::from_gates(&gates)
     }
 
     pub fn len(&self) -> usize {
@@ -340,7 +335,7 @@ impl Circuit{
                 }
             })
             .collect();
-        Self::from_gates(new_gates)
+        Self::from_gates(&new_gates)
     }
 
     //converts from a compressed string
@@ -378,7 +373,7 @@ impl Permutation {
 
     pub fn rand_perm(n:usize) -> Permutation {
         let mut p = Permutation::id_perm(n);
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         p.data.shuffle(&mut rng);
         p
     }
@@ -410,9 +405,9 @@ impl Permutation {
     }
 
 
-    pub fn bits(&self) -> u32 {
+    pub fn bits(&self) -> usize {
         let n = self.data.len();
-        ((n - 1) as u32).ilog2() + 1
+        ((n - 1) as usize).ilog2() as usize + 1
     }
 
     pub fn to_string(&self) -> String {
@@ -568,96 +563,177 @@ pub fn base_gates(n: usize) -> Vec<[usize; 3]> {
 //     result
 // }
 
-pub fn par_all_circuits(wires: usize, gates: usize) -> Receiver<Vec<usize>> {
-    let (tx,rx) = unbounded();
+// pub fn par_all_circuits(wires: usize, gates: usize) -> Receiver<Vec<usize>> {
+//     let (tx,rx) = unbounded();
+//     let base_gates = base_gates(wires);
+//     let z = base_gates.len() as i64;
+//     let total = (0..gates).fold(1i64, |acc, _| acc * z);
+
+//     thread::spawn(move || {
+//         const WORKERS: usize = 1;
+//         let (work_tx, work_rx) = unbounded::<i64>();
+//         println!("Launching {} build workers", WORKERS);
+//         //shadow for new threads
+//         let tx = Arc::new(tx);
+//         let mut handles = vec![];
+
+//         for _ in 0..WORKERS {
+//             let work_rx = work_rx.clone();
+//             let tx = Arc::clone(&tx);
+//             let handle = thread::spawn(move || {
+//                 for mut i in work_rx.iter() {
+//                     let mut send = true;
+//                     let mut s = vec![0;gates];
+
+//                     for j in 0..gates {
+//                         s[j] = (i%z) as usize;
+//                         i /= z;
+//                         if j > 0 && s[j] == s[j-1] {
+//                             send = false;
+//                             break;
+//                         }
+//                     }
+//                     if send {
+//                         tx.send(s).unwrap();
+//                     }
+//                 }
+//             });
+//             handles.push(handle);
+//         }
+//         //send
+//         for i in 0..total {
+//             work_tx.send(i).unwrap();
+//         }
+
+//         //close
+//         drop(work_tx);
+
+//         for handle in handles {
+//             handle.join().unwrap();
+//         }
+//     });
+//     rx
+// }
+
+//threads work independently, so use Rayon instead of Receiver
+pub fn par_all_circuits(wires: usize, gates: usize) -> impl ParallelIterator<Item = Vec<usize>>{
+    //keep as usize for now
     let base_gates = base_gates(wires);
-    let z = base_gates.len() as i64;
-    let total = (0..gates).fold(1i64, |acc, _| acc * z);
+    let z = base_gates.len();
+    let total = z.pow(gates as u32);
 
-    thread::spawn(move || {
-        const WORKERS: usize = 1;
-        let (work_tx, work_rx) = unbounded::<i64>();
+    (0..total).into_par_iter().filter_map(move |mut i| {
+        // use a stack array to avoid heap allocations
+        // more efficient for filter_map
+        let mut stack_buf = [0usize; 64]; // max 64 gates
+        assert!(gates <= stack_buf.len(), "Too many gates for stack buffer");
 
-        //shadow for new threads
-        let tx = Arc::new(tx);
-        let mut handles = vec![];
+        let mut skip = false;
 
-        for _ in 0..WORKERS {
-            let work_rx = work_rx.clone();
-            let tx = Arc::clone(&tx);
-            let handle = thread::spawn(move || {
-                for mut i in work_rx.iter() {
-                    let mut send = true;
-                    let mut s = vec![0;gates];
+        for j in 0..gates {
+            stack_buf[j] = i % z;
+            i /= z;
 
-                    for j in 0..gates {
-                        s[j] = (i%z) as usize;
-                        i /= z;
-                        if j > 0 && s[j] == s[j-1] {
-                            send = false;
-                            break;
-                        }
-                    }
-                    if send {
-                        tx.send(s).unwrap();
-                    }
-                }
-            });
-            handles.push(handle);
-        }
-        //send
-        for i in 0..total {
-            work_tx.send(i).unwrap();
-        }
-
-        //close
-        drop(work_tx);
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-    });
-    rx
-}
-
-pub fn build_from(num_wires: usize, num_gates: usize, 
-    store: &Arc<HashMap<String, PersistPermStore>>
-) -> Receiver<Vec<usize>> {
-    let (tx, rx) = unbounded::<Vec<usize>>();
-    let base_gates = base_gates(num_wires);
-    let store = Arc::clone(store);
-    thread::spawn(move || {
-        for perm in store.values() {
-            //prefix circuit length gates-1
-            let mut s = vec![0usize;num_gates-1];
-
-            for circuits in &perm.circuits {
-                let mut i = 0;
-                for g in circuits.bytes() {
-                    s[i] = g as usize;
-                    i += 1;
-                }
-
-                for g in 0..base_gates.len() {
-                    //no duplicates 
-                    if g == s[s.len() - 1] {
-                        continue;
-                    }
-
-                    let mut q1 = s.clone();
-                    q1.push(g);
-                    tx.send(q1).unwrap();
-
-                    let mut q2 = vec![g];
-                    q2.extend_from_slice(&s);
-                    tx.send(q2).unwrap();
-
-                    //TODO: also send reverse circuit?
-                }
+            if j > 0 && stack_buf[j] == stack_buf[j - 1] {
+                skip = true;
+                break;
             }
         }
-        drop(tx);
-    });
 
-    rx
+        if skip {
+            None
+        } else {
+            // Only copy the first #gates elements
+            Some(stack_buf[..gates].to_vec())
+        }
+    })
+}
+
+// pub fn build_from(num_wires: usize, num_gates: usize, 
+//     store: &Arc<HashMap<String, PersistPermStore>>
+// ) -> Receiver<Vec<usize>> {
+//     let (tx, rx) = unbounded::<Vec<usize>>();
+//     let base_gates = base_gates(num_wires);
+//     let store = Arc::clone(store);
+//     thread::spawn(move || {
+//         for perm in store.values() {
+//             //prefix circuit length gates-1
+//             let mut s = vec![0usize;num_gates-1];
+
+//             for circuits in &perm.circuits {
+//                 let mut i = 0;
+//                 for g in circuits.bytes() {
+//                     s[i] = g as usize;
+//                     i += 1;
+//                 }
+
+//                 for g in 0..base_gates.len() {
+//                     //no duplicates 
+//                     if g == s[s.len() - 1] {
+//                         continue;
+//                     }
+
+//                     let mut q1 = s.clone();
+//                     q1.push(g);
+//                     tx.send(q1).unwrap();
+
+//                     let mut q2 = vec![g];
+//                     q2.extend_from_slice(&s);
+//                     tx.send(q2).unwrap();
+
+//                     //TODO: also send reverse circuit?
+//                 }
+//             }
+//         }
+//         drop(tx);
+//     });
+
+//     rx
+// }
+
+//ordering of the vector will differ from the channel version
+//this shouldn't matter
+pub fn build_from(
+    num_wires: usize,
+    num_gates: usize,
+    store: &Arc<HashMap<String, PersistPermStore>>,
+) -> impl ParallelIterator<Item = Vec<usize>>{
+    let n_base = base_gates(num_wires).len();
+
+    store
+        .par_iter() // parallelize over each stored permutation since threads are independent
+        .flat_map_iter(move |(_key, perm)| {
+            // iterator over the circuits for a given perm
+            perm.circuits.iter().flat_map(move |circuit| { // use iter to avoid using more threads than the max
+                // allocate prefix on stack (max 64 gates, adjust if needed)
+                // use smallvec for stack efficiency
+                let mut prefix: SmallVec<[usize; 64]> = SmallVec::with_capacity(num_gates);
+                for b in circuit.bytes() { // fix: bytes() yields u8 directly
+                    prefix.push(b as usize);
+                }
+
+                // iterator over base_gates, yielding q1 and q2
+                (0..n_base).flat_map(move |idx| {
+                        // skip consecutive duplicate
+                        // before, we had s-1, but s was already num_gates - 1
+                        if num_gates >= 2 && idx == prefix[num_gates - 2] {
+                            return None;
+                        }
+
+                        // q1 = prefix + g
+                        let mut q1 = SmallVec::<[usize; 64]>::with_capacity(num_gates);
+                        q1.extend_from_slice(&prefix[..num_gates - 1]);
+                        q1.push(idx);
+
+                        // q2 = g + prefix
+                        let mut q2 = SmallVec::<[usize; 64]>::with_capacity(num_gates);
+                        q2.push(idx);
+                        q2.extend_from_slice(&prefix[..num_gates - 1]);
+
+                        // yield both q1 and q2 as Vec<usize>
+                        Some([q1.into_vec(), q2.into_vec()])
+                    })
+                    .flatten() // flatten the array of Vecs into iterator
+            })
+        })
 }

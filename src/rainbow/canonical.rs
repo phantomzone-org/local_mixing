@@ -1,7 +1,4 @@
-use crate::{
-    circuit::{Circuit, Gate, Permutation},
-    rainbow::constants::{self, CONTROL_FUNC_TABLE},
-};
+use crate::circuit::{Circuit, Permutation};
 
 use itertools::Itertools;
 use lru::LruCache;
@@ -9,7 +6,7 @@ use once_cell::sync::Lazy;
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroUsize,
-    sync::{Arc, Mutex},
+    sync::Mutex,
     sync::atomic::AtomicI64,
 };
 
@@ -42,6 +39,11 @@ pub struct PermStore {
 // no need to store unpopular perms
 const CACHE_SIZE: usize = 32768;
 
+//Use Lazy to ensure that BIT_SHUF is only initialized once. 
+//Use Mutex to allow us to initialize BIT_SHUF dynamically with chosen n
+//Use Lazy and Mutex for CACHE to ensure threads aren't updating cache at the same time
+//Use least recently updated cache for efficiency as we don't need unpopular perms
+//Cache will hold permutations and their associated canonicalizations, so if we see a permutation again, we do not need to recompute the canon perm
 static BIT_SHUF: Lazy<Mutex<Vec<Vec<usize>>>> = Lazy::new(|| Mutex::new(Vec::new()));
 static CACHE: Lazy<Mutex<LruCache<String, Canonicalization>>> = Lazy::new(|| {
     Mutex::new(LruCache::new(NonZeroUsize::new(CACHE_SIZE).unwrap()))
@@ -106,64 +108,65 @@ static PERM_FAST_COMPUTED: AtomicI64 = AtomicI64::new(0);
 impl Permutation {
     //need to test
     //Eli note, this needs t work in weight-class order
-    pub fn brute_canonical(&self) -> Canonicalization {
-        let n = self.data.len();
-        //let b = (n as u32 - 1).next_power_of_two().trailing_zeros() as usize;
-        let b = 32 - ((n as u32 - 1).leading_zeros() as usize);
-        // store minimal bit permutation in here
-        let mut m = self.clone().data;
-        // temporary to reconstruct shuffled bits
-        let mut t = vec![0; n];
-        // temporary to reconstruct shuffled indices
-        let mut idx = vec![0; n];
-        // temporary to shuffle t into, according to idx
-        let mut s = vec![0; n];
+    // pub fn brute_canonical(&self) -> Canonicalization {
+    //     let n = self.data.len();
+    //     //let b = (n as u32 - 1).next_power_of_two().trailing_zeros() as usize;
+    //     //b is just renaming of wires
+    //     let b = 32 - ((n as u32 - 1).leading_zeros() as usize);
+    //     // store minimal bit permutation in here
+    //     let mut m = self.clone().data;
+    //     // temporary to reconstruct shuffled bits
+    //     let mut t = vec![0; n];
+    //     // temporary to reconstruct shuffled indices
+    //     let mut idx = vec![0; n];
+    //     // temporary to shuffle t into, according to idx
+    //     let mut s = vec![0; n];
 
-        let mut best_shuffle = Permutation::id_perm(b);
+    //     let mut best_shuffle = Permutation::id_perm(b);
 
-        let bit_shuf = BIT_SHUF.lock().unwrap();
-        for r in bit_shuf.iter() {
-            // Apply the bit shuffle
-            for (src, dst) in r.iter().enumerate() {
-                for (i, &val) in self.data.iter().enumerate() {
-                    t[i] |= ((val >> src) & 1) << dst;
-                    idx[i] |= ((i >> src) & 1) << dst;
-                }
-            }
+    //     let bit_shuf = BIT_SHUF.lock().unwrap();
+    //     for r in bit_shuf.iter() {
+    //         // Apply the bit shuffle
+    //         for (src, dst) in r.iter().enumerate() {
+    //             for (i, &val) in self.data.iter().enumerate() {
+    //                 t[i] |= ((val >> src) & 1) << dst;
+    //                 idx[i] |= ((i >> src) & 1) << dst;
+    //             }
+    //         }
 
-            for (i, &ti) in t.iter().enumerate() {
-                s[idx[i]] = ti;
-            }
+    //         for (i, &ti) in t.iter().enumerate() {
+    //             s[idx[i]] = ti;
+    //         }
 
-            // lexicographical sort in weight-order
-            for w in 0..=b / 2 {
-                let mut done = false;
-                for i in index_set(w, b) {
-                    if s[i] == m[i] {
-                        continue;
-                    }
-                    if s[i] < m[i] {
-                        m.clone_from_slice(&s);
-                        best_shuffle = Permutation{ data: r.clone(), };
-                    }
-                    done = true;
-                    break;
-                }
-                if done {
-                    break;
-                }
-            }
+    //         // lexicographical sort in weight-order
+    //         for w in 0..=b / 2 {
+    //             let mut done = false;
+    //             for i in index_set(w, b) {
+    //                 if s[i] == m[i] {
+    //                     continue;
+    //                 }
+    //                 if s[i] < m[i] {
+    //                     m.clone_from_slice(&s);
+    //                     best_shuffle = Permutation{ data: r.clone(), };
+    //                 }
+    //                 done = true;
+    //                 break;
+    //             }
+    //             if done {
+    //                 break;
+    //             }
+    //         }
 
-            // clear slices out for the next round
-            t.fill(0);
-            idx.fill(0);
-        }
+    //         // clear slices out for the next round
+    //         t.fill(0);
+    //         idx.fill(0);
+    //     }
 
-        Canonicalization {
-            perm: Permutation { data: m },
-            shuffle: best_shuffle,
-        }
-    }
+    //     Canonicalization {
+    //         perm: Permutation { data: m },
+    //         shuffle: best_shuffle,
+    //     }
+    // }
 
     
 
@@ -237,101 +240,297 @@ impl Permutation {
     
     //Average-case poly time algorithm
     //Returns none if it can't determine. Then just resort to brute force
-    pub fn fast_canon(&self) -> Canonicalization {
-        let n = self.bits();
-        let mut cand = CandSet::new(n.try_into().unwrap());
-        let mut identity = false;
-        for weight in 0..=n/2 {
-            let s = index_set(weight.try_into().unwrap(),n.try_into().unwrap()); //a Vec<usize>
-            for &w in &s {
-                let p = cand.preimages(w);
-                if p.len() == 0 {
-                    return Canonicalization{ perm: Permutation{ data: Vec::new() },
-                                             shuffle: Permutation{ data: Vec::new() } }
-                }
+    // pub fn fast_canon(&self) -> Canonicalization {
+    //     let n = self.bits();
+    //     let mut cand = CandSet::new(n.try_into().unwrap());
+    //     let mut identity = false;
+    //     for weight in 0..=n/2 {
+    //         let s = index_set(weight.try_into().unwrap(),n.try_into().unwrap()); //a Vec<usize>
+    //         for &w in &s {
+    //             let p = cand.preimages(w);
+    //             if p.len() == 0 {
+    //                 return Canonicalization{ perm: Permutation{ data: Vec::new() },
+    //                                          shuffle: Permutation{ data: Vec::new() } }
+    //             }
                 
-                let mut passed: Vec<CandSet> = Vec::new();
-                let mut best_val = -1;
-                let mut best_x = 0;
+    //             let mut passed: Vec<CandSet> = Vec::new();
+    //             let mut best_val = -1;
+    //             let mut best_x = 0;
 
-                for &x in &p {
-                    let y = self.data[x];
-                    if !cand.consistent(x,w) {
-                        continue;
-                    }
-                    let mut cand2 = cand.clone();
-                    cand2.enforce(x,w);
+    //             for &x in &p {
+    //                 let y = self.data[x];
+    //                 if !cand.consistent(x,w) {
+    //                     continue;
+    //                 }
+    //                 let mut cand2 = cand.clone();
+    //                 cand2.enforce(x,w);
                     
-			        // given an input of y and the candidate set, what is the
-				    // minimum possible value we can achieve?
+	// 		        // given an input of y and the candidate set, what is the
+	// 			    // minimum possible value we can achieve?
+    //                 println!("cand 2 is: {:?}. \n y is : {}", cand2, y);
+    //                 let (val,mut m) = cand2.min_consistent(y);
+    //                 if val < 0 {
+    //                     continue;
+    //                 }
 
-                    let (val,mut m) = cand2.min_consistent(y);
-                    if val < 0 {
+    //                 m.intersect(&cand);
+    //                 if !m.consistent(x,w) {
+    //                     continue
+    //                 }
+
+    //                 if best_val < 0 || val < best_val {
+    //                     best_val = val;
+    //                     best_x = x;
+    //                     passed = vec![m]; //reset
+    //                     if w as isize == val {
+    //                         identity = true;
+    //                     }
+    //                 } else if val == best_val {
+    //                     if w as isize == val {
+    //                         if identity {
+    //                             passed.push(m);
+    //                         } else {
+    //                             passed = vec![m];
+    //                             best_x = x;
+    //                         }
+    //                         identity = true;
+    //                     } else if !identity {
+    //                         passed.push(m);
+    //                     }
+    //                 } else {
+    //                     continue;
+    //                 }
+    //             }
+    //             match passed.len() {
+    //                 0 => continue,
+    //                 1 => cand = passed.remove(0),
+    //                 _ => return Canonicalization { perm: Permutation { data: Vec::new(), },
+    //                                                shuffle: Permutation{ data: Vec::new(), }, },
+    //             }
+    //             if cand.complete() {
+    //                 break;
+    //             }
+    //         }
+    //         if cand.complete() {
+    //             break;
+    //         }
+    //     }
+    //     if cand.unconstrained() {
+    //         return Canonicalization{ perm: self.clone(), shuffle: Permutation{ data: Vec::new(), }, }
+    //     }
+
+    //     if !cand.complete() {
+    //         println!("Incomplete!");
+    //         println!("{:?}", self);
+    //         println!("{:?}", cand);
+    //         std::process::exit(1);
+    //     }
+    //     let final_shuffle = match cand.output() {
+    //         Some(v) => Permutation { data: v },
+    //         None => {
+    //         // fallback if output is incomplete, maybe return identity or exit
+    //         eprintln!("CandSet output returned None!");
+    //         std::process::exit(1);
+    //         }
+    //     };
+
+    //     Canonicalization{ perm: self.bit_shuffle(&final_shuffle.data), shuffle: final_shuffle, } 
+    // }
+
+    pub fn brute_canonical(&self) -> Canonicalization {
+        let bit_shuf_global = BIT_SHUF.lock().unwrap();
+        // Panic if BIT_SHUF hasn't been initialized
+        if bit_shuf_global.is_empty() {
+            panic!("Call init() first!");
+        }
+        
+        
+        //num wires
+        let n = self.data.len();
+
+        //num bits that we can shuffle for relabeling
+        //wires are 0..n-1
+        let num_b = std::mem::size_of::<usize>() * 8 - (n - 1).leading_zeros() as usize;
+
+        //store the minimal bit permutation
+        let mut min_perm = self.clone().data;
+
+        //store the shuffled bits according to the potential bit_shuf
+        let mut bits = vec![0;n];
+
+        //Vector to hold where old indices moved
+        let mut index_shuf = vec![0;n];
+
+        //Vector to hold the perm after bit shuffling and index shuffling
+        let mut perm_shuf = vec![0;n];
+
+        //hold our current best_shuffle
+        let mut best_shuffle = Permutation::id_perm(num_b);
+        for r in bit_shuf_global.iter() {
+            for (src, &dst) in r.iter().enumerate() {
+                for (i, &val) in self.data.iter().enumerate() {
+                    bits[i] |= ((val >> src) & 1) << dst;
+                    index_shuf[i] |= ((i >> src) & 1) << dst;
+                }
+            }
+
+            for (i, &val) in bits.iter().enumerate() {
+                perm_shuf[index_shuf[i]] = val;
+            }
+
+            //lexicographical sort in weight-order 
+            //Only consider b/2 since the "light" and "heavy" are just complements of each other
+            //See index_set
+            for weight in 0..=num_b/2 {
+                let mut done = false;
+                for i in index_set(weight, num_b) {
+                    if perm_shuf[i] == min_perm[i] {
                         continue;
                     }
-
-                    m.intersect(&cand);
-                    if !m.consistent(x,w) {
-                        continue
+                    if perm_shuf[i] < min_perm[i] {
+                        min_perm.copy_from_slice(&perm_shuf);
+                        best_shuffle.data.copy_from_slice(&r);
                     }
-
-                    if best_val < 0 || val < best_val {
-                        best_val = val;
-                        best_x = x;
-                        passed = vec![m]; //reset
-                        if w as isize == val {
-                            identity = true;
-                        }
-                    } else if val == best_val {
-                        if w as isize == val {
-                            if identity {
-                                passed.push(m);
-                            } else {
-                                passed = vec![m];
-                                best_x = x;
-                            }
-                            identity = true;
-                        } else if !identity {
-                            passed.push(m);
-                        }
-                    } else {
-                        continue;
-                    }
+                    done = true;
+                    break;
                 }
-                match passed.len() {
-                    0 => continue,
-                    1 => cand = passed.remove(0),
-                    _ => return Canonicalization { perm: Permutation { data: Vec::new(), },
-                                                   shuffle: Permutation{ data: Vec::new() }, },
-                }
-                if cand.complete() {
+                if done {
                     break;
                 }
             }
-            if cand.complete() {
+
+            //clear the temp vectors to check the next bit_shuf
+            bits.fill(0);
+            index_shuf.fill(0);
+        }
+        Canonicalization{
+            perm: Permutation{ data: min_perm, },
+            shuffle: best_shuffle,
+        }
+    }
+
+    //Goal of fast canon is to produce small snippets of the best permutation (by lexi order) and determine which in canonical
+    //If we can't decide between multiple, for now, we just ignore and will do brute force
+    pub fn fast_canon(&self) -> Canonicalization {
+        let num_bits = self.bits();
+        let mut candidates = CandSet::new(num_bits);
+        let mut found_identity = false;
+
+        // Scratch buffer to avoid cloning every iteration
+        let mut scratch = CandSet::new(num_bits);
+
+        // Pre-allocate viable_sets buffer to reuse
+        let mut viable_sets: Vec<CandSet> = Vec::with_capacity(4);
+
+        for weight in 0..=num_bits/2 {
+            let index_words = index_set(weight, num_bits); // Vec<usize>
+
+            'word_loop: for &w in &index_words {
+                // Determine which preimages are possible
+                let preimages = candidates.preimages(w);
+                if preimages.is_empty() {
+                    return Canonicalization {
+                        perm: Permutation { data: Vec::new() },
+                        shuffle: Permutation { data: Vec::new() },
+                    };
+                }
+
+                viable_sets.clear();
+                let mut best_score = -1;
+
+                for &pre_idx in &preimages {
+                    let mapped_value = self.data[pre_idx];
+
+                    if !candidates.consistent(pre_idx, w) {
+                        continue;
+                    }
+
+                    // Reset scratch from candidates and enforce mapping
+                    scratch.copy_from(&candidates);
+                    scratch.enforce(pre_idx, w);
+
+                    // Minimum possible value with current scratch
+                    let (score, mut reduced_set) = scratch.min_consistent(mapped_value);
+                    if score < 0 {
+                        continue;
+                    }
+
+                    reduced_set.intersect(&candidates);
+                    if !reduced_set.consistent(pre_idx, w) {
+                        continue;
+                    }
+
+                    // Track best score and viable sets
+                    if best_score < 0 || score < best_score {
+                        best_score = score;
+                        viable_sets.clear();
+                        // Move reduced_set into the vector (no clone)
+                        viable_sets.push(reduced_set);
+                        if w as isize == score {
+                            found_identity = true;
+                        }
+                    } else if score == best_score {
+                        if w as isize == score {
+                            if found_identity {
+                                viable_sets.push(reduced_set);
+                            } else {
+                                viable_sets.clear();
+                                viable_sets.push(reduced_set);
+                            }
+                            found_identity = true;
+                        } else if !found_identity {
+                            viable_sets.push(reduced_set);
+                        }
+                    }
+                }
+
+                match viable_sets.len() {
+                    0 => continue,
+                    1 => candidates = viable_sets.pop().unwrap(),
+                    _ => {
+                        return Canonicalization {
+                            perm: Permutation { data: Vec::new() },
+                            shuffle: Permutation { data: Vec::new() },
+                        }
+                    }
+                }
+
+                if candidates.complete() {
+                    break 'word_loop;
+                }
+            }
+
+            if candidates.complete() {
                 break;
             }
         }
-        if cand.unconstrained() {
-            return Canonicalization{ perm: self.clone(), shuffle: Permutation{ data: Vec::new(), }, }
+
+        if candidates.unconstrained() {
+            return Canonicalization {
+                perm: self.clone(),
+                shuffle: Permutation { data: Vec::new() },
+            };
         }
 
-        if !cand.complete() {
+        if !candidates.complete() {
             println!("Incomplete!");
             println!("{:?}", self);
-            println!("{:?}", cand);
+            println!("{:?}", candidates);
             std::process::exit(1);
         }
-        let final_shuffle = match cand.output() {
+
+        let final_shuffle = match candidates.output() {
             Some(v) => Permutation { data: v },
             None => {
-            // fallback if output is incomplete, maybe return identity or exit
-            eprintln!("CandSet output returned None!");
-            std::process::exit(1);
+                eprintln!("CandSet output returned None!");
+                std::process::exit(1);
             }
         };
 
-        Canonicalization{ perm: self.bit_shuffle(&final_shuffle.data), shuffle: final_shuffle, } 
+        Canonicalization {
+            perm: self.bit_shuffle(&final_shuffle.data),
+            shuffle: final_shuffle,
+        }
     }
 }
 
@@ -445,11 +644,11 @@ impl CandSet {
 
         for (k, row) in self.candidate.iter().enumerate() {
             // for each index where x has a zero...
-            if (x & (1 << k) == 0) {
+            if x & (1 << k) == 0 {
                 // does y also have a zero somewhere?
                 let mut mat = false;
                 for b in 0..n {
-                    if (y&(1<<b) == 0 && row[b]) {
+                    if y&(1<<b) == 0 && row[b] {
                         mat = true;
                         break;
                     }
@@ -461,11 +660,11 @@ impl CandSet {
             }
 
             //where x has a one
-            if (x&(1<<k) != 0) {
+            if x&(1<<k) != 0 {
                 //does y?
                 let mut mat = false;
                 for b in 0..n {
-                    if (y&(1<<b) != 0 && row[b]) {
+                    if y&(1<<b) != 0 && row[b] {
                         mat = true;
                         break;
                     }
@@ -619,6 +818,12 @@ impl CandSet {
         }
         s
     }
+
+    pub fn copy_from(&mut self, other: &CandSet) {
+        for (dest_row, src_row) in self.candidate.iter_mut().zip(&other.candidate) {
+            dest_row.copy_from_slice(src_row);
+        }
+    } 
 }
 
 impl PermStore {
@@ -655,12 +860,13 @@ mod tests {
 
     #[test]
     fn test_from_string_brute() {
+        init(4);
         let mut c: Circuit = Circuit::from_string("0 1 2; 3 2 1; 0 2 1".to_string());
         println!("Circuit data: \n{}", c.to_string());
         let perm = c.permutation();
         println!("Permutation: \n{:?}", perm.data);
         c.canonicalize();
-        let canon = perm.brute_canonical();
+        let canon = perm.fast_canon();
         println!("Canonical perm: \n {:?}", canon.perm);
         println!("Shuffle: \n{:?}", canon.shuffle);
         println!("Canonical circuit: \n{}", c.to_string());

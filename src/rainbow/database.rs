@@ -1,16 +1,11 @@
-use crate::{
-    circuit::{Circuit, Gate, Permutation},
-    circuit::control_functions::Gate_Control_Func,
-    rainbow::{Canonicalization, CandSet, constants::{self, CONTROL_FUNC_TABLE}},
-};
+use crate::circuit::{Circuit, Permutation};
 
 use bincode;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    fs::{self, File},
+    fs::File,
     io::{BufReader, BufWriter},
-    path::Path,
 };
 
 
@@ -47,7 +42,7 @@ impl PersistPermStore {
 
 impl Persist {
     pub fn save(n: usize, m: usize, store: &HashMap<String, PersistPermStore>) {
-        let file = File::create(format!("db/n{}m{}.bin", n, m))
+        let file = File::create(format!("./db/n{}m{}.bin", n, m))
             .expect("Failed to create file");
         let writer = BufWriter::new(file);
         let persist = Persist {
@@ -74,15 +69,8 @@ impl Persist {
     // }
 
     //correctly loads the file for m-1 db
-    pub fn load(n: usize, m: usize, path: &str) -> HashMap<String, PersistPermStore> {
-        let mut filename = path.to_string();
-
-        // If path is a directory, build the file name with m-1
-        if let Ok(info) = fs::metadata(path) {
-            if info.is_dir() {
-                filename = format!("{}/n{}m{}.bin", path, n, m - 1);
-            }
-        }
+    pub fn load(n: usize, m: usize) -> HashMap<String, PersistPermStore> {
+        let filename = format!("./db/n{}m{}.bin", n, m - 1);
 
         let file = File::open(&filename)
             .unwrap_or_else(|_| panic!("Failed to open file: {}", filename));
