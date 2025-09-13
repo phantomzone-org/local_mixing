@@ -29,7 +29,7 @@ pub struct Circuit{
 
 #[derive(Clone, Debug, Default)]
 pub struct CircuitSeq {
-    pub gates: Vec<usize>,
+    pub gates: Vec<usize>, //TODO: Change to Vec<[u8;3]>
 }
 
 //Permutations are all the possible outputs of a circuit
@@ -425,12 +425,20 @@ impl Permutation {
     }
 
     pub fn repr(&self) -> String {
-    self.data.iter()
-        .map(|&x| x.to_string())
-        .collect::<Vec<_>>()
-        .join(",")
-}
+        self.data.iter()
+            .map(|&x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    }
 
+    pub fn repr_blob(&self) -> Vec<u8> {
+        self.data.iter().map(|&x| x as u8).collect()
+    }
+
+    pub fn from_blob(blob: &[u8]) -> Self {
+        let data = blob.iter().map(|&b| b as usize).collect();
+        Permutation { data }
+    }
 
     pub fn bits(&self) -> usize {
         let n = self.data.len();
@@ -555,6 +563,17 @@ impl CircuitSeq {
             }
             buf
         }
+    }
+
+    pub fn repr_blob(&self, base_gates: &Vec<[usize; 3]>) -> Vec<u8> {
+        let mut blob = Vec::with_capacity(self.gates.len() * 3);
+        for &gate_idx in &self.gates {
+            let gate = &base_gates[gate_idx];
+            blob.push(gate[0] as u8);
+            blob.push(gate[1] as u8);
+            blob.push(gate[2] as u8);
+        }
+        blob
     }
 
     pub fn to_circuit(&self, base_gates: &Vec<[usize; 3]>) -> Circuit {

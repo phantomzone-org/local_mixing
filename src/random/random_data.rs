@@ -9,6 +9,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 pub fn random_circuit(base_gates: &Vec<[usize; 3]>, m: usize) -> CircuitSeq {
+    //TODO: (J: Speed this up)
     let mut rng = rand::rng();
     let mut circuit = Vec::with_capacity(m);
     let n = base_gates.len();
@@ -32,9 +33,9 @@ pub fn create_table(conn: &Connection, table_name: &str) -> Result<()> {
     // Table name includes n and m
     let sql = format!(
         "CREATE TABLE IF NOT EXISTS {} (
-            circuit TEXT UNIQUE,
-            perm TEXT NOT NULL,
-            shuf TEXT NOT NULL
+            circuit BLOB UNIQUE,
+            perm BLOB NOT NULL,
+            shuf BLOB NOT NULL
         )",
         table_name
     );
@@ -47,11 +48,12 @@ pub fn insert_circuit(
     conn: &mut Connection,
     circuit: &CircuitSeq, 
     canon: &Canonicalization,
-    table_name: &str
+    table_name: &str,
+    base_gates: &Vec<[usize;3]>
 ) -> Result<()> {
-    let key = circuit.repr();
-    let perm = canon.perm.repr();
-    let shuf = canon.shuffle.repr();
+    let key = circuit.repr_blob(base_gates);
+    let perm = canon.perm.repr_blob();
+    let shuf = canon.shuffle.repr_blob();
     let sql = format!("INSERT INTO {} (circuit, perm, shuf) VALUES (?1, ?2, ?3)", table_name);
     conn.execute(&sql, &[&key, &perm, &shuf])?;
     Ok(())
@@ -61,6 +63,7 @@ pub fn insert_circuits_batch(
     conn: &mut Connection,
     table_name: &str,
     circuits: &[(CircuitSeq, Canonicalization)],
+    base_gates: &Vec<[usize; 3]>
 ) -> Result<usize> {
     // Start a single transaction for all inserts
     let tx = conn.transaction()?;
@@ -74,9 +77,9 @@ pub fn insert_circuits_batch(
     let mut inserted = 0;
 
     for (circuit, canon) in circuits {
-        let key = circuit.repr();
-        let perm = canon.perm.repr();
-        let shuf = canon.shuffle.repr();
+        let key = circuit.repr_blob(base_gates);
+        let perm = canon.perm.repr_blob();
+        let shuf = canon.shuffle.repr_blob();
 
         if tx.execute(&sql, &[&key, &perm, &shuf])? > 0 {
             inserted += 1;
@@ -317,7 +320,7 @@ pub fn check_cycles(n: usize, m: usize) -> Result<()> {
 
     // Query all distinct perms
     let perm_iter = stmt.query_map([], |row| {
-        let perm_str: String = row.get(0)?; // now as String
+        let perm_str: Vec<u8> = row.get(0)?; // now as String
         Ok(perm_str)
     })?;
 
@@ -327,7 +330,7 @@ pub fn check_cycles(n: usize, m: usize) -> Result<()> {
         let perm_str = perm_str_result?;
 
         // Convert the string into a Permutation
-        let perm = Permutation::from_string(&perm_str);
+        let perm = Permutation::from_blob(&perm_str);
         let cycles = perm;
 
         println!("{:?}", cycles);
@@ -347,6 +350,9 @@ pub fn count_distinct(n: usize, m: usize) -> Result<usize> {
     Ok(count)
 }
 
+//TODO: benchmark to see which part is taking the most time and what exactly can be sped up
+//Speed up SQL queries
+//Should not see for a particular size query, the speed should not vary across multiple runs
 pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
     let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
     let table_name = format!("n{}m{}", n, m);
@@ -372,6 +378,7 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
 
     while running.load(Ordering::SeqCst) && (!stop && inserted < count || stop) {
         total_attempts += 1;
+
         let mut circuit = random_circuit(&base_gates, m);
         circuit.canonicalize(&base_gates);
 
@@ -379,15 +386,27 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
         batch.push((circuit, perm));
 
         if batch.len() >= batch_size {
-            let success_count = insert_circuits_batch(&mut conn, &table_name, &batch)
-                .unwrap_or(0);
+            let success_count =
+                insert_circuits_batch(&mut conn, &table_name, &batch, &base_gates).unwrap_or(0);
+
             inserted += success_count;
             recent += success_count;
             batch.clear();
+
+            // Early stop if >=99% of last batch failed
+            if success_count * 100 <= batch_size {
+                println!(
+                    "Stopping early: only {}/{} inserts succeeded in last batch (~{:.2}% success)",
+                    success_count,
+                    batch_size,
+                    (success_count as f64 / batch_size as f64) * 100.0
+                );
+                break;
+            }
         }
 
         if total_attempts % 50_000 == 0 {
-            println!("Attempts: {}, inserted: {}", total_attempts, recent);
+            println!("Attempts: {}, inserted in last window: {}", total_attempts, recent);
             recent = 0;
         }
 
@@ -399,8 +418,8 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
 
     // Insert remaining circuits before exiting
     if !batch.is_empty() {
-        let success_count = insert_circuits_batch(&mut conn, &table_name, &batch)
-            .unwrap_or(0);
+        let success_count =
+            insert_circuits_batch(&mut conn, &table_name, &batch, &base_gates).unwrap_or(0);
         inserted += success_count;
     }
 
@@ -411,14 +430,18 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
 }
 
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_check_cycles_n3m3() -> Result<()> {
+        let now = std::time::Instant::now();
         // Call check_cycles for n=3, m=3
-        count_distinct(5, 5)?;
+        let _ = check_cycles(3, 3);
+        count_distinct(3, 3)?;
+        println!("Time: {:?}", now.elapsed());
         Ok(())
     }
 }
