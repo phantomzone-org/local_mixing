@@ -35,33 +35,44 @@ static CKT_I: AtomicI64 = AtomicI64::new(0);
 
 /// Parallel circuit builder returning a ParallelIterator of PR
 //TODO: (J: Canonicalises the circuit ( i.e. runs fast canon, brute force canon etc. ). Fix the parallel part.)
+
 pub fn build_circuit_rayon(
     n: usize,
     _m: usize,
     circuits: impl ParallelIterator<Item = Vec<usize>> + Send,
-    base_gates: Arc<Vec<[usize;3]>>,
+    base_gates: Arc<Vec<[usize; 3]>>,
 ) -> impl ParallelIterator<Item = PR> + Send {
-    circuits.map(|circuit| CircuitSeq { gates: circuit })
-        .flat_map(move |mut c| {
-            CKT_CHECK.fetch_add(1, Ordering::Relaxed);
+    circuits.filter_map(move |circuit| {
+        CKT_CHECK.fetch_add(1, Ordering::Relaxed);
 
-            c.canonicalize(&base_gates);
+        // Convert indices → gates ([usize;3] → [u8;3])
+        let mut c = CircuitSeq {
+            gates: circuit
+                .iter()
+                .map(|&i| {
+                    let gate = base_gates[i];
+                    [gate[0] as u8, gate[1] as u8, gate[2] as u8]
+                })
+                .collect(),
+        };
 
-            if c.adjacent_id() {
-                SKIP_ID.fetch_add(1, Ordering::Relaxed);
-                return vec![].into_par_iter();
-            }
+        c.canonicalize();
 
-            let per = c.permutation(n, &base_gates);
-            let can_per = per.canonical();
-            let is_canonical = per == can_per.perm;
+        if c.adjacent_id() {
+            SKIP_ID.fetch_add(1, Ordering::Relaxed);
+            return None;
+        }
 
-            vec![PR {
-                p: can_per.perm,
-                r: c.repr_bytes(),
-                canonical: is_canonical,
-            }].into_par_iter()
+        let per = c.permutation(n);
+        let can_per = per.canonical();
+        let is_canonical = per == can_per.perm;
+
+        Some(PR {
+            p: can_per.perm,
+            r: c.repr_blob(),
+            canonical: is_canonical,
         })
+    })
 }
 
 

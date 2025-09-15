@@ -27,9 +27,9 @@ pub struct Circuit{
     pub gates: Vec<Gate>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CircuitSeq {
-    pub gates: Vec<usize>, //TODO: Change to Vec<[u8;3]>
+    pub gates: Vec<[u8;3]>, //TODO: Change to Vec<[u8;3]>
 }
 
 //Permutations are all the possible outputs of a circuit
@@ -116,41 +116,40 @@ impl Gate {
         std_max(std_max(self.pins[0], self.pins[1]), self.pins[2])
     }
 
-    pub fn collides_index(a: usize, b:usize, base_gates: &Vec<[usize;3]>) -> bool {
-        base_gates[a][0] == base_gates[b][1]
-            || base_gates[a][0] == base_gates[b][2] 
-            || base_gates[a][1] == base_gates[b][0] 
-            || base_gates[a][2] == base_gates[b][0]
+    pub fn collides_index(gate: &[u8;3], other: [u8;3]) -> bool {
+        gate[0] == other[1] 
+            || gate[0] == other[2]
+            || gate[1] == other[0] 
+            || gate[2] == other[0]
     }
     //b is "larger"
-    pub fn ordered_index(a: usize, b:usize, base_gates: &Vec<[usize;3]>) -> bool {
-        if base_gates[a][0] > base_gates[b][0] {
+    pub fn ordered_index(gate: &[u8;3], other: [u8;3]) -> bool {
+        if gate[0] > other[0] {
             return false
         }
-        else if base_gates[a][0] == base_gates[b][0]{
-            if base_gates[a][1] > base_gates[b][1] {
+        else if gate[0] == other[0]{
+            if gate[1] > other[1] {
                 return false
             }
-            else if base_gates[a][1] == base_gates[b][1] {
-                return base_gates[a][2] < base_gates[b][2]
+            else if gate[1] == other[1] {
+                return gate[2] < other[2]
             }
         }
         true
     }
 
     #[inline(always)]
-    pub fn evaluate_index(state: usize, gate: usize, base_gates: &Vec<[usize;3]>) -> usize {
-        let pins = base_gates[gate];
-        let c1 = (state >> pins[1]) & 1;
-        let c2 = (state >> pins[2]) & 1;
-        state ^ (c1 | ((!c2) & 1)) << pins[0]
+    pub fn evaluate_index(state: usize, gate: [u8;3]) -> usize {
+        let c1 = (state >> gate[1]) & 1;
+        let c2 = (state >> gate[2]) & 1;
+        state ^ (c1 | ((!c2) & 1)) << gate[0]
     }
 
     #[inline(always)]
-    pub fn evaluate_index_list(state: usize, gates: &Vec<usize>, base_gates: &Vec<[usize;3]>) -> usize {
+    pub fn evaluate_index_list(state: usize, gates: &Vec<[u8;3]>) -> usize {
         let mut current_wires = state;
         for g in gates {
-            current_wires = Self::evaluate_index(current_wires, *g, base_gates);
+            current_wires = Self::evaluate_index(current_wires, *g);
         }
         current_wires
     }
@@ -526,49 +525,48 @@ impl CircuitSeq {
         false
     }
 
-    pub fn evaluate(&self, input: usize, base_gates: &Vec<[usize;3]>) -> usize {
-        Gate::evaluate_index_list(input, &self.gates, base_gates)
+    pub fn evaluate(&self, input: usize) -> usize {
+        Gate::evaluate_index_list(input, &self.gates)
     }
 
-    pub fn permutation(&self, num_wires: usize, base_gates: &Vec<[usize;3]>) -> Permutation {
+    pub fn permutation(&self, num_wires: usize) -> Permutation {
         let size = 1 << num_wires;
         //TODO: the size could be over 64, so is small vec a bad choice?
         let mut output = vec![0; size];
 
         for input in 0..size {
-            output[input] = self.evaluate(input, base_gates);
+            output[input] = self.evaluate(input);
         }
 
         Permutation { data: output }
     }
 
-    pub fn repr(&self) -> String {
-        // Join all gates as decimal numbers separated by commas
-        self.gates.iter()
-            .map(|&id| id.to_string())
-            .collect::<Vec<_>>()
-            .join(",")
-    }
+    // pub fn repr(&self) -> String {
+    //     // Join all gates as decimal numbers separated by commas
+    //     self.gates.iter()
+    //         .map(|&id| id.to_string())
+    //         .collect::<Vec<_>>()
+    //         .join(",")
+    // }
     
-    pub fn repr_bytes(&self) -> Vec<u8> {
-        // just store each usize as a byte if it's <= 255
-        // or u16 if larger
-        if self.gates.iter().all(|&x| x <= 255) {
-            self.gates.iter().map(|&x| x as u8).collect()
-        } else {
-            // fallback to 2-byte encoding
-            let mut buf = Vec::with_capacity(self.gates.len() * 2);
-            for &x in &self.gates {
-                buf.extend_from_slice(&(x as u16).to_le_bytes());
-            }
-            buf
-        }
-    }
+    // pub fn repr_bytes(&self) -> Vec<u8> {
+    //     // just store each usize as a byte if it's <= 255
+    //     // or u16 if larger
+    //     if self.gates.iter().all(|&x| x <= 255) {
+    //         self.gates.iter().map(|&x| x as u8).collect()
+    //     } else {
+    //         // fallback to 2-byte encoding
+    //         let mut buf = Vec::with_capacity(self.gates.len() * 2);
+    //         for &x in &self.gates {
+    //             buf.extend_from_slice(&(x as u16).to_le_bytes());
+    //         }
+    //         buf
+    //     }
+    // }
 
-    pub fn repr_blob(&self, base_gates: &Vec<[usize; 3]>) -> Vec<u8> {
+    pub fn repr_blob(&self) -> Vec<u8> {
         let mut blob = Vec::with_capacity(self.gates.len() * 3);
-        for &gate_idx in &self.gates {
-            let gate = &base_gates[gate_idx];
+        for &gate in &self.gates {
             blob.push(gate[0] as u8);
             blob.push(gate[1] as u8);
             blob.push(gate[2] as u8);
@@ -576,23 +574,28 @@ impl CircuitSeq {
         blob
     }
 
-    pub fn to_circuit(&self, base_gates: &Vec<[usize; 3]>) -> Circuit {
-        // `self.gates` holds indices into base_gates
-        let gates: Vec<Gate> = self.gates.iter().enumerate().map(|(_, &idx)| {
-            if idx >= base_gates.len() {
-                panic!("Invalid gate index {} for base_gates of length {}", idx, base_gates.len());
+    pub fn to_circuit(&self) -> Circuit {
+        let mut gates = Vec::new();
+        let mut max: usize = 0;
+        for g in &self.gates {
+            gates.push(Gate{ pins: [g[0] as usize, g[1] as usize, g[2] as usize], control_function: 2, id: 0 });
+            for &p in g {
+                if p as usize > max {
+                    max = p as usize;
+                }
             }
+        }
+        Circuit{ num_wires: max, gates, }
+    }
 
-            let pins = base_gates[idx];
-            Gate {
-                pins,
-                control_function: 2,
-                id: 0, 
-            }
-        }).collect();
-
-        let n = base_gates.iter().flat_map(|g| g.iter()).max().unwrap() + 1;
-        Circuit { num_wires: n, gates }
+    /// Reconstruct CircuitSeq from a BLOB
+    pub fn from_blob(blob: &[u8]) -> Self {
+        assert!(blob.len() % 3 == 0, "Invalid blob length");
+        let gates: Vec<[u8; 3]> = blob
+            .chunks(3)
+            .map(|chunk| [chunk[0], chunk[1], chunk[2]])
+            .collect();
+        CircuitSeq { gates }
     }
 }
 
@@ -699,25 +702,25 @@ pub fn build_from(
 mod tests {
     use super::*;
     use crate::rainbow::init;
-    #[test]
-    fn test_to_circuit_and_canon() {
-        init(3);
-        let mut circuit1: Vec<usize> = Vec::new();
-        circuit1.push(3);
-        circuit1.push(5);
-        circuit1.push(0);
-        let circuit1 = CircuitSeq { gates: circuit1 };
-        let base_gates = base_gates(3);
-        let circuit1 = circuit1.to_circuit(&base_gates);
+    // #[test]
+    // fn test_to_circuit_and_canon() {
+    //     init(3);
+    //     let mut circuit1: Vec<usize> = Vec::new();
+    //     circuit1.push(3);
+    //     circuit1.push(5);
+    //     circuit1.push(0);
+    //     let circuit1 = CircuitSeq { gates: circuit1 };
+    //     let base_gates = base_gates(3);
+    //     let circuit1 = circuit1.to_circuit();
 
-        let mut circuit2: Vec<usize> = Vec::new();
-        circuit2.push(4);
-        circuit2.push(0);
-        circuit2.push(3);
-        let circuit2 = CircuitSeq { gates: circuit2 };
-        let circuit2 = circuit2.to_circuit(&base_gates);
+    //     let mut circuit2: Vec<usize> = Vec::new();
+    //     circuit2.push(4);
+    //     circuit2.push(0);
+    //     circuit2.push(3);
+    //     let circuit2 = CircuitSeq { gates: circuit2 };
+    //     let circuit2 = circuit2.to_circuit();
 
-        println!("{:?}", circuit1.permutation().canonical());
-        println!("{:?}", circuit2.permutation().canonical());
-    } 
+    //     println!("{:?}", circuit1.permutation().canonical());
+    //     println!("{:?}", circuit2.permutation().canonical());
+    // } 
 }

@@ -1,32 +1,37 @@
 use crate::circuit::{self, Permutation, CircuitSeq};
 use crate::rainbow::canonical::{self, Canonicalization, CandSet};
-use rand::Rng;
 use rusqlite::{Connection, Result};
 use smallvec::SmallVec;
 use itertools::Itertools;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::fs::OpenOptions;
+use std::io::Write;
 
-pub fn random_circuit(base_gates: &Vec<[usize; 3]>, m: usize) -> CircuitSeq {
-    //TODO: (J: Speed this up)
-    let mut rng = rand::rng();
+pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
     let mut circuit = Vec::with_capacity(m);
-    let n = base_gates.len();
-    let mut last = None;
 
     for _ in 0..m {
-        let mut candidate;
-        loop {
-            candidate = rng.random_range(0..n);
-            if Some(candidate) != last { 
-                break; 
+        let mut set = [false; 16]; // mask for used pins. for now, we don't expect to go past 16 wires
+        for i in n..16 { set[i as usize] = true; } // disable pins >= n
+
+        let mut gate = [0u8; 3];
+        for j in 0..3 {
+            loop {
+                let v = fastrand::u8(..16);
+                if !set[v as usize] {
+                    set[v as usize] = true;
+                    gate[j] = v;
+                    break;
+                }
             }
         }
-        last = Some(candidate);
-        circuit.push(candidate);
+
+        circuit.push(gate);
     }
-    CircuitSeq {gates: circuit }
+
+    CircuitSeq { gates: circuit }
 }
 
 pub fn create_table(conn: &Connection, table_name: &str) -> Result<()> {
@@ -49,9 +54,8 @@ pub fn insert_circuit(
     circuit: &CircuitSeq, 
     canon: &Canonicalization,
     table_name: &str,
-    base_gates: &Vec<[usize;3]>
 ) -> Result<()> {
-    let key = circuit.repr_blob(base_gates);
+    let key = circuit.repr_blob();
     let perm = canon.perm.repr_blob();
     let shuf = canon.shuffle.repr_blob();
     let sql = format!("INSERT INTO {} (circuit, perm, shuf) VALUES (?1, ?2, ?3)", table_name);
@@ -63,7 +67,6 @@ pub fn insert_circuits_batch(
     conn: &mut Connection,
     table_name: &str,
     circuits: &[(CircuitSeq, Canonicalization)],
-    base_gates: &Vec<[usize; 3]>
 ) -> Result<usize> {
     // Start a single transaction for all inserts
     let tx = conn.transaction()?;
@@ -77,7 +80,7 @@ pub fn insert_circuits_batch(
     let mut inserted = 0;
 
     for (circuit, canon) in circuits {
-        let key = circuit.repr_blob(base_gates);
+        let key = circuit.repr_blob();
         let perm = canon.perm.repr_blob();
         let shuf = canon.shuffle.repr_blob();
 
@@ -339,6 +342,36 @@ pub fn check_cycles(n: usize, m: usize) -> Result<()> {
     Ok(())
 }
 
+pub fn print_all(table_name: &str) -> Result<()> {
+    let conn = Connection::open("circuits.db")?;
+
+    let query = format!("SELECT circuit, perm, shuf FROM {}", table_name);
+    let mut stmt = conn.prepare(&query)?;
+
+    let rows = stmt.query_map([], |row| {
+        let circuit_blob: Vec<u8> = row.get(0)?;
+        let perm_blob: Vec<u8> = row.get(1)?;
+        let shuf_blob: Vec<u8> = row.get(2)?;
+
+        Ok((circuit_blob, perm_blob, shuf_blob))
+    })?;
+
+    for row in rows {
+        let (circuit_blob, perm_blob, shuf_blob) = row?;
+
+        let circuit = CircuitSeq::from_blob(&circuit_blob);
+        let perm = Permutation::from_blob(&perm_blob);
+        let shuf = Permutation::from_blob(&shuf_blob);
+
+        println!("Circuit: {:?}", circuit.gates);
+        println!("Perm:    {:?}", perm.data);
+        println!("Shuf:    {:?}", shuf.data);
+        println!();
+    }
+
+    Ok(())
+}
+
 pub fn count_distinct(n: usize, m: usize) -> Result<usize> {
     let conn = Connection::open("circuits.db")?;
     let table_name = format!("n{}m{}", n, m);
@@ -358,7 +391,6 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
     let table_name = format!("n{}m{}", n, m);
     create_table(&mut conn, &table_name).expect("Failed to create table");
 
-    let base_gates = circuit::base_gates(n);
     let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
     let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
 
@@ -376,18 +408,34 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
         r.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
+    //TODO: test speed here
     while running.load(Ordering::SeqCst) && (!stop && inserted < count || stop) {
+        let start = std::time::Instant::now(); // start timing this iteration
         total_attempts += 1;
 
-        let mut circuit = random_circuit(&base_gates, m);
-        circuit.canonicalize(&base_gates);
+        let mut circuit = random_circuit(n as u8, m);
+        circuit.canonicalize();
 
-        let perm = circuit.permutation(n, &base_gates).canon_simple(&bit_shuf);
+        let perm = circuit.permutation(n).canon_simple(&bit_shuf);
         batch.push((circuit, perm));
 
         if batch.len() >= batch_size {
+            //let start = std::time::Instant::now();
             let success_count =
-                insert_circuits_batch(&mut conn, &table_name, &batch, &base_gates).unwrap_or(0);
+                insert_circuits_batch(&mut conn, &table_name, &batch).unwrap_or(0);
+            //let elapsed = start.elapsed();
+
+            // Log timing to file
+            // let mut file = OpenOptions::new()
+            //     .create(true)
+            //     .append(true)
+            //     .open("time5000.txt")
+            //     .expect("Failed to open time.txt");
+            // writeln!(
+            //     file,
+            //     "Batch of {} attempted, {} inserted, time: {:?}",
+            //     batch_size, success_count, elapsed
+            // ).expect("Failed to write to time.txt");
 
             inserted += success_count;
             recent += success_count;
@@ -395,8 +443,16 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
 
             // Early stop if >=99% of last batch failed
             if success_count * 100 <= batch_size {
+                // writeln!(
+                //     file,
+                //     "Stopping early: only {}/{} inserts succeeded (~{:.2}% success)",
+                //     success_count,
+                //     batch_size,
+                //     (success_count as f64 / batch_size as f64) * 100.0
+                // ).expect("Failed to write to time.txt");
+
                 println!(
-                    "Stopping early: only {}/{} inserts succeeded in last batch (~{:.2}% success)",
+                    "Stopping early: only {}/{} inserts succeeded (~{:.2}% success)",
                     success_count,
                     batch_size,
                     (success_count as f64 / batch_size as f64) * 100.0
@@ -414,12 +470,21 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
         if !stop && inserted >= count {
             break;
         }
+
+        let elapsed = start.elapsed();
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("while.txt")
+            .expect("Failed to open while.txt");
+        writeln!(file, "Iteration {} took {:?}", total_attempts, elapsed)
+            .expect("Failed to write to while.txt");
     }
 
     // Insert remaining circuits before exiting
     if !batch.is_empty() {
         let success_count =
-            insert_circuits_batch(&mut conn, &table_name, &batch, &base_gates).unwrap_or(0);
+            insert_circuits_batch(&mut conn, &table_name, &batch).unwrap_or(0);
         inserted += success_count;
     }
 

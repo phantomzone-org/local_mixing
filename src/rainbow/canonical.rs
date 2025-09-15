@@ -697,7 +697,7 @@ impl PermStore {
 }
 
 impl CircuitSeq {
-    pub fn canonicalize(&mut self, base_gates: &Vec<[usize; 3]>) {
+    pub fn canonicalize(&mut self) {
         for i in 1..self.gates.len() {
             //index in base_gates of current gate
             let gi_index = self.gates[i];
@@ -708,9 +708,9 @@ impl CircuitSeq {
                 j -= 1;
                 let gj_index = self.gates[j];
 
-                if Gate::collides_index(gi_index, gj_index, base_gates) {
+                if Gate::collides_index(&gi_index, gj_index) {
                     break;
-                } else if !Gate::ordered_index(gj_index, gi_index, base_gates) {
+                } else if !Gate::ordered_index(&gj_index, gi_index) {
                     to_swap = Some(j);
                 }
             }
