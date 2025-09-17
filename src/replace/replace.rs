@@ -1,5 +1,4 @@
 use crate::circuit::circuit::{Permutation, CircuitSeq};
-use crate::random::random_data;
 use crate::random::random_data::random_circuit;
 use itertools::Itertools;
 use rusqlite::{Connection, OptionalExtension};
@@ -195,42 +194,90 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &Connection) -> CircuitSeq 
 }
 
 // inflate. u8 is the size of the random circuit used to obfuscate over 2 
-pub fn obfuscate(c: &CircuitSeq) -> (CircuitSeq, usize) {
-    // Start with an empty circuit, preserving wire count
-    let mut obfuscated = CircuitSeq {
-        gates: Vec::new(),
-    };
+// This tries to mix and hide original gate
+// pub fn obfuscate(c: &CircuitSeq) -> (CircuitSeq, Vec<usize>) {
+//     // Start with an empty circuit, preserving wire count
+//     let mut obfuscated = CircuitSeq {
+//         gates: Vec::new(),
+//     };
+
+//     // We want the ability to choose where to compress, so return beginning of each half id
+//     let mut inverse_starts = Vec::new(); 
+
+//     let num_wires = c.num_wires();
+//     // The identity permutation on all wires
+//     let identity_perm = Permutation::id_perm(1 << num_wires);
+
+//     // Size of our random circuit. This can be randomized more later
+//     let mut rng = rand::rng();
+//     let m = rng.random_range(3..=5);
+
+//     for gate in &c.gates {
+//         // Generate a random identity circuit
+//         let (ran, rand_rev) = random_id(num_wires as u8, m);
+//         let mut id = CircuitSeq { gates: Vec::new() };
+//         id.gates.extend(&ran.gates);
+
+//         // record where the inverse part (rand_rev) begins
+//         inverse_starts.push(obfuscated.gates.len() + id.gates.len());
+
+//         id.gates.extend(&rand_rev.gates);
+
+//         // Sanity check: its permutation should equal the identity
+//         if id.permutation(num_wires) != identity_perm {
+//             panic!(
+//                 "Random identity circuit has wrong permutation: {:?}",
+//                 id.permutation(num_wires)
+//             );
+//         }
+
+//         // Rewire the first gate of the identity circuit to match this gate
+//         id.rewire_first_gate(*gate);
+
+//         // Append everything *after* that first gate into the obfuscated circuit
+//         obfuscated
+//             .gates
+//             .extend_from_slice(&id.gates[1..]);
+//     }
+
+//     let (r0, r0_inv) = random_id(num_wires as u8, rng.random_range(3..=5));
+
+//     obfuscated.gates.extend(&r0.gates);
+//     inverse_starts.push(obfuscated.gates.len());
+//     obfuscated.gates.extend(&r0_inv.gates);
+
+//     (obfuscated, inverse_starts)
+// }
+
+pub fn obfuscate(c: &CircuitSeq) -> (CircuitSeq, Vec<usize>) {
+    let mut obfuscated = CircuitSeq { gates: Vec::new() };
+    let mut inverse_starts = Vec::new();
 
     let num_wires = c.num_wires();
-    // The identity permutation on all wires
-    let identity_perm = Permutation::id_perm(1 << num_wires);
-
-    // Size of our random circuit (so id is 8). This can be randomized later
-    let m = 4;
+    let mut rng = rand::rng();
 
     for gate in &c.gates {
-        // Generate a random identity circuit
-        let (mut ran, mut rand_rev) = random_id(num_wires as u8, m);
-        let mut id = CircuitSeq { gates: Vec::new() };
-        id.gates.extend(&ran.gates);
-        id.gates.extend(&rand_rev.gates);
-        // Sanity check: its permutation should equal the identity
-        if id.permutation(num_wires) != identity_perm {
-            panic!(
-                "Random identity circuit has wrong permutation: {:?}",
-                id.permutation(num_wires)
-            );
-        }
+        // Generate a random identity r ⋅ r⁻¹
+        let (r, r_inv) = random_id(num_wires as u8, rng.random_range(3..=5));
 
-        // Rewire the first gate of the identity circuit to match this gate
-        id.rewire_first_gate(*gate);
+        // Add r
+        obfuscated.gates.extend(&r.gates);
 
-        // Append everything *after* that first gate into the obfuscated circuit
-        obfuscated
-            .gates
-            .extend_from_slice(&id.gates[1..]);
+        // Record where r⁻¹ starts
+        inverse_starts.push(obfuscated.gates.len());
+
+        // Add r⁻¹
+        obfuscated.gates.extend(&r_inv.gates);
+
+        // Now add the original gate
+        obfuscated.gates.push(*gate);
     }
 
-    (obfuscated, m)
-}
+    // Add a final padding random identity
+    let (r0, r0_inv) = random_id(num_wires as u8, rng.random_range(3..=5));
+    obfuscated.gates.extend(&r0.gates);
+    inverse_starts.push(obfuscated.gates.len());
+    obfuscated.gates.extend(&r0_inv.gates);
 
+    (obfuscated, inverse_starts)
+}

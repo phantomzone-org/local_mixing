@@ -597,7 +597,7 @@ impl CircuitSeq {
                 }
             }
         }
-        max
+        max + 1
     }
 
     /// Reconstruct CircuitSeq from a BLOB
