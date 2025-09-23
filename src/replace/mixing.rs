@@ -1,15 +1,21 @@
-use crate::circuit::circuit::{CircuitSeq};
-use crate::replace::replace::{obfuscate, compress};
-use std::fs::File;
-use std::io::Write;
-use rusqlite::Connection;
-use itertools::Itertools;
-use std::fs::OpenOptions;
+use crate::{
+    circuit::circuit::CircuitSeq,
+    replace::replace::{compress, obfuscate},
+};
 
-fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
+use itertools::Itertools;
+use rusqlite::Connection;
+
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+};
+
+fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize, seed: u64) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
-    let (mut _final_circuit, _inverse_starts) = obfuscate(c, n);
-    let (mut final_circuit, inverse_starts) = obfuscate(&_final_circuit, n);
+    let (mut final_circuit, inverse_starts) = obfuscate(c, n, seed);
+    println!("{}", final_circuit.to_string(n));
+    //let (mut final_circuit, inverse_starts) = obfuscate(&_final_circuit, n);
     println!("{:?} Obf Len: {}", pin_counts(&final_circuit, n), final_circuit.gates.len());
     // For each gate, compress its "inverse+gate+next_random" slice
     // Reverse iteration to avoid index shifting issues
@@ -58,7 +64,7 @@ pub fn pin_counts(circuit: &CircuitSeq, num_wires: usize) -> Vec<usize> {
     counts
 }
 
-pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &Connection, n: usize) {
+pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, seed: u64) {
     // Start with the input circuit
     let mut circuit = c.clone();
     let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
@@ -67,7 +73,7 @@ pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &Connection, n: usize) {
     let mut post_len = 0;
     let mut count = 0;
     for _ in 0..rounds {
-        circuit = obfuscate_and_target_compress(&circuit, conn, &bit_shuf, n);
+        circuit = obfuscate_and_target_compress(&circuit, conn, &bit_shuf, n, seed);
         if circuit.gates.len() == 0 {
             break;
         }
@@ -83,7 +89,18 @@ pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &Connection, n: usize) {
             break;
         }
     }
+    let mut i = 0;
+    while i < circuit.gates.len().saturating_sub(1) {
+        if circuit.gates[i] == circuit.gates[i + 1] {
+            // remove elements at i and i+1
+            circuit.gates.drain(i..=i + 1);
 
+            // step back up to 2 indices, but not below 0
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
+        }
+    }
     // Convert the final circuit to string
     let circuit_str = circuit.to_string(n);
     println!("{:?}", circuit.permutation(n).data);

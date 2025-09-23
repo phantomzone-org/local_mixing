@@ -1,11 +1,17 @@
-use crate::circuit::circuit::{Permutation, CircuitSeq};
-use crate::random::random_data::random_circuit;
-use rusqlite::{Connection, OptionalExtension};
-use rand::prelude::IndexedRandom;
-use std::cmp::{max, min};
-use rand::Rng;
-use std::fs::OpenOptions;
-use std::io::Write;
+use crate::{
+    circuit::circuit::{CircuitSeq, Permutation},
+    random::random_data::{create_table, random_circuit, seeded_random_circuit},
+};
+
+use rand::{prelude::IndexedRandom, Rng};
+use rusqlite::{params, Connection, OptionalExtension};
+
+use std::{
+    cmp::{max, min},
+    // used for testing
+    fs::OpenOptions,
+    io::Write,
+};
 
 // Returns a nontrivial identity circuit built from two "friend" circuits
 pub fn random_canonical_id(
@@ -29,8 +35,8 @@ pub fn random_canonical_id(
 
     loop {
         // Pick two random tables (can be different m values)
-        let table_a = tables[rng.random_range(0..tables.len())].clone();
-        let table_b = tables[rng.random_range(0..tables.len())].clone();
+        let table_a = tables[rng.random_range(1..tables.len())].clone();
+        let table_b = tables[rng.random_range(1..tables.len())].clone();
 
         // Find a permutation that exists in both tables
         let perm_opt: Option<Vec<u8>> = conn.query_row(
@@ -91,8 +97,8 @@ pub fn random_canonical_id(
 }
 
 // To just get a completely random circuit and reverse for identity, rather than using canonical ones from our rainbow table
-pub fn random_id(n: u8, m: usize) -> (CircuitSeq, CircuitSeq) {
-    let circuit = random_circuit(n, m);
+pub fn random_id(n: u8, m: usize, seed: u64) -> (CircuitSeq, CircuitSeq) {
+    let circuit = seeded_random_circuit(n, m, seed);
 
     // Preallocate reversed gates so we don't need to run through circuit twice
     let mut rev_gates = Vec::with_capacity(circuit.gates.len());
@@ -142,17 +148,17 @@ pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
     (CircuitSeq{ gates: subcircuit }, start, end)
 }
 
-pub fn compress(c: &CircuitSeq, trials: usize, conn: &Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
+pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     let mut compressed = c.clone();
     if c.gates.len() == 0 {
         return CircuitSeq{ gates: Vec::new() } 
     }
     // Open the file in append mode
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("test.txt")
-        .expect("Cannot open test.txt");
+    // let mut file = OpenOptions::new()
+    //     .create(true)
+    //     .append(true)
+    //     .open("test.txt")
+    //     .expect("Cannot open test.txt");
     //writeln!(file, "Permutation is initially: \n{:?}", compressed.permutation(n).data).unwrap();
     // let mut i = 0;
     // while i < compressed.gates.len().saturating_sub(1) {
@@ -178,56 +184,75 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &Connection, bit_shuf: &Vec
         let perm_blob = canon_perm.perm.repr_blob();
 
         let sub_m = subcircuit.gates.len();
+        let mut replaced = false;
 
         // Try all smaller m tables for this n
         for smaller_m in 1..sub_m {
             let table = format!("n{}m{}", n, smaller_m);
             let query = format!("SELECT blob FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1", table);
-            let mut stmt = match conn.prepare(&query) {
-                Ok(s) => s,
-                Err(_) => continue, // skip if table doesn't exist TODO: add to db if not found
-            };
+            {
+                // Limit stmt's lifetime to this block
+                let mut stmt = match conn.prepare(&query) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
 
-            let mut rows = stmt.query([&perm_blob]).expect("Query failed");
+                let mut rows = stmt.query([&perm_blob]).expect("Query failed");
 
-            if let Some(row) = rows.next().unwrap() {
-                let blob: Vec<u8> = row.get(0).expect("Failed to get blob");
-                let mut repl = CircuitSeq::from_blob(&blob);
+                if let Some(row) = rows.next().unwrap() {
+                    let blob: Vec<u8> = row.get(0).expect("Failed to get blob");
+                    let mut repl = CircuitSeq::from_blob(&blob);
 
-                if repl.gates.len() < subcircuit.gates.len() {
-                    // adjust rewiring
-                    let rc = repl.permutation(n).canon_simple(&bit_shuf);
-                    if !rc.shuffle.data.is_empty() {
-                        repl.rewire(&rc.shuffle, n);
+                    if repl.gates.len() < subcircuit.gates.len() {
+                        // adjust rewiring
+                        let rc = repl.permutation(n).canon_simple(&bit_shuf);
+                        if !rc.shuffle.data.is_empty() {
+                            repl.rewire(&rc.shuffle, n);
+                        }
+                        repl.rewire(&canon_perm.shuffle.invert(), n);
+
+                        if repl.permutation(n) != sub_perm {
+                            panic!("Replacement permutation mismatch!");
+                        }
+
+                        // Do the replacement
+                        compressed.gates.splice(start..end, repl.gates);
+                        replaced = true;
+                        break; // stop once a replacement is applied
                     }
-                    repl.rewire(&canon_perm.shuffle.invert(), n);
-
-                    if repl.permutation(n) != sub_perm {
-                        panic!("Replacement permutation mismatch!");
-                    }
-
-                    // Do the replacement
-                    compressed.gates.splice(start..end, repl.gates);
-                    break; // stop once a replacement is applied
                 }
             }
+                
+        }
+        // If not replaced, insert the subcircuit into its own table immediately
+        if !replaced {
+            let table = format!("n{}m{}", n, sub_m);
+            let sub_blob = subcircuit.repr_blob();
+
+            create_table(conn, &table).expect("Failed to create table");
+
+            conn.execute(
+                &format!("INSERT INTO {} (circuit, perm) VALUES (?1, ?2)", table),
+                params![sub_blob, perm_blob],
+            )
+            .expect("Insert failed");
         }
     }
     //writeln!(file, "Permutation after replacement is: \n{:?}", compressed.permutation(n).data).unwrap();
 
-    let mut i = 0;
-    while i < compressed.gates.len().saturating_sub(1) {
-        if compressed.gates[i] == compressed.gates[i + 1] {
-            // remove elements at i and i+1
-            compressed.gates.drain(i..=i + 1);
+    // let mut i = 0;
+    // while i < compressed.gates.len().saturating_sub(1) {
+    //     if compressed.gates[i] == compressed.gates[i + 1] {
+    //         // remove elements at i and i+1
+    //         compressed.gates.drain(i..=i + 1);
 
-            // step back up to 2 indices, but not below 0
-            i = i.saturating_sub(2);
-        } else {
-            i += 1;
-        }
-    }
-    writeln!(file, "Permutation after remove identities 2 is: \n{:?}", compressed.permutation(n).data).unwrap();
+    //         // step back up to 2 indices, but not below 0
+    //         i = i.saturating_sub(2);
+    //     } else {
+    //         i += 1;
+    //     }
+    // }
+    //writeln!(file, "Permutation after remove identities 2 is: \n{:?}", compressed.permutation(n).data).unwrap();
 
     compressed
 }
@@ -288,7 +313,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &Connection, bit_shuf: &Vec
 //     (obfuscated, inverse_starts)
 // }
 
-pub fn obfuscate(c: &CircuitSeq, num_wires: usize) -> (CircuitSeq, Vec<usize>) {
+pub fn obfuscate(c: &CircuitSeq, num_wires: usize, seed: u64) -> (CircuitSeq, Vec<usize>) {
     if c.gates.len() == 0 {
         return (CircuitSeq { gates: Vec::new() }, Vec::new() )
     }
@@ -299,7 +324,7 @@ pub fn obfuscate(c: &CircuitSeq, num_wires: usize) -> (CircuitSeq, Vec<usize>) {
 
     for gate in &c.gates {
         // Generate a random identity r ⋅ r⁻¹
-        let (r, r_inv) = random_id(num_wires as u8, rng.random_range(3..=25));
+        let (r, r_inv) = random_id(num_wires as u8, rng.random_range(3..=25), seed);
 
         // Add r
         obfuscated.gates.extend(&r.gates);
@@ -315,7 +340,7 @@ pub fn obfuscate(c: &CircuitSeq, num_wires: usize) -> (CircuitSeq, Vec<usize>) {
     }
 
     // Add a final padding random identity
-    let (r0, r0_inv) = random_id(num_wires as u8, rng.random_range(3..=5));
+    let (r0, r0_inv) = random_id(num_wires as u8, rng.random_range(3..=5), seed);
     obfuscated.gates.extend(&r0.gates);
     inverse_starts.push(obfuscated.gates.len());
     obfuscated.gates.extend(&r0_inv.gates);

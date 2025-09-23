@@ -1,13 +1,22 @@
-use crate::circuit::{Permutation, CircuitSeq};
-use crate::rainbow::canonical::{self, Canonicalization, CandSet};
-use rusqlite::{Connection, Result};
-use smallvec::SmallVec;
+use crate::{
+    circuit::{CircuitSeq, Permutation},
+    rainbow::canonical::{self, Canonicalization, CandSet},
+};
+
 use itertools::Itertools;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::fs::OpenOptions;
-use std::io::Write;
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
+use rusqlite::{params, Connection, Result};
+use smallvec::SmallVec;
+
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
     let mut circuit = Vec::with_capacity(m);
@@ -46,8 +55,45 @@ pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
     CircuitSeq { gates: circuit }
 }
 
+pub fn seeded_random_circuit(n: u8, m: usize, seed: u64) -> CircuitSeq {
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut circuit = Vec::with_capacity(m);
 
-pub fn create_table(conn: &Connection, table_name: &str) -> Result<()> {
+    for _ in 0..m {
+        loop {
+            // mask for used pins
+            let mut set = [false; 16];
+            for i in n..16 {
+                set[i as usize] = true; // disable pins >= n
+            }
+
+            // pick 3 distinct pins
+            let mut gate = [0u8; 3];
+            for j in 0..3 {
+                loop {
+                    let v: u8 = rng.gen_range(0..16);
+                    if !set[v as usize] {
+                        set[v as usize] = true;
+                        gate[j] = v;
+                        break;
+                    }
+                }
+            }
+
+            // check against last gate to avoid duplicates
+            if circuit.last() == Some(&gate) {
+                continue; 
+            } else {
+                circuit.push(gate);
+                break;
+            }
+        }
+    }
+
+    CircuitSeq { gates: circuit }
+}
+
+pub fn create_table(conn: &mut Connection, table_name: &str) -> Result<()> {
     // Table name includes n and m
     let sql = format!(
         "CREATE TABLE IF NOT EXISTS {} (
@@ -394,6 +440,112 @@ pub fn count_distinct(n: usize, m: usize) -> Result<usize> {
     
     println!("Number of distinct permutations in {}: {}", table_name, count);
     Ok(count)
+}
+
+pub fn base_gates(n: usize) -> Vec<[u8; 3]> {
+    let n = n as u8;
+    let mut gates: Vec<[u8;3]> = Vec::new();
+    for a in 0..n {
+        for b in 0..n {
+            if b == a { continue; }
+            for c in 0..n {
+                if c == a || c == b { continue; }
+                gates.push([a, b, c]);
+            }
+        }
+    }
+    gates
+}
+
+pub fn build_from_sql(conn: &mut Connection, n: usize, m: usize, bit_shuf: &Vec<Vec<usize>>) -> Result<()> {
+    let old_table = format!("n{}m{}", n, m - 1);
+    let new_table = format!("n{}m{}", n, m);
+
+    // Create the new table if it doesn't exist
+    create_table(conn, &new_table)?;
+
+    // Precompute base gates
+    let base_gates: Vec<[u8; 3]> = base_gates(n);
+
+    // Get total number of rows in old table once
+    let total_rows: i64 = conn.query_row(
+        &format!("SELECT COUNT(*) FROM {}", old_table),
+        [],
+        |row| row.get(0)
+    )?;
+    println!("Total rows in {}: {}", old_table, total_rows);
+
+    let mut last_rowid: i64 = 0;
+    let mut insert_batch: Vec<(CircuitSeq, Canonicalization)> = Vec::with_capacity(5000);
+
+    loop {
+        // Read a batch of old circuits
+        let rows: Vec<(i64, Vec<u8>)> = {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT rowid, circuit FROM {} WHERE rowid > ? ORDER BY rowid LIMIT ?",
+                old_table
+            ))?;
+            stmt.query_map(params![last_rowid, 500], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            .collect::<Result<_, _>>()?
+        };
+
+        if rows.is_empty() {
+            break; // Finished reading all old circuits
+        }
+
+        for (rowid, blob) in rows {
+            last_rowid = rowid;
+
+            // Decode old circuit from blob
+            let old_circuit = CircuitSeq::from_blob(&blob);
+            let mut prefix: SmallVec<[[u8; 3]; 64]> = SmallVec::with_capacity(m);
+            prefix.extend_from_slice(&old_circuit.gates);
+
+            // Expand by prepending/appending each base gate
+            for g in &base_gates {
+                // q1 = prefix + g
+                let mut q1 = prefix.clone();
+                q1.push(*g);
+
+                // q2 = g + prefix
+                let mut q2 = SmallVec::<[[u8; 3]; 64]>::with_capacity(m + 1);
+                q2.push(*g);
+                q2.extend_from_slice(&prefix);
+
+                // Canonicalize
+                let mut c1 = CircuitSeq { gates: q1.to_vec() };
+                let mut c2 = CircuitSeq { gates: q2.to_vec() };
+                c1.canonicalize();
+                c2.canonicalize();
+
+                let canon1 = c1.permutation(n).canon_simple(&bit_shuf);
+                let canon2 = c2.permutation(n).canon_simple(&bit_shuf);
+
+                // Add to batch
+                insert_batch.push((c1, canon1));
+                insert_batch.push((c2, canon2));
+
+                // Insert when batch reaches 5000
+                if insert_batch.len() >= 5000 {
+                    insert_circuits_batch(conn, &new_table, &insert_batch)?;
+                    insert_batch.clear();
+                }
+            }
+            if last_rowid % 1000 == 0 {
+                println!("Sampled: {}. Progress: {:.1}%", last_rowid, (last_rowid as f64/total_rows as f64)*100.0 );
+            }
+        }
+    }
+
+    // Insert any remaining circuits
+    if !insert_batch.is_empty() {
+        insert_circuits_batch(conn, &new_table, &insert_batch)?;
+        insert_batch.clear();
+    }
+
+    Ok(())
 }
 
 //TODO: benchmark to see which part is taking the most time and what exactly can be sped up

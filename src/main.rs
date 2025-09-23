@@ -1,13 +1,23 @@
-use local_mixing::random::random_data::main_random;
-use local_mixing::rainbow::rainbow::{main_rainbow_generate, main_rainbow_load};
-use local_mixing::rainbow::explore::explore_db;
-use local_mixing::replace::mixing::main_mix;
-use local_mixing::replace::replace::random_id;
-use local_mixing::replace::replace::random_canonical_id;
-use local_mixing::circuit::CircuitSeq;
+use local_mixing::{
+    circuit::CircuitSeq,
+    rainbow::{
+        explore::explore_db,
+        rainbow::{main_rainbow_generate, main_rainbow_load},
+    },
+    random::random_data::{build_from_sql, main_random},
+    replace::{
+        mixing::main_mix,
+        replace::{random_canonical_id, random_id},
+    },
+};
+
 use clap::{Arg, ArgAction, Command};
+use itertools::Itertools;
+use rand::rngs::OsRng;
+use rand::TryRngCore;
 use rusqlite::Connection;
 use std::fs;
+
 fn main() {
     let matches = Command::new("rainbow")
         .about("Rainbow circuit generator")
@@ -73,7 +83,13 @@ fn main() {
         Some(("load", sub)) => {
             let n: usize = *sub.get_one("n").unwrap();
             let m: usize = *sub.get_one("m").unwrap();
-            main_rainbow_load(n, m, "./db");
+            // main_rainbow_load(n, m, "./db");
+            
+            // Open DB connection
+            let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+            let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
+            let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+            build_from_sql(&mut conn, n,m, &bit_shuf).expect("Unknown error occured");
         }
         Some(("explore", sub)) => {
             let n: usize = *sub.get_one("n").unwrap();
@@ -98,23 +114,26 @@ fn main() {
             let rounds: usize = *sub.get_one("rounds").unwrap();
 
             let data = fs::read_to_string("initial.txt").expect("Failed to read initial.txt");
-
+            let seed = OsRng.try_next_u64().unwrap_or_else(|e| {
+                panic!("Failed to generate random seed: {}", e);
+            });
+            println!("Using seed: {}", seed);
             if data.trim().is_empty() {
                 // Open DB connection
-                let conn = Connection::open("circuits.db").expect("Failed to open DB");
+                let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
                 
                 // Fallback when file is empty
                 let c1= random_canonical_id(&conn, 5).unwrap();
                 println!("{:?} Starting Len: {}", c1.permutation(5).data, c1.gates.len());
-                main_mix(&c1, rounds, &conn, 5);
+                main_mix(&c1, rounds, &mut conn, 5,seed);
             } else {
                 
                 let c = CircuitSeq::from_string(&data);
 
                 // Open DB connection
-                let conn = Connection::open("circuits.db").expect("Failed to open DB");
+                let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
 
-                main_mix(&c, rounds, &conn, 5);
+                main_mix(&c, rounds, &mut conn, 5, seed);
             }
         }
         _ => unreachable!(),
