@@ -120,7 +120,7 @@ pub fn insert_circuit(
     let key = circuit.repr_blob();
     let perm = canon.perm.repr_blob();
     let shuf = canon.shuffle.repr_blob();
-    let sql = format!("INSERT INTO {} (circuit, perm, shuf) VALUES (?1, ?2, ?3)", table_name);
+    let sql = format!("INSERT OR IGNORE INTO {} (circuit, perm, shuf) VALUES (?1, ?2, ?3)", table_name);
     conn.execute(&sql, &[&key, &perm, &shuf])?;
     Ok(())
 }
