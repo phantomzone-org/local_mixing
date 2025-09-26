@@ -123,10 +123,10 @@ fn main() {
             let rounds: usize = *sub.get_one("rounds").unwrap();
 
             let data = fs::read_to_string("initial.txt").expect("Failed to read initial.txt");
-            let seed = OsRng.try_next_u64().unwrap_or_else(|e| {
-                panic!("Failed to generate random seed: {}", e);
-            });
-            println!("Using seed: {}", seed);
+            // let seed = OsRng.try_next_u64().unwrap_or_else(|e| {
+            //     panic!("Failed to generate random seed: {}", e);
+            // });
+            // println!("Using seed: {}", seed);
             if data.trim().is_empty() {
                 // Open DB connection
                 let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
@@ -142,7 +142,7 @@ fn main() {
                 // Fallback when file is empty
                 let c1= random_canonical_id(&conn, 5).unwrap();
                 println!("{:?} Starting Len: {}", c1.permutation(5).data, c1.gates.len());
-                main_mix(&c1, rounds, &mut conn, 5,seed);
+                main_mix(&c1, rounds, &mut conn, 5);
             } else {
                 
                 let c = CircuitSeq::from_string(&data);
@@ -158,7 +158,7 @@ fn main() {
                     PRAGMA locking_mode = EXCLUSIVE;
                     "
                 ).unwrap();
-                main_mix(&c, rounds, &mut conn, 5, seed);
+                main_mix(&c, rounds, &mut conn, 5);
             }
         }
         _ => unreachable!(),

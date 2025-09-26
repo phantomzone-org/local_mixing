@@ -97,8 +97,8 @@ pub fn random_canonical_id(
 }
 
 // To just get a completely random circuit and reverse for identity, rather than using canonical ones from our rainbow table
-pub fn random_id(n: u8, m: usize, seed: u64) -> (CircuitSeq, CircuitSeq) {
-    let circuit = seeded_random_circuit(n, m, seed);
+pub fn random_id(n: u8, m: usize) -> (CircuitSeq, CircuitSeq) {
+    let circuit = random_circuit(n, m);
 
     // Preallocate reversed gates so we don't need to run through circuit twice
     let mut rev_gates = Vec::with_capacity(circuit.gates.len());
@@ -313,7 +313,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
 //     (obfuscated, inverse_starts)
 // }
 
-pub fn obfuscate(c: &CircuitSeq, num_wires: usize, seed: u64) -> (CircuitSeq, Vec<usize>) {
+pub fn obfuscate(c: &CircuitSeq, num_wires: usize) -> (CircuitSeq, Vec<usize>) {
     if c.gates.len() == 0 {
         return (CircuitSeq { gates: Vec::new() }, Vec::new() )
     }
@@ -322,9 +322,12 @@ pub fn obfuscate(c: &CircuitSeq, num_wires: usize, seed: u64) -> (CircuitSeq, Ve
 
     let mut rng = rand::rng();
 
+    // for butterfly
+    let (r, r_inv) = random_id(num_wires as u8, rng.random_range(3..=25));
+
     for gate in &c.gates {
         // Generate a random identity r ⋅ r⁻¹
-        let (r, r_inv) = random_id(num_wires as u8, rng.random_range(3..=25), seed);
+        // let (r, r_inv) = random_id(num_wires as u8, rng.random_range(3..=25), seed);
 
         // Add r
         obfuscated.gates.extend(&r.gates);
@@ -340,10 +343,12 @@ pub fn obfuscate(c: &CircuitSeq, num_wires: usize, seed: u64) -> (CircuitSeq, Ve
     }
 
     // Add a final padding random identity
-    let (r0, r0_inv) = random_id(num_wires as u8, rng.random_range(3..=5), seed);
-    obfuscated.gates.extend(&r0.gates);
+    //let (r0, r0_inv) = random_id(num_wires as u8, rng.random_range(3..=5), seed);
+    //obfuscated.gates.extend(&r0.gates);
+    obfuscated.gates.extend(&r.gates);
     inverse_starts.push(obfuscated.gates.len());
-    obfuscated.gates.extend(&r0_inv.gates);
+    //obfuscated.gates.extend(&r0_inv.gates);
+    obfuscated.gates.extend(&r_inv.gates);
 
     (obfuscated, inverse_starts)
 }

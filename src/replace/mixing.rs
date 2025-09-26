@@ -3,17 +3,19 @@ use crate::{
     replace::replace::{compress, obfuscate},
 };
 
+use crate::replace::replace::random_id;
+
 use itertools::Itertools;
 use rusqlite::Connection;
-
+use rand::Rng;
 use std::{
     fs::{File, OpenOptions},
     io::Write,
 };
 
-fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize, seed: u64) -> CircuitSeq {
+fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
-    let (mut final_circuit, inverse_starts) = obfuscate(c, n, seed);
+    let (mut final_circuit, inverse_starts) = obfuscate(c, n);
     println!("{}", final_circuit.to_string(n));
     //let (mut final_circuit, inverse_starts) = obfuscate(&_final_circuit, n);
     println!("{:?} Obf Len: {}", pin_counts(&final_circuit, n), final_circuit.gates.len());
@@ -64,7 +66,50 @@ pub fn pin_counts(circuit: &CircuitSeq, num_wires: usize) -> Vec<usize> {
     counts
 }
 
-pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, seed: u64) {
+pub fn butteryfly(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize >>, n: usize) -> CircuitSeq {
+    // Pick one random R
+    let mut rng = rand::rng();
+    let (r, r_inv) = random_id(n as u8, rng.random_range(3..=25)); 
+
+    // Build blocks: [R* gᵢ R]
+    let mut blocks: Vec<CircuitSeq> = Vec::new();
+    for g in &c.gates {
+        let gi = CircuitSeq { gates: vec![*g] };   // wrap gate as circuit
+        let block = r_inv.clone()
+            .concat(&gi)
+            .concat(&r.clone());
+        // Compress each block
+        let compressed_block = compress(&block, 100_000, conn, bit_shuf, n);
+        blocks.push(compressed_block);
+    }
+
+    // Combine blocks hierarchically
+    let mut acc = blocks[0].clone();
+    for b in blocks.into_iter().skip(1) {
+        let combined = acc.concat(&b);
+        acc = compress(&combined, 100_000, conn, bit_shuf, n);
+    }
+
+    // Add bookends: R ... R*
+    acc = r.concat(&acc).concat(&r_inv);
+
+    // Final global compression
+    let mut prev_len = acc.gates.len();
+    let mut stable_count = 0;
+    while stable_count < 3 {
+        acc = compress(&acc, 100_000, conn, bit_shuf, n);
+        if acc.gates.len() == prev_len {
+            stable_count += 1;
+        } else {
+            prev_len = acc.gates.len();
+            stable_count = 0;
+        }
+    }
+
+    acc
+}
+
+pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) {
     // Start with the input circuit
     let mut circuit = c.clone();
     let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
@@ -73,7 +118,7 @@ pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, 
     let mut post_len = 0;
     let mut count = 0;
     for _ in 0..rounds {
-        circuit = obfuscate_and_target_compress(&circuit, conn, &bit_shuf, n, seed);
+        circuit = obfuscate_and_target_compress(&circuit, conn, &bit_shuf, n);
         if circuit.gates.len() == 0 {
             break;
         }

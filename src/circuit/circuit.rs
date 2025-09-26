@@ -757,6 +757,13 @@ impl CircuitSeq {
 
         result
     }
+
+    pub fn concat(&self, other: &CircuitSeq) -> CircuitSeq {
+        let mut gates = self.gates.clone();
+        gates.extend_from_slice(&other.gates);
+        CircuitSeq { gates }
+    }
+
 }
 
 pub fn base_gates(n: usize) -> Vec<[usize; 3]> {
