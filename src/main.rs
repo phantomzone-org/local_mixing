@@ -11,6 +11,8 @@ use local_mixing::{
     },
 };
 
+use local_mixing::replace::mixing::main_butterfly;
+
 use clap::{Arg, ArgAction, Command};
 use itertools::Itertools;
 use rand::rngs::OsRng;
@@ -64,6 +66,17 @@ fn main() {
         .subcommand(
             Command::new("mix")
                 .about("Obfuscate and compress an existing circuit")
+                .arg(
+                    Arg::new("rounds")
+                        .short('r')
+                        .long("rounds")
+                        .required(true)
+                        .value_parser(clap::value_parser!(usize))
+                ),
+        )
+        .subcommand(
+            Command::new("butterfly")
+                .about("Obfuscate and compress an existing circuit via butterfly method")
                 .arg(
                     Arg::new("rounds")
                         .short('r')
@@ -159,6 +172,48 @@ fn main() {
                     "
                 ).unwrap();
                 main_mix(&c, rounds, &mut conn, 5);
+            }
+        }
+        Some(("butterfly", sub)) => {
+            let rounds: usize = *sub.get_one("rounds").unwrap();
+
+            let data = fs::read_to_string("initial.txt").expect("Failed to read initial.txt");
+            // let seed = OsRng.try_next_u64().unwrap_or_else(|e| {
+            //     panic!("Failed to generate random seed: {}", e);
+            // });
+            // println!("Using seed: {}", seed);
+            if data.trim().is_empty() {
+                // Open DB connection
+                let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+                conn.execute_batch(
+                    "
+                    PRAGMA synchronous = OFF;
+                    PRAGMA journal_mode = WAL;
+                    PRAGMA temp_store = MEMORY;
+                    PRAGMA cache_size = -200000;
+                    PRAGMA locking_mode = EXCLUSIVE;
+                    "
+                ).unwrap();
+                // Fallback when file is empty
+                let c1= random_canonical_id(&conn, 5).unwrap();
+                println!("{:?} Starting Len: {}", c1.permutation(5).data, c1.gates.len());
+                main_butterfly(&c1, rounds, &mut conn, 5);
+            } else {
+                
+                let c = CircuitSeq::from_string(&data);
+
+                // Open DB connection
+                let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+                conn.execute_batch(
+                    "
+                    PRAGMA synchronous = OFF;
+                    PRAGMA journal_mode = WAL;
+                    PRAGMA temp_store = MEMORY;
+                    PRAGMA cache_size = -200000;
+                    PRAGMA locking_mode = EXCLUSIVE;
+                    "
+                ).unwrap();
+                main_butterfly(&c, rounds, &mut conn, 5);
             }
         }
         _ => unreachable!(),

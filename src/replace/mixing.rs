@@ -66,45 +66,79 @@ pub fn pin_counts(circuit: &CircuitSeq, num_wires: usize) -> Vec<usize> {
     counts
 }
 
-pub fn butteryfly(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize >>, n: usize) -> CircuitSeq {
+pub fn butterfly(
+    c: &CircuitSeq,
+    conn: &mut Connection,
+    bit_shuf: &Vec<Vec<usize>>,
+    n: usize,
+) -> CircuitSeq {
     // Pick one random R
     let mut rng = rand::rng();
     let (r, r_inv) = random_id(n as u8, rng.random_range(3..=25)); 
 
+    println!("Butterfly start: {} gates", c.gates.len());
+
     // Build blocks: [R* gᵢ R]
     let mut blocks: Vec<CircuitSeq> = Vec::new();
-    for g in &c.gates {
+    for (i, g) in c.gates.iter().enumerate() {
         let gi = CircuitSeq { gates: vec![*g] };   // wrap gate as circuit
         let block = r_inv.clone()
             .concat(&gi)
             .concat(&r.clone());
-        // Compress each block
+
         let compressed_block = compress(&block, 100_000, conn, bit_shuf, n);
+
+        println!(
+            "  Block {}: before {} gates → after {} gates",
+            i,
+            block.gates.len(),
+            compressed_block.gates.len()
+        );
+
         blocks.push(compressed_block);
     }
 
     // Combine blocks hierarchically
     let mut acc = blocks[0].clone();
-    for b in blocks.into_iter().skip(1) {
+    println!("Start combining: {}", acc.gates.len());
+
+    for (i, b) in blocks.into_iter().skip(1).enumerate() {
         let combined = acc.concat(&b);
+        let before = combined.gates.len();
         acc = compress(&combined, 100_000, conn, bit_shuf, n);
+        let after = acc.gates.len();
+
+        println!(
+            "  Combine step {}: {} → {} gates",
+            i + 1,
+            before,
+            after
+        );
     }
 
     // Add bookends: R ... R*
     acc = r.concat(&acc).concat(&r_inv);
+    println!("After adding bookends: {} gates", acc.gates.len());
 
-    // Final global compression
+    // Final global compression (until stable 3x)
     let mut prev_len = acc.gates.len();
     let mut stable_count = 0;
     while stable_count < 3 {
+        let before = acc.gates.len();
         acc = compress(&acc, 100_000, conn, bit_shuf, n);
-        if acc.gates.len() == prev_len {
+        let after = acc.gates.len();
+
+        if after == before {
             stable_count += 1;
+            println!("  Final compression stable {}/3 at {} gates", stable_count, after);
         } else {
-            prev_len = acc.gates.len();
+            println!("  Final compression reduced: {} → {} gates", before, after);
+            prev_len = after;
             stable_count = 0;
         }
     }
+
+    println!("Butterfly done: {} gates", acc.gates.len());
 
     acc
 }
@@ -119,6 +153,76 @@ pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) 
     let mut count = 0;
     for _ in 0..rounds {
         circuit = obfuscate_and_target_compress(&circuit, conn, &bit_shuf, n);
+        if circuit.gates.len() == 0 {
+            break;
+        }
+        
+        if circuit.gates.len() == post_len {
+            count += 1;
+        } else {
+            post_len = circuit.gates.len();
+            count = 0;
+        }
+
+        if count > 2 {
+            break;
+        }
+    }
+    let mut i = 0;
+    while i < circuit.gates.len().saturating_sub(1) {
+        if circuit.gates[i] == circuit.gates[i + 1] {
+            // remove elements at i and i+1
+            circuit.gates.drain(i..=i + 1);
+
+            // step back up to 2 indices, but not below 0
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
+        }
+    }
+    // Convert the final circuit to string
+    let circuit_str = circuit.to_string(n);
+    println!("{:?}", circuit.permutation(n).data);
+    // Write to file
+    let mut file = File::create("recent_circuit.txt").expect("Failed to create file");
+    file.write_all(circuit_str.as_bytes())
+        .expect("Failed to write circuit to file");
+
+    let circuit_str = circuit.repr(); // or however you stringify your circuit
+
+    if !circuit.gates.is_empty() {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(true) // append instead of overwriting
+            .open("good_id.txt")
+            .expect("Failed to open good_id.txt");
+
+        let line = format!("{} : {}\n", circuit.gates.len(), circuit_str);
+
+        file.write_all(line.as_bytes())
+            .expect("Failed to write circuit to good_ids.txt");
+
+        println!("Wrote good circuit to good_id.txt");
+    }
+
+    if circuit.gates == c.gates {
+        println!("The obfuscation didn't do anything");
+    }
+
+    println!("Final circuit written to recent_circuit.txt");
+}
+
+pub fn main_butterfly(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) {
+    // Start with the input circuit
+    let mut circuit = c.clone();
+    let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
+    let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+    // Repeat obfuscate + compress 'rounds' times
+    let mut post_len = 0;
+    let mut count = 0;
+    for _ in 0..rounds {
+        circuit = butterfly(&circuit, conn, &bit_shuf, n);
         if circuit.gates.len() == 0 {
             break;
         }
