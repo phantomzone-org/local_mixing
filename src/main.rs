@@ -145,7 +145,7 @@ fn main() {
                 let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
                 conn.execute_batch(
                     "
-                    PRAGMA synchronous = OFF;
+                    PRAGMA synchronous = NORMAL;
                     PRAGMA journal_mode = WAL;
                     PRAGMA temp_store = MEMORY;
                     PRAGMA cache_size = -200000;
@@ -164,7 +164,7 @@ fn main() {
                 let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
                 conn.execute_batch(
                     "
-                    PRAGMA synchronous = OFF;
+                    PRAGMA synchronous = NORMAL;
                     PRAGMA journal_mode = WAL;
                     PRAGMA temp_store = MEMORY;
                     PRAGMA cache_size = -200000;
@@ -187,7 +187,7 @@ fn main() {
                 let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
                 conn.execute_batch(
                     "
-                    PRAGMA synchronous = OFF;
+                    PRAGMA synchronous = NORMAL;
                     PRAGMA journal_mode = WAL;
                     PRAGMA temp_store = MEMORY;
                     PRAGMA cache_size = -200000;
@@ -207,7 +207,7 @@ fn main() {
                 let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
                 conn.execute_batch(
                     "
-                    PRAGMA synchronous = OFF;
+                    PRAGMA synchronous = NORMAL;
                     PRAGMA journal_mode = WAL;
                     PRAGMA temp_store = MEMORY;
                     PRAGMA cache_size = -200000;

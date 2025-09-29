@@ -35,73 +35,64 @@ pub fn random_canonical_id(
         return Err(format!("Need at least 2 tables matching {}", pattern).into());
     }
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     loop {
-        // Pick two random tables (can be different m values)
-        let table_a = tables[rng.gen_range(0..tables.len())].clone();
-        let table_b = tables[rng.gen_range(0..tables.len())].clone();
+        // Pick two random tables
+        let table_a = tables[rng.random_range(0..tables.len())].clone();
+        let table_b = tables[rng.random_range(0..tables.len())].clone();
 
-        // Count how many perms exist in both tables
-        let count: i64 = conn.query_row(
-            &format!(
-                "SELECT COUNT(*) FROM {a} a JOIN {b} b ON a.perm = b.perm",
-                a = table_a,
-                b = table_b
-            ),
+        let (small, large) = if table_a < table_b {
+            (table_a, table_b)
+        } else {
+            (table_b, table_a)
+        };
+
+        let count_small: i64 = conn.query_row(
+            &format!("SELECT MAX(rowid) FROM {}", small),
             [],
             |row| row.get(0),
         )?;
-
-        // If none, retry with new tables
-        if count == 0 {
-            continue;
+        if count_small == 0 {
+            continue; // empty table, retry
         }
 
-        // Pick a random offset within the count
-        let offset = rng.gen_range(0..count);
+        let random_id = rng.random_range(1..=count_small);
+        let (circuit_blob, perm_blob, shuf_blob): (Vec<u8>, Vec<u8>, Vec<u8>) = conn.query_row(
+            &format!("SELECT circuit, perm, shuf FROM {} WHERE rowid = ?", small),
+            [random_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        )?;
 
-        // Select one perm at that offset
-        let perm: Vec<u8> = conn.query_row(
-            &format!(
-                "SELECT a.perm FROM {a} a JOIN {b} b ON a.perm = b.perm LIMIT 1 OFFSET ?",
-                a = table_a,
-                b = table_b
-            ),
-            [offset],
+        let count_large: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM {} WHERE perm = ?", large),
+            [&perm_blob],
             |row| row.get(0),
         )?;
 
-        // Fetch circuits from table_a with this perm
-        let blobs_a: Vec<[Vec<u8>; 2]> = conn
-            .prepare(&format!("SELECT circuit, shuf FROM {} WHERE perm = ?", table_a))?
-            .query_map([&perm], |row| Ok([row.get(0)?, row.get(1)?]))?
-            .map(|r| r.unwrap())
-            .collect();
-
-        // Fetch circuits from table_b with this perm
-        let blobs_b: Vec<[Vec<u8>; 2]> = conn
-            .prepare(&format!("SELECT circuit, shuf FROM {} WHERE perm = ?", table_b))?
-            .query_map([&perm], |row| Ok([row.get(0)?, row.get(1)?]))?
-            .map(|r| r.unwrap())
-            .collect();
-
-        // Skip if either table has no circuits for this perm
-        if blobs_a.is_empty() || blobs_b.is_empty() {
-            continue;
+        if count_large == 0 {
+            continue; // not in both tables, retry
         }
 
-        // Pick one circuit from each table
-        let a_blob = blobs_a.choose(&mut rng).unwrap();
-        let b_blob = blobs_b.choose(&mut rng).unwrap();
+        // Pick a random offset
+        let offset = rng.random_range(0..count_large);
+
+        let b_blob: [Vec<u8>; 2] = conn.query_row(
+            &format!(
+                "SELECT circuit, shuf FROM {} WHERE perm = ? LIMIT 1 OFFSET ?",
+                large
+            ),
+            rusqlite::params![&perm_blob, offset],
+            |row| Ok([row.get(0)?, row.get(1)?]),
+        )?;
 
         // Deserialize circuits
-        let mut ca = CircuitSeq::from_blob(&a_blob[0]);
+        let mut ca = CircuitSeq::from_blob(&circuit_blob);
         let mut cb = CircuitSeq::from_blob(&b_blob[0]);
 
         // Rewire cb to align with ca
         cb.rewire(&Permutation::from_blob(&b_blob[1]), wires);
-        cb.rewire(&Permutation::from_blob(&a_blob[1]).invert(), wires);
+        cb.rewire(&Permutation::from_blob(&shuf_blob).invert(), wires);
 
         // Reverse cb and append to ca
         cb.gates.reverse();
@@ -126,6 +117,7 @@ pub fn random_id(n: u8, m: usize) -> (CircuitSeq, CircuitSeq) {
     (circuit, rev)
 }
 
+//TODO: look into if this is the best way to do things
 // Return a random subcircuit, its starting index (gate), and ending index
 pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
     let len = circuit.gates.len();
