@@ -11,6 +11,7 @@ use rayon::iter::ParallelIterator;
 use rusqlite::{params, Connection, Result};
 use smallvec::SmallVec;
 use rayon::iter::IntoParallelRefIterator;
+use rayon::prelude::*;
 
 use std::{
     fs::OpenOptions,
@@ -582,8 +583,6 @@ pub fn build_from_sql(
     m: usize,
     bit_shuf: &Vec<Vec<usize>>,
 ) -> Result<()> {
-    use rayon::prelude::*;
-    use std::sync::Mutex;
 
     println!("Running build (max CPU)");
 
@@ -641,7 +640,7 @@ pub fn build_from_sql(
         last_rowid = rows.last().unwrap().0;
 
         let results: Vec<(CircuitSeq, Canonicalization)> = rows
-            .par_chunks(5000)
+            .par_chunks(500)
             .flat_map(|row_chunk| {
                 let mut local_results = Vec::with_capacity(row_chunk.len() * base_gates.len() * 2);
 
