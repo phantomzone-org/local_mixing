@@ -4,10 +4,10 @@ use local_mixing::{
         explore::explore_db,
         rainbow::{main_rainbow_generate, main_rainbow_load},
     },
-    random::random_data::{build_from_sql, main_random},
+    random::random_data::{build_from_sql, main_random, random_circuit},
     replace::{
         mixing::main_mix,
-        replace::{random_canonical_id, random_id},
+        replace::{random_canonical_id, random_id, compress},
     },
 };
 
@@ -99,7 +99,7 @@ fn main() {
             // main_rainbow_load(n, m, "./db");
             
             // Open DB connection
-            let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+            let mut conn = Connection::open("./db/circuits.db").expect("Failed to open DB");
             conn.execute_batch(
                     "
                     PRAGMA synchronous = OFF;
@@ -197,6 +197,9 @@ fn main() {
                 // Fallback when file is empty
                 println!("Generating random");
                 let c1= random_canonical_id(&conn, 5).unwrap();
+                // let perms: Vec<Vec<usize>> = (0..5).permutations(5).collect();
+                // let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+                // let c1 = compress(&random_circuit(5,128), 100_000, &mut conn, &bit_shuf,5 );
                 println!("{:?} Starting Len: {}", c1.permutation(5).data, c1.gates.len());
                 main_butterfly(&c1, rounds, &mut conn, 5);
             } else {

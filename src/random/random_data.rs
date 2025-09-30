@@ -75,7 +75,7 @@ pub fn seeded_random_circuit(n: u8, m: usize, seed: u64) -> CircuitSeq {
             let mut gate = [0u8; 3];
             for j in 0..3 {
                 loop {
-                    let v: u8 = rng.gen_range(0..16);
+                    let v: u8 = rng.random_range(0..16);
                     if !set[v as usize] {
                         set[v as usize] = true;
                         gate[j] = v;
@@ -700,7 +700,7 @@ pub fn build_from_sql(
 //Speed up SQL queries
 //Should not see for a particular size query, the speed should not vary across multiple runs
 pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
-    let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+    let mut conn = Connection::open("./db/circuits.db").expect("Failed to open DB");
     let table_name = format!("n{}m{}", n, m);
     create_table(&mut conn, &table_name).expect("Failed to create table");
 

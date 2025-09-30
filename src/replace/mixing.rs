@@ -13,6 +13,8 @@ use std::{
     io::Write,
 };
 
+use crate::replace::replace::outward_compress;
+
 fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
     let (mut final_circuit, inverse_starts) = obfuscate(c, n);
@@ -80,24 +82,39 @@ pub fn butterfly(
 
     // Build blocks: [R* gᵢ R]
     let mut blocks: Vec<CircuitSeq> = Vec::new();
-    for (i, g) in c.gates.iter().enumerate() {
-        let gi = CircuitSeq { gates: vec![*g] };   // wrap gate as circuit
-        let block = r_inv.clone()
-            .concat(&gi)
-            .concat(&r.clone());
+    // for (i, g) in c.gates.iter().enumerate() {
+    //     let gi = CircuitSeq { gates: vec![*g] };   // wrap gate as circuit
+    //     let block = r_inv.clone()
+    //         .concat(&gi)
+    //         .concat(&r.clone());
 
-        let compressed_block = compress(&block, 100_000, conn, bit_shuf, n);
+    //     let compressed_block = compress(&block, 100_000, conn, bit_shuf, n);
+
+    //     println!(
+    //         "  Block {}: before {} gates → after {} gates",
+    //         i,
+    //         block.gates.len(),
+    //         compressed_block.gates.len()
+    //     );
+
+    //     blocks.push(compressed_block);
+    // }
+
+    for (i, g) in c.gates.iter().enumerate() {
+        let gi = CircuitSeq { gates: vec![*g] }; // wrap the single gate as a CircuitSeq
+
+        // Outward compression with r and gi
+        let compressed_block = outward_compress(&gi, &r, 100_000, conn, bit_shuf, n);
 
         println!(
             "  Block {}: before {} gates → after {} gates",
             i,
-            block.gates.len(),
+            r_inv.gates.len() * 2 + 1, // approximate size before compress
             compressed_block.gates.len()
         );
 
         blocks.push(compressed_block);
     }
-
     // Combine blocks hierarchically
     let mut acc = blocks[0].clone();
     println!("Start combining: {}", acc.gates.len());
@@ -138,6 +155,21 @@ pub fn butterfly(
         }
     }
 
+    let mut i = 0;
+    while i < acc.gates.len().saturating_sub(1) {
+        if acc.gates[i] == acc.gates[i + 1] {
+            // remove elements at i and i+1
+            acc.gates.drain(i..=i + 1);
+
+            // step back up to 2 indices, but not below 0
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
+        }
+    }
+    //writeln!(file, "Permutation after remove identities 2 is: \n{:?}", acc.permutation(n).data).unwrap();
+    println!("Compressed len: {}", acc.gates.len());
+
     println!("Butterfly done: {} gates", acc.gates.len());
 
     acc
@@ -145,6 +177,7 @@ pub fn butterfly(
 
 pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) {
     // Start with the input circuit
+    println!("Starting len: {}", c.gates.len());
     let mut circuit = c.clone();
     let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
     let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
@@ -215,6 +248,7 @@ pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) 
 
 pub fn main_butterfly(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) {
     // Start with the input circuit
+    println!("Starting len: {}", c.gates.len());
     let mut circuit = c.clone();
     let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
     let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
@@ -237,19 +271,21 @@ pub fn main_butterfly(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: u
         if count > 2 {
             break;
         }
-    }
-    let mut i = 0;
-    while i < circuit.gates.len().saturating_sub(1) {
-        if circuit.gates[i] == circuit.gates[i + 1] {
-            // remove elements at i and i+1
-            circuit.gates.drain(i..=i + 1);
+        let mut i = 0;
+        while i < circuit.gates.len().saturating_sub(1) {
+            if circuit.gates[i] == circuit.gates[i + 1] {
+                // remove elements at i and i+1
+                circuit.gates.drain(i..=i + 1);
 
-            // step back up to 2 indices, but not below 0
-            i = i.saturating_sub(2);
-        } else {
-            i += 1;
+                // step back up to 2 indices, but not below 0
+                i = i.saturating_sub(2);
+            } else {
+                i += 1;
+            }
         }
     }
+    println!("Final len: {}", circuit.gates.len());
+    println!("Final cycle: {:?}", circuit.permutation(n).to_cycle());
     // Convert the final circuit to string
     let circuit_str = circuit.to_string(n);
     println!("{:?}", circuit.permutation(n).data);

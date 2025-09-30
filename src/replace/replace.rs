@@ -120,40 +120,63 @@ pub fn random_id(n: u8, m: usize) -> (CircuitSeq, CircuitSeq) {
 //TODO: look into if this is the best way to do things
 // Return a random subcircuit, its starting index (gate), and ending index
 pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
+    // let len = circuit.gates.len();
+    
+    // if circuit.gates.len() == 0 {
+    //     return (CircuitSeq{gates: Vec::new()}, 0, 0)
+    // }
+
+    // let mut rng = rand::rng();
+    // //get size with more bias to lower length subcircuits
+    // let a = rng.random_range(0..len);
+
+    // // pick one of 1, 2, 4, 8
+    // let shift = rng.random_range(0..4);
+    // let upper = 1 << shift;
+
+    // let mut b = (a + (1 + rng.random_range(0..upper))) as usize;
+
+    // if b > len {
+    //     b = len;
+    // }
+
+    // if a == b {
+    //     if b < len - 1 {
+    //         b += 1;
+    //     } else {
+    //         b -= 1;
+    //     }
+    // }
+
+    // let start = min(a,b);
+    // let end = max(a,b);
+
+    // let subcircuit = circuit.gates[start..end].to_vec();
+
+    // (CircuitSeq{ gates: subcircuit }, start, end)
+
     let len = circuit.gates.len();
     
-    if circuit.gates.len() == 0 {
-        return (CircuitSeq{gates: Vec::new()}, 0, 0)
+    if len == 0 {
+        return (CircuitSeq { gates: Vec::new() }, 0, 0);
     }
 
     let mut rng = rand::rng();
-    //get size with more bias to lower length subcircuits
-    let a = rng.random_range(0..len);
 
-    // pick one of 1, 2, 4, 8
-    let shift = rng.random_range(0..4);
-    let upper = 1 << shift;
+    // Pick a random start index
+    let start = rng.random_range(0..len);
 
-    let mut b = (a + (1 + rng.random_range(0..upper))) as usize;
+    // Maximum subcircuit length is 8, but can't go past end of circuit
+    let max_len = 8.min(len - start);
 
-    if b > len {
-        b = len;
-    }
+    // Pick random length from 1..=max_len
+    let sub_len = rng.random_range(1..=max_len);
 
-    if a == b {
-        if b < len - 1 {
-            b += 1;
-        } else {
-            b -= 1;
-        }
-    }
-
-    let start = min(a,b);
-    let end = max(a,b);
+    let end = start + sub_len;
 
     let subcircuit = circuit.gates[start..end].to_vec();
 
-    (CircuitSeq{ gates: subcircuit }, start, end)
+    (CircuitSeq { gates: subcircuit }, start, end)
 }
 
 pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
@@ -262,7 +285,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
     //     }
     // }
     //writeln!(file, "Permutation after remove identities 2 is: \n{:?}", compressed.permutation(n).data).unwrap();
-
+    //println!("Compressed len: {}", compressed.gates.len());
     compressed
 }
 
@@ -360,4 +383,13 @@ pub fn obfuscate(c: &CircuitSeq, num_wires: usize) -> (CircuitSeq, Vec<usize>) {
     obfuscated.gates.extend(&r_inv.gates);
 
     (obfuscated, inverse_starts)
+}
+
+pub fn outward_compress(g: &CircuitSeq, r: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
+    let mut g = g.clone();
+    for gate in r.gates.iter().rev() {
+        let wrapper = CircuitSeq { gates: vec![*gate] };
+        g = compress(&wrapper.concat(&g).concat(&wrapper), trials, conn, bit_shuf, n);
+    }
+    g
 }
