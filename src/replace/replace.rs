@@ -7,7 +7,7 @@ use crate::random::random_data::insert_circuit;
 
 use rand::{prelude::IndexedRandom, Rng};
 use rusqlite::{params, Connection, OptionalExtension};
-
+use itertools::Itertools;
 use std::{
     cmp::{max, min},
     // used for testing
@@ -120,63 +120,63 @@ pub fn random_id(n: u8, m: usize) -> (CircuitSeq, CircuitSeq) {
 //TODO: look into if this is the best way to do things
 // Return a random subcircuit, its starting index (gate), and ending index
 pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
-    // let len = circuit.gates.len();
-    
-    // if circuit.gates.len() == 0 {
-    //     return (CircuitSeq{gates: Vec::new()}, 0, 0)
-    // }
-
-    // let mut rng = rand::rng();
-    // //get size with more bias to lower length subcircuits
-    // let a = rng.random_range(0..len);
-
-    // // pick one of 1, 2, 4, 8
-    // let shift = rng.random_range(0..4);
-    // let upper = 1 << shift;
-
-    // let mut b = (a + (1 + rng.random_range(0..upper))) as usize;
-
-    // if b > len {
-    //     b = len;
-    // }
-
-    // if a == b {
-    //     if b < len - 1 {
-    //         b += 1;
-    //     } else {
-    //         b -= 1;
-    //     }
-    // }
-
-    // let start = min(a,b);
-    // let end = max(a,b);
-
-    // let subcircuit = circuit.gates[start..end].to_vec();
-
-    // (CircuitSeq{ gates: subcircuit }, start, end)
-
     let len = circuit.gates.len();
     
-    if len == 0 {
-        return (CircuitSeq { gates: Vec::new() }, 0, 0);
+    if circuit.gates.len() == 0 {
+        return (CircuitSeq{gates: Vec::new()}, 0, 0)
     }
 
     let mut rng = rand::rng();
+    //get size with more bias to lower length subcircuits
+    let a = rng.random_range(0..len);
 
-    // Pick a random start index
-    let start = rng.random_range(0..len);
+    // pick one of 1, 2, 4, 8
+    let shift = rng.random_range(0..4);
+    let upper = 1 << shift;
 
-    // Maximum subcircuit length is 8, but can't go past end of circuit
-    let max_len = 8.min(len - start);
+    let mut b = (a + (1 + rng.random_range(0..upper))) as usize;
 
-    // Pick random length from 1..=max_len
-    let sub_len = rng.random_range(1..=max_len);
+    if b > len {
+        b = len;
+    }
 
-    let end = start + sub_len;
+    if a == b {
+        if b < len - 1 {
+            b += 1;
+        } else {
+            b -= 1;
+        }
+    }
+
+    let start = min(a,b);
+    let end = max(a,b);
 
     let subcircuit = circuit.gates[start..end].to_vec();
 
-    (CircuitSeq { gates: subcircuit }, start, end)
+    (CircuitSeq{ gates: subcircuit }, start, end)
+
+    // let len = circuit.gates.len();
+    
+    // if len == 0 {
+    //     return (CircuitSeq { gates: Vec::new() }, 0, 0);
+    // }
+
+    // let mut rng = rand::rng();
+
+    // // Pick a random start index
+    // let start = rng.random_range(0..len);
+
+    // // Maximum subcircuit length is 8, but can't go past end of circuit
+    // let max_len = 8.min(len - start);
+
+    // // Pick random length from 1..=max_len
+    // let sub_len = rng.random_range(1..=max_len);
+
+    // let end = start + sub_len;
+
+    // let subcircuit = circuit.gates[start..end].to_vec();
+
+    // (CircuitSeq { gates: subcircuit }, start, end)
 }
 
 pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
@@ -251,6 +251,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
                         // Do the replacement
                         compressed.gates.splice(start..end, repl.gates);
                         replaced = true;
+                        println!("A replacement was found!");
                         break; // stop once a replacement is applied
                     }
                 }
@@ -393,4 +394,52 @@ pub fn outward_compress(g: &CircuitSeq, r: &CircuitSeq, trials: usize, conn: &mu
         g = compress(&wrapper.concat(&g).concat(&wrapper), trials, conn, bit_shuf, n);
     }
     g
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[test]
+    fn random_circuit_exists_in_db() {
+        // Open the SQLite DB
+        let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+
+        let perms: Vec<Vec<usize>> = (0..5).permutations(5).collect();
+        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+
+        let n = 5;
+        let len = 4;
+
+        // Generate a random circuit of length 4
+        let c = random_circuit(n, len);
+        println!("Random circuit: {:?}", c.gates);
+
+        // Compute its permutation and canonical form
+        let perm = c.permutation(n as usize);
+        let canon = perm.canon_simple(&bit_shuf);
+        let perm_blob = canon.perm.repr_blob();
+
+        let mut found = false;
+
+        // Check tables for lengths 1..=len
+        for m in 1..=len {
+            let table = format!("n{}m{}", n, m);
+            let query = format!("SELECT COUNT(*) FROM {} WHERE perm = ?1", table);
+
+            if let Ok(count) =
+                conn.query_row(&query, [perm_blob.as_slice()], |row| row.get::<_, i64>(0))
+            {
+                if count > 0 {
+                    println!("Found permutation in table {}!", table);
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        // Assert that the permutation exists in at least one table
+        assert!(found, "Permutation not found in any table!");
+    }
 }

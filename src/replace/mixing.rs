@@ -104,7 +104,7 @@ pub fn butterfly(
         let gi = CircuitSeq { gates: vec![*g] }; // wrap the single gate as a CircuitSeq
 
         // Outward compression with r and gi
-        let compressed_block = outward_compress(&gi, &r, 100_000, conn, bit_shuf, n);
+        let compressed_block = outward_compress(&gi, &r, 1_000_000, conn, bit_shuf, n);
 
         println!(
             "  Block {}: before {} gates → after {} gates",

@@ -818,7 +818,7 @@ mod tests {
         let now = std::time::Instant::now();
         // Call check_cycles for n=3, m=3
         let _ = check_cycles(3, 3);
-        print_all("n10m2")?;
+        //count_distinct()?;
         println!("Time: {:?}", now.elapsed());
         Ok(())
     }
