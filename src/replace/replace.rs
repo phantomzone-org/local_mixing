@@ -209,7 +209,8 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
     // Can forcibly choose where to do compression as well
 
     for _ in 0..trials {
-        let (subcircuit, start, end) = random_subcircuit(&compressed);
+        let (mut subcircuit, start, end) = random_subcircuit(&compressed);
+        subcircuit.canonicalize();
         let sub_perm = subcircuit.permutation(n);
         let canon_perm = sub_perm.canon_simple(&bit_shuf);
         let perm_blob = canon_perm.perm.repr_blob();
