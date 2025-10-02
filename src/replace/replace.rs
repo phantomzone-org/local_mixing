@@ -39,8 +39,8 @@ pub fn random_canonical_id(
 
     loop {
         // Pick two random tables
-        let table_a = tables[rng.random_range(0..tables.len())].clone();
-        let table_b = tables[rng.random_range(0..tables.len())].clone();
+        let table_a = tables[rng.random_range(2..tables.len())].clone();
+        let table_b = tables[rng.random_range(2..tables.len())].clone();
 
         let (small, large) = if table_a < table_b {
             (table_a, table_b)
@@ -190,7 +190,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
     if c.gates.len() == 0 {
         return CircuitSeq{ gates: Vec::new() } 
     }
-    
+
     // Open the file in append mode
     // let mut file = OpenOptions::new()
     //     .create(true)
