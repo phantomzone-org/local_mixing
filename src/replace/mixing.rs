@@ -145,6 +145,8 @@ pub fn butterfly(
             compressed_block.gates.len()
         );
 
+        println!("  {}", compressed_block.repr());
+
         compressed_block
     })
     .collect();
