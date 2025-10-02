@@ -180,10 +180,17 @@ pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
 }
 
 pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
+    let id = Permutation::id_perm(n);
+    
+    if c.permutation(n) == id {
+        return CircuitSeq{ gates: Vec::new() }
+    }
+
     let mut compressed = c.clone();
     if c.gates.len() == 0 {
         return CircuitSeq{ gates: Vec::new() } 
     }
+    
     // Open the file in append mode
     // let mut file = OpenOptions::new()
     //     .create(true)
@@ -203,6 +210,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
             i += 1;
         }
     }
+
     if compressed.gates.len() == 0 {
         return CircuitSeq{ gates: Vec::new() } 
     }

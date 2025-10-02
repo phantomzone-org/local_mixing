@@ -100,15 +100,16 @@ pub fn seeded_random_circuit(n: u8, m: usize, seed: u64) -> CircuitSeq {
 pub fn create_table(conn: &mut Connection, table_name: &str) -> Result<()> {
     // Table name includes n and m
     let sql = format!(
-        "CREATE TABLE IF NOT EXISTS {} (
+        "CREATE TABLE IF NOT EXISTS {table} (
             circuit BLOB UNIQUE,
             perm BLOB NOT NULL,
             shuf BLOB NOT NULL
-        )",
-        table_name
+        );
+        CREATE INDEX IF NOT EXISTS idx_perm_{table} ON {table} (perm);",
+        table = table_name
     );
 
-    conn.execute(&sql, [])?;
+    conn.execute_batch(&sql)?;
     Ok(())
 }
 
@@ -604,7 +605,7 @@ pub fn build_from_sql(
     let chunk_size: i64 = 50_000;
     let batch_size = 10_000;
 
-    let mut last_rowid: i64 = 0;
+    let mut last_rowid: i64 = 2950000;
 
     // Atomic flag for CTRL+C
     let stop_flag = Arc::new(AtomicBool::new(false));

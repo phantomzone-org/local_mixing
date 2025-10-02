@@ -118,22 +118,22 @@ pub fn butterfly(
     // }
 
     let r = &r;           // reference is enough; read-only
-let r_inv = &r_inv;   // same
-let bit_shuf = &bit_shuf;
+    let r_inv = &r_inv;   // same
+    let bit_shuf = &bit_shuf;
 
-// Parallel processing of gates
-let blocks: Vec<_> = c.gates
-    .par_iter()
-    .enumerate()
-    .map(|(i, &g)| {
-        // wrap single gate as CircuitSeq
-        let gi = CircuitSeq { gates: vec![g] };
+    // Parallel processing of gates
+    let blocks: Vec<_> = c.gates
+        .par_iter()
+        .enumerate()
+        .map(|(i, &g)| {
+            // wrap single gate as CircuitSeq
+            let gi = CircuitSeq { gates: vec![g] };
 
-        // create a read-only connection per thread
-        let mut conn = Connection::open_with_flags(
-        "circuits.db",
-        OpenFlags::SQLITE_OPEN_READ_ONLY,
-    ).expect("Failed to open read-only connection");
+            // create a read-only connection per thread
+            let mut conn = Connection::open_with_flags(
+            "circuits.db",
+            OpenFlags::SQLITE_OPEN_READ_ONLY,
+        ).expect("Failed to open read-only connection");
 
         // compress the block
         let compressed_block = outward_compress(&gi, r, 100_000, &mut conn, bit_shuf, n);
