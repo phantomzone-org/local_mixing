@@ -12,7 +12,10 @@ use rusqlite::{params, Connection, Result};
 use smallvec::SmallVec;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::*;
+use std::thread;
 
+use crossbeam::channel::{unbounded, Sender};
+use rayon::prelude::*;
 use std::{
     fs::OpenOptions,
     io::Write,
@@ -463,14 +466,12 @@ pub fn base_gates(n: usize) -> Vec<[u8; 3]> {
     gates
 }
 
-
 pub fn build_from_sql(
     conn: &mut Connection,
     n: usize,
     m: usize,
     bit_shuf: &Vec<Vec<usize>>,
 ) -> Result<()> {
-
     println!("Running build (max CPU)");
 
     let old_table = format!("n{}m{}", n, m - 1);
@@ -500,8 +501,34 @@ pub fn build_from_sql(
         ctrlc::set_handler(move || {
             println!("CTRL+C detected! Finishing current batch...");
             stop_flag.store(true, Ordering::SeqCst);
-        }).expect("Error setting CTRL+C handler");
+        })
+        .expect("Error setting CTRL+C handler");
     }
+
+    // Setup insertion queue
+    let (tx, rx) = unbounded::<Vec<(CircuitSeq, Canonicalization)>>();
+    let new_table_clone = new_table.clone();
+    let stop_flag_clone = stop_flag.clone();
+
+    let insert_handle = thread::spawn(move || {
+        // Open a new connection in the insertion thread
+        let mut insert_conn =
+            Connection::open("./db/circuits.db").expect("Failed to open DB in insert thread");
+
+        while let Ok(batch) = rx.recv() {
+            if stop_flag_clone.load(Ordering::SeqCst) {
+                println!("Insertion thread stopping early...");
+                break;
+            }
+
+            if let Err(e) = insert_circuits_batch(&mut insert_conn, &new_table_clone, &batch) {
+                eprintln!("Error inserting batch: {:?}", e);
+                // Decide: panic, break, or continue
+            }
+        }
+
+        println!("Insertion thread finished.");
+    });
 
     while last_rowid < total_rows {
         if stop_flag.load(Ordering::SeqCst) {
@@ -509,6 +536,7 @@ pub fn build_from_sql(
             break;
         }
 
+        // Fetch a chunk from the old table
         let rows: Vec<(i64, Vec<u8>)> = {
             let mut stmt = conn.prepare(&format!(
                 "SELECT rowid, circuit FROM {} WHERE rowid > ? ORDER BY rowid LIMIT ?",
@@ -526,14 +554,17 @@ pub fn build_from_sql(
 
         last_rowid = rows.last().unwrap().0;
 
+        // Process circuits in parallel
         let results: Vec<(CircuitSeq, Canonicalization)> = rows
             .par_chunks(500)
             .flat_map(|row_chunk| {
-                let mut local_results = Vec::with_capacity(row_chunk.len() * base_gates.len() * 2);
+                let mut local_results =
+                    Vec::with_capacity(row_chunk.len() * base_gates.len() * 2);
 
                 for (_rowid, blob) in row_chunk {
                     let old_circuit = CircuitSeq::from_blob(blob);
-                    let mut prefix: SmallVec<[[u8; 3]; 64]> = SmallVec::with_capacity(m);
+                    let mut prefix: SmallVec<[[u8; 3]; 64]> =
+                        SmallVec::with_capacity(m);
                     prefix.extend_from_slice(&old_circuit.gates);
 
                     for g in base_gates.iter() {
@@ -559,11 +590,15 @@ pub fn build_from_sql(
             })
             .collect();
 
-        // Insert batches, stop if CTRL+C
+        // Send batches to insertion thread safely
         for batch_chunk in results.chunks(batch_size) {
-            insert_circuits_batch(conn, &new_table, batch_chunk)?;
+            if let Err(e) = tx.send(batch_chunk.to_vec()) {
+                eprintln!("Failed to send batch to insertion thread: {:?}", e);
+                break; // stop sending if the insertion thread has disconnected
+            }
+
             if stop_flag.load(Ordering::SeqCst) {
-                println!("Flushed remaining batch after CTRL+C.");
+                println!("Stopping generation due to CTRL+C...");
                 break;
             }
         }
@@ -578,6 +613,10 @@ pub fn build_from_sql(
             break;
         }
     }
+
+    // Close sender to signal insertion thread to exit
+    drop(tx);
+    insert_handle.join().expect("Insertion thread panicked");
 
     println!("Build finished (or stopped early).");
     Ok(())
