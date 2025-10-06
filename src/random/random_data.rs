@@ -12,9 +12,6 @@ use rusqlite::{params, Connection, Result};
 use smallvec::SmallVec;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::*;
-use crossbeam::channel::{bounded, Sender};
-use rayon::prelude::*;
-use ctrlc;
 
 use std::{
     fs::OpenOptions,
@@ -466,16 +463,19 @@ pub fn base_gates(n: usize) -> Vec<[u8; 3]> {
     gates
 }
 
+
 pub fn build_from_sql(
     conn: &mut Connection,
     n: usize,
     m: usize,
     bit_shuf: &Vec<Vec<usize>>,
 ) -> Result<()> {
+
     println!("Running build (max CPU)");
 
     let old_table = format!("n{}m{}", n, m - 1);
     let new_table = format!("n{}m{}", n, m);
+
     create_table(conn, &new_table)?;
 
     let base_gates: Arc<Vec<[u8; 3]>> = Arc::new(base_gates(n));
@@ -489,45 +489,20 @@ pub fn build_from_sql(
     println!("Total rows in {}: {}", old_table, total_rows);
 
     let chunk_size: i64 = 50_000;
-    let batch_size: usize = 50_000; // SQLite batch insert
-    let max_queue_items: usize = 5_000_000;
+    let batch_size = 10_000;
 
+    let mut last_rowid: i64 = 0;
+
+    // Atomic flag for CTRL+C
     let stop_flag = Arc::new(AtomicBool::new(false));
     {
         let stop_flag = stop_flag.clone();
         ctrlc::set_handler(move || {
             println!("CTRL+C detected! Finishing current batch...");
             stop_flag.store(true, Ordering::SeqCst);
-        })
-        .expect("Error setting CTRL+C handler");
+        }).expect("Error setting CTRL+C handler");
     }
 
-    // Create a bounded channel
-    let (tx, rx) = crossbeam::channel::bounded::<(CircuitSeq, Canonicalization)>(max_queue_items);
-
-    // Inserter thread
-    let mut inserter_conn = Connection::open("circuits.db").expect("Failed to open DB");
-    let new_table_clone = new_table.clone();
-    let stop_flag_insert = stop_flag.clone();
-    let inserter_handle = std::thread::spawn(move || {
-        let mut buffer = Vec::with_capacity(batch_size);
-        while !stop_flag_insert.load(Ordering::SeqCst) || !rx.is_empty() {
-            if let Ok(item) = rx.recv() {
-                buffer.push(item);
-                if buffer.len() >= batch_size {
-                    insert_circuits_batch(&mut inserter_conn, &new_table_clone, &buffer)
-                        .expect("Failed batch insert");
-                    buffer.clear();
-                }
-            }
-        }
-        if !buffer.is_empty() {
-            insert_circuits_batch(&mut inserter_conn, &new_table_clone, &buffer)
-                .expect("Failed final batch insert");
-        }
-    });
-
-    let mut last_rowid: i64 = 0;
     while last_rowid < total_rows {
         if stop_flag.load(Ordering::SeqCst) {
             println!("Stopping early due to CTRL+C...");
@@ -551,51 +526,62 @@ pub fn build_from_sql(
 
         last_rowid = rows.last().unwrap().0;
 
-        // Parallel canonicalization and send to channel
-        rows.par_chunks(500).for_each_with(tx.clone(), |tx, row_chunk| {
-            for (_rowid, blob) in row_chunk {
-                let old_circuit = CircuitSeq::from_blob(blob);
-                let mut prefix: SmallVec<[[u8; 3]; 64]> = SmallVec::with_capacity(m);
-                prefix.extend_from_slice(&old_circuit.gates);
+        let results: Vec<(CircuitSeq, Canonicalization)> = rows
+            .par_chunks(500)
+            .flat_map(|row_chunk| {
+                let mut local_results = Vec::with_capacity(row_chunk.len() * base_gates.len() * 2);
 
-                for g in base_gates.iter() {
-                    // Variant 1
-                    let mut q1 = prefix.clone();
-                    q1.push(*g);
-                    let mut c1 = CircuitSeq { gates: q1.to_vec() };
-                    c1.canonicalize();
-                    let canon1 = c1.permutation(n).canon_simple(&bit_shuf);
-                    // Panic if send fails
-                    tx.send((c1, canon1)).expect("Channel closed unexpectedly");
+                for (_rowid, blob) in row_chunk {
+                    let old_circuit = CircuitSeq::from_blob(blob);
+                    let mut prefix: SmallVec<[[u8; 3]; 64]> = SmallVec::with_capacity(m);
+                    prefix.extend_from_slice(&old_circuit.gates);
 
-                    // Variant 2
-                    let mut q2 = SmallVec::<[[u8; 3]; 64]>::with_capacity(m + 1);
-                    q2.push(*g);
-                    q2.extend_from_slice(&prefix);
-                    let mut c2 = CircuitSeq { gates: q2.to_vec() };
-                    c2.canonicalize();
-                    let canon2 = c2.permutation(n).canon_simple(&bit_shuf);
-                    // Panic if send fails
-                    tx.send((c2, canon2)).expect("Channel closed unexpectedly");
+                    for g in base_gates.iter() {
+                        let mut q1 = prefix.clone();
+                        q1.push(*g);
+                        let mut c1 = CircuitSeq { gates: q1.to_vec() };
+                        c1.canonicalize();
+                        let canon1 = c1.permutation(n).canon_simple(&bit_shuf);
+
+                        let mut q2 = SmallVec::<[[u8; 3]; 64]>::with_capacity(m + 1);
+                        q2.push(*g);
+                        q2.extend_from_slice(&prefix);
+                        let mut c2 = CircuitSeq { gates: q2.to_vec() };
+                        c2.canonicalize();
+                        let canon2 = c2.permutation(n).canon_simple(&bit_shuf);
+
+                        local_results.push((c1, canon1));
+                        local_results.push((c2, canon2));
+                    }
                 }
+
+                local_results
+            })
+            .collect();
+
+        // Insert batches, stop if CTRL+C
+        for batch_chunk in results.chunks(batch_size) {
+            insert_circuits_batch(conn, &new_table, batch_chunk)?;
+            if stop_flag.load(Ordering::SeqCst) {
+                println!("Flushed remaining batch after CTRL+C.");
+                break;
             }
-        });
+        }
 
         println!(
             "Processed up to rowid {}. Progress: {:.2}%",
             last_rowid,
             (last_rowid as f64 / total_rows as f64) * 100.0
         );
-    }
 
-    // Only drop tx after all canonicalization threads are done
-    drop(tx);
-    inserter_handle.join().unwrap();
+        if stop_flag.load(Ordering::SeqCst) {
+            break;
+        }
+    }
 
     println!("Build finished (or stopped early).");
     Ok(())
 }
-
 
 //TODO: benchmark to see which part is taking the most time and what exactly can be sped up
 //Speed up SQL queries
