@@ -505,13 +505,13 @@ pub fn build_from_sql(
         .expect("Error setting CTRL+C handler");
     }
 
-    // Setup insertion queue
-    let (tx, rx) = bounded::<Vec<(CircuitSeq, Canonicalization)>>(10000);
+    // Setup bounded channel for insertion
+    let (tx, rx) = bounded::<Vec<(CircuitSeq, Canonicalization)>>(50000);
     let new_table_clone = new_table.clone();
     let stop_flag_clone = stop_flag.clone();
 
+    // Spawn insertion thread
     let insert_handle = thread::spawn(move || {
-        // Open a new connection in the insertion thread
         let mut insert_conn =
             Connection::open("./db/circuits.db").expect("Failed to open DB in insert thread");
 
@@ -523,20 +523,19 @@ pub fn build_from_sql(
 
             if let Err(e) = insert_circuits_batch(&mut insert_conn, &new_table_clone, &batch) {
                 eprintln!("Error inserting batch: {:?}", e);
-                // Decide: panic, break, or continue
             }
         }
 
         println!("Insertion thread finished.");
     });
 
+    // Main loop: fetch old table in chunks
     while last_rowid < total_rows {
         if stop_flag.load(Ordering::SeqCst) {
             println!("Stopping early due to CTRL+C...");
             break;
         }
 
-        // Fetch a chunk from the old table
         let rows: Vec<(i64, Vec<u8>)> = {
             let mut stmt = conn.prepare(&format!(
                 "SELECT rowid, circuit FROM {} WHERE rowid > ? ORDER BY rowid LIMIT ?",
@@ -554,54 +553,56 @@ pub fn build_from_sql(
 
         last_rowid = rows.last().unwrap().0;
 
-        // Process circuits in parallel
-        let results: Vec<(CircuitSeq, Canonicalization)> = rows
-            .par_chunks(500)
-            .flat_map(|row_chunk| {
-                let mut local_results =
-                    Vec::with_capacity(row_chunk.len() * base_gates.len() * 2);
+        // Process circuits in parallel and stream batches immediately
+        rows.par_chunks(500).for_each(|row_chunk| {
+            let mut local_results =
+                Vec::with_capacity(row_chunk.len() * base_gates.len() * 2);
 
-                for (_rowid, blob) in row_chunk {
-                    let old_circuit = CircuitSeq::from_blob(blob);
-                    let mut prefix: SmallVec<[[u8; 3]; 64]> =
-                        SmallVec::with_capacity(m);
-                    prefix.extend_from_slice(&old_circuit.gates);
+            for (_rowid, blob) in row_chunk {
+                let old_circuit = CircuitSeq::from_blob(blob);
+                let mut prefix: SmallVec<[[u8; 3]; 64]> =
+                    SmallVec::with_capacity(m);
+                prefix.extend_from_slice(&old_circuit.gates);
 
-                    for g in base_gates.iter() {
-                        let mut q1 = prefix.clone();
-                        q1.push(*g);
-                        let mut c1 = CircuitSeq { gates: q1.to_vec() };
-                        c1.canonicalize();
-                        let canon1 = c1.permutation(n).canon_simple(&bit_shuf);
+                for g in base_gates.iter() {
+                    let mut q1 = prefix.clone();
+                    q1.push(*g);
+                    let mut c1 = CircuitSeq { gates: q1.to_vec() };
+                    c1.canonicalize();
+                    let canon1 = c1.permutation(n).canon_simple(&bit_shuf);
 
-                        let mut q2 = SmallVec::<[[u8; 3]; 64]>::with_capacity(m + 1);
-                        q2.push(*g);
-                        q2.extend_from_slice(&prefix);
-                        let mut c2 = CircuitSeq { gates: q2.to_vec() };
-                        c2.canonicalize();
-                        let canon2 = c2.permutation(n).canon_simple(&bit_shuf);
+                    let mut q2 = SmallVec::<[[u8; 3]; 64]>::with_capacity(m + 1);
+                    q2.push(*g);
+                    q2.extend_from_slice(&prefix);
+                    let mut c2 = CircuitSeq { gates: q2.to_vec() };
+                    c2.canonicalize();
+                    let canon2 = c2.permutation(n).canon_simple(&bit_shuf);
 
-                        local_results.push((c1, canon1));
-                        local_results.push((c2, canon2));
+                    local_results.push((c1, canon1));
+                    local_results.push((c2, canon2));
+                }
+
+                // Stream batches immediately
+                while local_results.len() >= batch_size {
+                    let batch = local_results.split_off(local_results.len() - batch_size);
+                    if let Err(e) = tx.send(batch) {
+                        eprintln!("Failed to send batch to insertion thread: {:?}", e);
+                        break;
                     }
                 }
 
-                local_results
-            })
-            .collect();
-
-        // Send batches to insertion thread safely
-        for batch_chunk in results.chunks(batch_size) {
-            if let Err(e) = tx.send(batch_chunk.to_vec()) {
-                eprintln!("Failed to send batch to insertion thread: {:?}", e);
-                break; // stop sending if the insertion thread has disconnected
+                if stop_flag.load(Ordering::SeqCst) {
+                    break;
+                }
             }
 
-            if stop_flag.load(Ordering::SeqCst) {
-                println!("Stopping generation due to CTRL+C...");
-                break;
+            // Send remaining circuits in local_results
+            if !local_results.is_empty() {
+                if let Err(e) = tx.send(local_results) {
+                    eprintln!("Failed to send remaining batch: {:?}", e);
+                }
             }
-        }
+        });
 
         println!(
             "Processed up to rowid {}. Progress: {:.2}%",
