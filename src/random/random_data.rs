@@ -14,7 +14,7 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::*;
 use std::thread;
 
-use crossbeam::channel::{unbounded, Sender};
+use crossbeam::channel::{bounded, unbounded, Sender};
 use rayon::prelude::*;
 use std::{
     fs::OpenOptions,
@@ -506,7 +506,7 @@ pub fn build_from_sql(
     }
 
     // Setup insertion queue
-    let (tx, rx) = unbounded::<Vec<(CircuitSeq, Canonicalization)>>();
+    let (tx, rx) = bounded::<Vec<(CircuitSeq, Canonicalization)>>(100);
     let new_table_clone = new_table.clone();
     let stop_flag_clone = stop_flag.clone();
 
