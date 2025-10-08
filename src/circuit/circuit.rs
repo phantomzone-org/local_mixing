@@ -116,14 +116,14 @@ impl Gate {
         std_max(std_max(self.pins[0], self.pins[1]), self.pins[2])
     }
 
-    pub fn collides_index(gate: &[u8;3], other: [u8;3]) -> bool {
+    pub fn collides_index(gate: &[u8;3], other: &[u8;3]) -> bool {
         gate[0] == other[1] 
             || gate[0] == other[2]
             || gate[1] == other[0] 
             || gate[2] == other[0]
     }
     //b is "larger"
-    pub fn ordered_index(gate: &[u8;3], other: [u8;3]) -> bool {
+    pub fn ordered_index(gate: &[u8;3], other: &[u8;3]) -> bool {
         if gate[0] > other[0] {
             return false
         }

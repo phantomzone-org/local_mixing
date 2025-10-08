@@ -708,9 +708,9 @@ impl CircuitSeq {
                 j -= 1;
                 let gj_index = self.gates[j];
 
-                if Gate::collides_index(&gi_index, gj_index) {
+                if Gate::collides_index(&gi_index, &gj_index) {
                     break;
-                } else if !Gate::ordered_index(&gj_index, gi_index) {
+                } else if !Gate::ordered_index(&gj_index, &gi_index) {
                     to_swap = Some(j);
                 }
             }
