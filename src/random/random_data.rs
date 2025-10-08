@@ -1052,7 +1052,7 @@ mod tests {
         let max_wires = 7;
 
         let (subcircuit_gates, attempts) =
-            find_convex_subcircuit(3,16,max_wires, &c, &mut rng);
+            find_convex_subcircuit(3,max_wires,16, &c, &mut rng);
 
         println!("Selected gate indices: {:?}", subcircuit_gates);
         println!("Number of search attempts: {}", attempts);
