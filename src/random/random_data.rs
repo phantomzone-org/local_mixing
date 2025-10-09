@@ -180,7 +180,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
     let num_gates = circuit.gates.len();
     let mut search_attempts = 0;
     let max_attempts = 10_000;
-
+    let set_size = 17; 
     loop {
         search_attempts += 1;
         if search_attempts > max_attempts {
@@ -340,7 +340,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
         }
 
         // Must have at least 3 gates
-        if selected_gate_ctr < 3 {
+        if selected_gate_ctr < set_size - search_attempts {
             continue;
         }
 
