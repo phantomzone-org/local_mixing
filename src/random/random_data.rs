@@ -374,7 +374,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
         }
 
         // Must have at least 3 gates
-        if selected_gate_ctr < 3 {
+        if selected_gate_ctr != set_size {
             continue;
         }
 
