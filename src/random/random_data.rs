@@ -180,7 +180,6 @@ pub fn find_convex_subcircuit<R: RngCore>(
     let num_gates = circuit.gates.len();
     let mut search_attempts = 0;
     let max_attempts = 10_000;
-    let set_size = 17; 
     loop {
         search_attempts += 1;
         if search_attempts > max_attempts {
@@ -340,7 +339,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
         }
 
         // Must have at least 3 gates
-        if selected_gate_ctr < set_size - search_attempts {
+        if selected_gate_ctr < 3 {
             continue;
         }
 
@@ -1051,8 +1050,23 @@ mod tests {
         let mut rng = rand::rng();
         let max_wires = 7;
 
-        let (subcircuit_gates, attempts) =
-            find_convex_subcircuit(3,max_wires,16, &c, &mut rng);
+        let mut subcircuit_gates = vec![];
+        let mut attempts = 0;
+
+        for set_size in (3..=16).rev() {
+            let (gates, tries) = find_convex_subcircuit(set_size, max_wires, 16, &c, &mut rng);
+            attempts += tries;
+
+            if !gates.is_empty() {
+                subcircuit_gates = gates;
+                println!("Found convex subcircuit with {set_size} gates after {attempts} total attempts");
+                break;
+            }
+        }
+
+        if subcircuit_gates.is_empty() {
+            eprintln!("No convex subcircuit found for any size in 3..=16");
+        }
 
         println!("Selected gate indices: {:?}", subcircuit_gates);
         println!("Number of search attempts: {}", attempts);
