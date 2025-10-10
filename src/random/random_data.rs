@@ -1176,7 +1176,8 @@ mod tests {
             gates[i] = c.gates[*g];
         }
         let subcircuit = CircuitSeq { gates };
-        println!("{}", subcircuit.to_string(wire_set.len()));
+        println!("{}", subcircuit.to_string(16));
+        println!("{:?}", subcircuit.used_wires());
         assert!(convex_ok, "Selected subcircuit is not convex");
         println!("Convexity check passed");
     }

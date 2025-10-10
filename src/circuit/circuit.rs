@@ -763,6 +763,22 @@ impl CircuitSeq {
         gates.extend_from_slice(&other.gates);
         CircuitSeq { gates }
     }
+
+    pub fn used_wires(&self) -> Vec<u8> {
+        let mut used: HashSet<u8> = HashSet::new();
+        for gates in &self.gates {
+            used.insert(gates[0]);
+            used.insert(gates[1]);
+            used.insert(gates[2]);
+        }
+        let mut wires: Vec<u8> = used.into_iter().collect();
+        wires.sort();
+        wires
+    }
+
+    pub fn count_used_wires(&self) -> usize {
+        Self::used_wires(&self).len()
+    }
 }
 
 pub fn base_gates(n: usize) -> Vec<[usize; 3]> {
