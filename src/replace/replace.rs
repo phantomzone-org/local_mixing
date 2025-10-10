@@ -4,7 +4,8 @@ use crate::{
 };
 
 use crate::random::random_data::insert_circuit;
-
+use crate::random::random_data::find_convex_subcircuit;
+use crate::random::random_data::contiguous_convex;
 use rand::{prelude::IndexedRandom, Rng};
 use rusqlite::{params, Connection, OptionalExtension};
 use itertools::Itertools;
@@ -306,9 +307,43 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
     compressed
 }
 
-// pub fn compress_big(circuit: &CircuitSeq, num_wires: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>) -> CircuitSeq {
+pub fn compress_big(circuit: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>) -> CircuitSeq {
+    let mut circuit = circuit.clone();
+    let mut rng = rand::rng();
+    for _ in 0..trials {
+        let mut subcircuit_gates = vec![];
 
-// }
+        for set_size in (3..=16).rev() {
+            let (gates, _) = find_convex_subcircuit(set_size, 7, num_wires, &circuit, &mut rng);
+
+            if !gates.is_empty() {
+                subcircuit_gates = gates;
+                break;
+            }
+        }
+
+        if subcircuit_gates.is_empty() {
+            return circuit
+        }
+
+        let mut gates: Vec<[u8;3]> = vec![[0,0,0];subcircuit_gates.len()];
+        for (i, g) in subcircuit_gates.iter().enumerate() {
+            gates[i] = circuit.gates[*g];
+        }
+
+        subcircuit_gates.sort();
+        let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates).unwrap();
+        let mut subcircuit = CircuitSeq { gates };
+
+        let used_wires = subcircuit.used_wires();
+        subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
+        subcircuit = compress(&subcircuit, 100_000, conn, &bit_shuf, subcircuit.count_used_wires());
+        subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
+        circuit.gates.splice(start..end+1, subcircuit.gates);
+    }
+    circuit
+}
+
 // inflate. u8 is the size of the random circuit used to obfuscate over 2 
 // This tries to mix and hide original gate
 // pub fn obfuscate(c: &CircuitSeq) -> (CircuitSeq, Vec<usize>) {

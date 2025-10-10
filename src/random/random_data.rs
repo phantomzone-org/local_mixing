@@ -434,10 +434,13 @@ pub fn find_convex_subcircuit<R: RngCore>(
 }
 
 // Rearranges circuit to put the convex subcircuit in a contiguous manner. Do this via outward expansion
-pub fn contiguous_convex(circuit: &mut CircuitSeq, ordered_convex_gates: &mut Vec<usize>) {
+pub fn contiguous_convex(
+    circuit: &mut CircuitSeq,
+    ordered_convex_gates: &mut Vec<usize>,
+) -> Option<(usize, usize)> {
     // This should never run
     if ordered_convex_gates.len() < 2 {
-        return
+        return None;
     }
 
     // Keep track of convex positions
@@ -453,7 +456,7 @@ pub fn contiguous_convex(circuit: &mut CircuitSeq, ordered_convex_gates: &mut Ve
     let mut non_convex: Vec<usize> = (start..=end)
         .filter(|&i| !is_convex[i])
         .collect();
-    
+
     // Left pass
     while !non_convex.is_empty() {
         let leftmost = non_convex[0];
@@ -469,10 +472,14 @@ pub fn contiguous_convex(circuit: &mut CircuitSeq, ordered_convex_gates: &mut Ve
             circuit.gates.insert(start, gate);
 
             for idx in ordered_convex_gates.iter_mut() {
-                if *idx >= start && *idx < leftmost { *idx += 1; }
+                if *idx >= start && *idx < leftmost {
+                    *idx += 1;
+                }
             }
             for i in 0..non_convex.len() {
-                if non_convex[i] >= start && non_convex[i] < leftmost { non_convex[i] += 1; }
+                if non_convex[i] >= start && non_convex[i] < leftmost {
+                    non_convex[i] += 1;
+                }
             }
             start += 1;
             non_convex.remove(0);
@@ -496,10 +503,14 @@ pub fn contiguous_convex(circuit: &mut CircuitSeq, ordered_convex_gates: &mut Ve
             circuit.gates.insert(end, gate);
 
             for idx in ordered_convex_gates.iter_mut() {
-                if *idx > rightmost && *idx <= end { *idx -= 1; }
+                if *idx > rightmost && *idx <= end {
+                    *idx -= 1;
+                }
             }
             for i in 0..non_convex.len() {
-                if non_convex[i] > rightmost && non_convex[i] <= end { non_convex[i] -= 1; }
+                if non_convex[i] > rightmost && non_convex[i] <= end {
+                    non_convex[i] -= 1;
+                }
             }
             end -= 1;
             non_convex.pop();
@@ -507,6 +518,8 @@ pub fn contiguous_convex(circuit: &mut CircuitSeq, ordered_convex_gates: &mut Ve
             break;
         }
     }
+
+    Some((start, end))
 }
 
 pub fn create_table(conn: &mut Connection, table_name: &str) -> Result<()> {
