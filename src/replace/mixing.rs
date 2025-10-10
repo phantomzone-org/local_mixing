@@ -324,7 +324,14 @@ pub fn main_butterfly(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: u
     println!("Final cycle: {:?}", circuit.permutation(n).to_cycle());
     // Convert the final circuit to string
     let circuit_str = circuit.to_string(n);
-    println!("{:?}", circuit.permutation(n).data);
+    println!("Final Permutation: {:?}", circuit.permutation(n).data);
+    if circuit.permutation(n).data != c.permutation(n).data {
+        panic!(
+            "The permutation differs from the original.\nOriginal: {:?}\nNew: {:?}",
+            c.permutation(n).data,
+            circuit.permutation(n).data
+        );
+    }
     // Write to file
     let mut file = File::create("recent_circuit.txt").expect("Failed to create file");
     file.write_all(circuit_str.as_bytes())
