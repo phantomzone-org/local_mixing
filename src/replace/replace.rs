@@ -407,7 +407,7 @@ pub fn obfuscate(c: &CircuitSeq, num_wires: usize) -> (CircuitSeq, Vec<usize>) {
 
 pub fn outward_compress(g: &CircuitSeq, r: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     let mut g = g.clone();
-    for gate in r.gates.iter().rev() {
+    for gate in r.gates.iter() {
         let wrapper = CircuitSeq { gates: vec![*gate] };
         g = compress(&wrapper.concat(&g).concat(&wrapper), trials, conn, bit_shuf, n);
     }
