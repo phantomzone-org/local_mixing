@@ -1171,6 +1171,12 @@ mod tests {
 
         // Check that the selected subcircuit is actually convex
         let convex_ok = is_convex(16, &c, &subcircuit_gates);
+        let mut gates: Vec<[u8;3]> = vec![[0,0,0];subcircuit_gates.len()];
+        for (i, g) in subcircuit_gates.iter().enumerate() {
+            gates[i] = c.gates[*g];
+        }
+        let subcircuit = CircuitSeq { gates };
+        println!("{}", subcircuit.to_string(wire_set.len()));
         assert!(convex_ok, "Selected subcircuit is not convex");
         println!("Convexity check passed");
     }

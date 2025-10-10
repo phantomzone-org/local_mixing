@@ -763,7 +763,6 @@ impl CircuitSeq {
         gates.extend_from_slice(&other.gates);
         CircuitSeq { gates }
     }
-
 }
 
 pub fn base_gates(n: usize) -> Vec<[usize; 3]> {
