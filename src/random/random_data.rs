@@ -1249,7 +1249,7 @@ mod tests {
         for (i, g) in subcircuit_gates.iter().enumerate() {
             gates[i] = c.gates[*g];
         }
-        let mut subcircuit = CircuitSeq { gates };
+        let subcircuit = CircuitSeq { gates };
         subcircuit_gates.sort();
         println!("{}", subcircuit.to_string(16));
         println!("{:?}", subcircuit.used_wires());
@@ -1260,6 +1260,7 @@ mod tests {
         println!("Convexity check passed");
         let mut circ = c.clone();
         contiguous_convex(&mut circ,  &mut subcircuit_gates);
-        println!("The rearranged are equal: {}", c.permutation(16).data == circ.permutation(16).data)
+        println!("The rearranged are equal: {}", c.permutation(16).data == circ.permutation(16).data);
+        println!("{}", circ.to_string(16));
     }
 }
