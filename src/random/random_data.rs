@@ -235,10 +235,10 @@ pub fn find_convex_subcircuit<R: RngCore>(
     loop {
         search_attempts += 1;
         if search_attempts > max_attempts {
-            eprintln!(
-                "No convex subcircuit found after {} attempts (set_size={}, max_wires={})",
-                search_attempts, set_size, max_wires
-            );
+            // eprintln!(
+            //     "No convex subcircuit found after {} attempts (set_size={}, max_wires={})",
+            //     search_attempts, set_size, max_wires
+            // );
             return (vec![], search_attempts);
         }
 
@@ -404,7 +404,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
                 None => break,
             };
 
-            // --- NEW: check if adding this gate would exceed max_wires ---
+            // check if adding this gate would exceed max_wires ---
             let mut new_wires = curr_wires.clone();
             new_wires.extend(circuit.gates[next_candidate].iter().copied());
             if new_wires.len() > max_wires {
@@ -429,6 +429,12 @@ pub fn find_convex_subcircuit<R: RngCore>(
             continue;
         }
 
+        println!(
+            "convex subcircuit found! {} wires {} gates",
+            curr_wires.len(),
+            selected_gate_ctr
+        );
+        
         return (selected_gate_idx[..selected_gate_ctr].to_vec(), search_attempts);
     }
 }
