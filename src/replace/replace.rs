@@ -329,7 +329,7 @@ pub fn compress(
                         // splice_max = splice_max.max(splice_time);
                         // splice_count += 1;
 
-                        println!("A replacement was found!");
+                        // println!("A replacement was found!");
                         break;
                     }
                 }
