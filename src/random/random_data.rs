@@ -1315,6 +1315,6 @@ mod tests {
         let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
 
         let com = compress_big(&c, 10, 16, &mut conn);
-        println!("compression is okay: {}", com.gates == c.gates);
+        println!("compression is okay: {}", com.permutation(16) == c.permutation(16));
     }
 }
