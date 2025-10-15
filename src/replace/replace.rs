@@ -14,6 +14,7 @@ use std::{
     // used for testing
     fs::OpenOptions,
     io::Write,
+    time::Instant,
 };
 
 // Returns a nontrivial identity circuit built from two "friend" circuits
@@ -186,74 +187,83 @@ pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
 
 pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     let id = Permutation::id_perm(n);
-    
+
     if c.permutation(n) == id {
-        return CircuitSeq{ gates: Vec::new() }
+        return CircuitSeq { gates: Vec::new() };
     }
 
     let mut compressed = c.clone();
-    if c.gates.len() == 0 {
-        return CircuitSeq{ gates: Vec::new() } 
+    if compressed.gates.is_empty() {
+        return CircuitSeq { gates: Vec::new() };
     }
 
-    // Open the file in append mode
-    // let mut file = OpenOptions::new()
-    //     .create(true)
-    //     .append(true)
-    //     .open("test.txt")
-    //     .expect("Cannot open test.txt");
-    //writeln!(file, "Permutation is initially: \n{:?}", compressed.permutation(n).data).unwrap();
     let mut i = 0;
     while i < compressed.gates.len().saturating_sub(1) {
         if compressed.gates[i] == compressed.gates[i + 1] {
-            // remove elements at i and i+1
             compressed.gates.drain(i..=i + 1);
-
-            // step back up to 2 indices, but not below 0
             i = i.saturating_sub(2);
         } else {
             i += 1;
         }
     }
 
-    if compressed.gates.len() == 0 {
-        return CircuitSeq{ gates: Vec::new() } 
+    if compressed.gates.is_empty() {
+        return CircuitSeq { gates: Vec::new() };
     }
-    //writeln!(file, "Permutation after remove identities 1 is: \n{:?}", compressed.permutation(n).data).unwrap();
 
-    // Find a random subcircuit to (attempt to) replace some number of times
-    // Can forcibly choose where to do compression as well
+    // open log files once
+    let mut canon_log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("canon_time.txt")
+        .expect("Failed to open canon_time.txt");
+
+    let mut lookup_log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("lookup_time.txt")
+        .expect("Failed to open lookup_time.txt");
 
     for _ in 0..trials {
         let (mut subcircuit, start, end) = random_subcircuit(&compressed);
+
+        // time canonicalization
+        let t0 = Instant::now();
         subcircuit.canonicalize();
+        let canon_time = t0.elapsed();
+        writeln!(canon_log, "Num wires: {}. Time: {:.6}", n, canon_time.as_secs_f64()).unwrap();
+
         let sub_perm = subcircuit.permutation(n);
         let canon_perm = sub_perm.canon_simple(&bit_shuf);
         let perm_blob = canon_perm.perm.repr_blob();
-        // let shuf_blob = canon_perm.shuffle.repr_blob();
 
         let sub_m = subcircuit.gates.len();
-        let mut replaced = false;
 
-        // Try all smaller m tables for this n
-        for smaller_m in 1..sub_m {
+        for smaller_m in 1..=sub_m {
             let table = format!("n{}m{}", n, smaller_m);
-            let query = format!("SELECT blob FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1", table);
-            {
-                // Limit stmt's lifetime to this block
-                let mut stmt = match conn.prepare(&query) {
-                    Ok(s) => s,
-                    Err(_) => continue,
-                };
+            let query = format!(
+                "SELECT blob FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1",
+                table
+            );
 
-                let mut rows = stmt.query([&perm_blob]).expect("Query failed");
+            let lookup_start = Instant::now();
 
-                if let Some(row) = rows.next().unwrap() {
+            let mut stmt = match conn.prepare(&query) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let rows = stmt.query([&perm_blob]);
+
+            // measure query duration
+            let lookup_time = lookup_start.elapsed();
+            writeln!(lookup_log, "Table: n{}m{}. Time: {:.6}", n, smaller_m, lookup_time.as_secs_f64()).unwrap();
+
+            if let Ok(mut r) = rows {
+                if let Some(row) = r.next().unwrap() {
                     let blob: Vec<u8> = row.get(0).expect("Failed to get blob");
                     let mut repl = CircuitSeq::from_blob(&blob);
 
                     if repl.gates.len() < subcircuit.gates.len() {
-                        // adjust rewiring
                         let rc = repl.permutation(n).canon_simple(&bit_shuf);
                         if !rc.shuffle.data.is_empty() {
                             repl.rewire(&rc.shuffle, n);
@@ -264,46 +274,25 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
                             panic!("Replacement permutation mismatch!");
                         }
 
-                        // Do the replacement
                         compressed.gates.splice(start..end, repl.gates);
-                        replaced = true;
                         println!("A replacement was found!");
-                        break; // stop once a replacement is applied
+                        break;
                     }
                 }
             }
-                
         }
-        // If not replaced, insert the subcircuit into its own table immediately
-        // if !replaced {
-        //     let table = format!("n{}m{}", n, sub_m);
-        //     //let sub_blob = subcircuit.repr_blob();
-
-        //     create_table(conn, &table).expect("Failed to create table");
-        //     insert_circuit(conn, &subcircuit, &canon_perm, &table).expect("insertion failed");
-        //     // conn.execute(
-        //     //     &format!("INSERT INTO {} (circuit, perm, shuf) VALUES (?1, ?2, ?3)", table),
-        //     //     params![sub_blob, perm_blob, shuf_blob],
-        //     // )
-        //     // .expect("Insert failed");
-        // }
     }
-    //writeln!(file, "Permutation after replacement is: \n{:?}", compressed.permutation(n).data).unwrap();
 
     let mut i = 0;
     while i < compressed.gates.len().saturating_sub(1) {
         if compressed.gates[i] == compressed.gates[i + 1] {
-            // remove elements at i and i+1
             compressed.gates.drain(i..=i + 1);
-
-            // step back up to 2 indices, but not below 0
             i = i.saturating_sub(2);
         } else {
             i += 1;
         }
     }
-    //writeln!(file, "Permutation after remove identities 2 is: \n{:?}", compressed.permutation(n).data).unwrap();
-    //println!("Compressed len: {}", compressed.gates.len());
+
     compressed
 }
 
@@ -341,7 +330,7 @@ pub fn compress_big(circuit: &CircuitSeq, trials: usize, num_wires: usize, conn:
         let num_wires = used_wires.len();
         let perms: Vec<Vec<usize>> = (0..num_wires).permutations(num_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
-        subcircuit = compress(&subcircuit, 100_000, conn, &bit_shuf, subcircuit.count_used_wires());
+        subcircuit = compress(&subcircuit, 50_000, conn, &bit_shuf, subcircuit.count_used_wires());
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
         circuit.gates.splice(start..end+1, subcircuit.gates);
     }

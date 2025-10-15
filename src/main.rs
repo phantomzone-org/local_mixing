@@ -10,7 +10,7 @@ use local_mixing::{
         replace::{random_canonical_id, random_id, compress},
     },
 };
-
+use rusqlite::OpenFlags;
 use local_mixing::replace::mixing::main_butterfly;
 use local_mixing::replace::mixing::main_butterfly_big;
 use clap::{Arg, ArgAction, Command};
@@ -154,7 +154,7 @@ fn main() {
             // println!("Using seed: {}", seed);
             if data.trim().is_empty() {
                 // Open DB connection
-                let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+                let mut conn = Connection::open_with_flags("circuits.db",OpenFlags::SQLITE_OPEN_READ_ONLY,).expect("Failed to open DB (read-only)");
                 conn.execute_batch(
                     "
                     PRAGMA synchronous = NORMAL;
@@ -173,7 +173,7 @@ fn main() {
                 let c = CircuitSeq::from_string(&data);
 
                 // Open DB connection
-                let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+                let mut conn = Connection::open_with_flags("circuits.db",OpenFlags::SQLITE_OPEN_READ_ONLY,).expect("Failed to open DB (read-only)");
                 conn.execute_batch(
                     "
                     PRAGMA synchronous = NORMAL;
@@ -196,7 +196,7 @@ fn main() {
             // println!("Using seed: {}", seed);
             if data.trim().is_empty() {
                 // Open DB connection
-                let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+                let mut conn = Connection::open_with_flags("circuits.db",OpenFlags::SQLITE_OPEN_READ_ONLY,).expect("Failed to open DB (read-only)");
                 conn.execute_batch(
                     "
                     PRAGMA synchronous = NORMAL;
@@ -219,7 +219,7 @@ fn main() {
                 let c = CircuitSeq::from_string(&data);
 
                 // Open DB connection
-                let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+                let mut conn = Connection::open_with_flags("circuits.db",OpenFlags::SQLITE_OPEN_READ_ONLY,).expect("Failed to open DB (read-only)");
                 conn.execute_batch(
                     "
                     PRAGMA synchronous = NORMAL;
@@ -237,7 +237,7 @@ fn main() {
 
         let data = fs::read_to_string("initial.txt").expect("Failed to read initial.txt");
 
-        let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+        let mut conn = Connection::open_with_flags("circuits.db",OpenFlags::SQLITE_OPEN_READ_ONLY,).expect("Failed to open DB (read-only)");
         conn.execute_batch(
             "
             PRAGMA synchronous = NORMAL;
