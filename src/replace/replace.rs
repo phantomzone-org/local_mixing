@@ -227,14 +227,14 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
     for _ in 0..trials {
         let (mut subcircuit, start, end) = random_subcircuit(&compressed);
 
-        // time canonicalization
-        let t0 = Instant::now();
         subcircuit.canonicalize();
-        let canon_time = t0.elapsed();
-        writeln!(canon_log, "Num wires: {}. Time: {:?}", n, canon_time).unwrap();
 
         let sub_perm = subcircuit.permutation(n);
+        // time canonicalization
+        let t0 = Instant::now();
         let canon_perm = sub_perm.canon_simple(&bit_shuf);
+        let canon_time = t0.elapsed();
+        writeln!(canon_log, "Num wires: {}. Time: {:?}", n, canon_time).unwrap();
         let perm_blob = canon_perm.perm.repr_blob();
 
         let sub_m = subcircuit.gates.len();
@@ -250,7 +250,11 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
 
             let mut stmt = match conn.prepare(&query) {
                 Ok(s) => s,
-                Err(_) => continue,
+                Err(e)=>{
+                    writeln!(lookup_log, "Failed to prepare {}: {}", table, e).unwrap();
+                    lookup_log.flush().unwrap(); // ensure it's written immediately
+                    continue;
+                }
             };
             let rows = stmt.query([&perm_blob]);
 
