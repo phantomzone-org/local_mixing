@@ -503,10 +503,10 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
         }
     }
     println!("Final len: {}", circuit.gates.len());
-    println!("Final cycle: {:?}", circuit.permutation(n).to_cycle());
+    // println!("Final cycle: {:?}", circuit.permutation(n).to_cycle());
     // Convert the final circuit to string
     let circuit_str = circuit.to_string(n);
-    println!("Final Permutation: {:?}", circuit.permutation(n).data);
+    // println!("Final Permutation: {:?}", circuit.permutation(n).data);
     if circuit.permutation(n).data != c.permutation(n).data {
         panic!(
             "The permutation differs from the original.\nOriginal: {:?}\nNew: {:?}",
