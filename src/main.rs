@@ -240,11 +240,8 @@ fn main() {
         let mut conn = Connection::open_with_flags("./db/circuits.db",OpenFlags::SQLITE_OPEN_READ_ONLY,).expect("Failed to open DB (read-only)");
         conn.execute_batch(
             "
-            PRAGMA synchronous = NORMAL;
-            PRAGMA journal_mode = WAL;
             PRAGMA temp_store = MEMORY;
             PRAGMA cache_size = -200000;
-            PRAGMA locking_mode = EXCLUSIVE;
             "
         ).unwrap();
 
