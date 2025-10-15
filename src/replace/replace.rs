@@ -231,7 +231,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
         let t0 = Instant::now();
         subcircuit.canonicalize();
         let canon_time = t0.elapsed();
-        writeln!(canon_log, "Num wires: {}. Time: {:.6}", n, canon_time.as_secs_f64()).unwrap();
+        writeln!(canon_log, "Num wires: {}. Time: {:?}", n, canon_time).unwrap();
 
         let sub_perm = subcircuit.permutation(n);
         let canon_perm = sub_perm.canon_simple(&bit_shuf);
@@ -256,7 +256,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
 
             // measure query duration
             let lookup_time = lookup_start.elapsed();
-            writeln!(lookup_log, "Table: n{}m{}. Time: {:.6}", n, smaller_m, lookup_time.as_secs_f64()).unwrap();
+            writeln!(lookup_log, "Table: n{}m{}. Time: {:?}", n, smaller_m, lookup_time).unwrap();
 
             if let Ok(mut r) = rows {
                 if let Some(row) = r.next().unwrap() {
