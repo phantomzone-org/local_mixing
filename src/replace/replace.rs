@@ -242,7 +242,7 @@ pub fn compress(c: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: 
         for smaller_m in 1..=sub_m {
             let table = format!("n{}m{}", n, smaller_m);
             let query = format!(
-                "SELECT blob FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1",
+                "SELECT circuit FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1",
                 table
             );
 
