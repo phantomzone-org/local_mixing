@@ -233,10 +233,15 @@ pub fn compress(
     // cumulative timers
     let mut canon_total = Duration::ZERO;
     let mut canon_max = Duration::ZERO;
+    let mut canon_count = 0;
+
     let mut lookup_total = Duration::ZERO;
     let mut lookup_max = Duration::ZERO;
+    let mut lookup_count = 0;
+
     let mut splice_total = Duration::ZERO;
     let mut splice_max = Duration::ZERO;
+    let mut splice_count = 0;
 
     for trial in 0..trials {
         let (mut subcircuit, start, end) = random_subcircuit(&compressed);
@@ -247,8 +252,13 @@ pub fn compress(
         let canon_time = t0.elapsed();
         canon_total += canon_time;
         canon_max = canon_max.max(canon_time);
-        writeln!(canon_log, "Trial {}: Num wires: {}. canonicalize(): {:?}", trial, n, canon_time)
-            .unwrap();
+        canon_count += 1;
+        writeln!(
+            canon_log,
+            "Trial {}: Num wires: {}. canonicalize(): {:?}",
+            trial, n, canon_time
+        )
+        .unwrap();
 
         // canon_simple
         let t1 = Instant::now();
@@ -257,6 +267,7 @@ pub fn compress(
         let canon_simple_time = t1.elapsed();
         canon_total += canon_simple_time;
         canon_max = canon_max.max(canon_simple_time);
+        canon_count += 1;
         writeln!(
             canon_log,
             "Trial {}: Num wires: {}. canon_simple(): {:?}",
@@ -287,8 +298,13 @@ pub fn compress(
             let lookup_time = lookup_start.elapsed();
             lookup_total += lookup_time;
             lookup_max = lookup_max.max(lookup_time);
-            writeln!(lookup_log, "Trial {}: Table: {}. Time: {:?}", trial, table, lookup_time)
-                .unwrap();
+            lookup_count += 1;
+            writeln!(
+                lookup_log,
+                "Trial {}: Table: {}. Time: {:?}",
+                trial, table, lookup_time
+            )
+            .unwrap();
 
             if let Ok(mut r) = rows {
                 if let Some(row) = r.next().unwrap() {
@@ -311,6 +327,7 @@ pub fn compress(
                         let splice_time = splice_start.elapsed();
                         splice_total += splice_time;
                         splice_max = splice_max.max(splice_time);
+                        splice_count += 1;
 
                         println!("A replacement was found!");
                         break;
@@ -332,9 +349,30 @@ pub fn compress(
     }
 
     println!("=== Compress Timing Summary ===");
-    println!("Total canonicalization time: {:?}, max single trial: {:?}", canon_total, canon_max);
-    println!("Total lookup time: {:?}, max single lookup: {:?}", lookup_total, lookup_max);
-    println!("Total splice time: {:?}, max single splice: {:?}", splice_total, splice_max);
+    if canon_count > 0 {
+        println!(
+            "Canonicalization total: {:?}, max: {:?}, average: {:?}",
+            canon_total,
+            canon_max,
+            canon_total / canon_count as u32
+        );
+    }
+    if lookup_count > 0 {
+        println!(
+            "Lookup total: {:?}, max: {:?}, average: {:?}",
+            lookup_total,
+            lookup_max,
+            lookup_total / lookup_count as u32
+        );
+    }
+    if splice_count > 0 {
+        println!(
+            "Splice total: {:?}, max: {:?}, average: {:?}",
+            splice_total,
+            splice_max,
+            splice_total / splice_count as u32
+        );
+    }
 
     compressed
 }
