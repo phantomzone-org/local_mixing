@@ -411,7 +411,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         // let t_convex = t0.elapsed();
         // println!("contiguous_convex: {:?}", t_convex);
         let mut subcircuit = CircuitSeq { gates };
-        println!("Checking: {:?} \n Start {}, End {}", subcircuit_gates, start, end);
+        // println!("Checking: {:?} \n Start {}, End {}", subcircuit_gates, start, end);
         let expected_slice: Vec<_> = subcircuit_gates.iter().map(|&i| circuit.gates[i]).collect();
         // assert_eq!(
         //     &circuit.gates[start..=end],
@@ -450,7 +450,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         //         is_convex(16, &circuit, &subcircuit_gates),
         //         contiguous_convex(&mut circuit.clone(), &mut subcircuit_gates.clone()),
         //     );
-        break;
+            break;
         }
 
         //let t1 = Instant::now();
