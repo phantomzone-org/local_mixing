@@ -1258,9 +1258,11 @@ mod tests {
         assert!(convex_ok, "Selected subcircuit is not convex");
         println!("Convexity check passed");
         let mut circ = c.clone();
+        println!("Before gates {:?}", subcircuit_gates);
         let (start, end) = contiguous_convex(&mut circ,  &mut subcircuit_gates).unwrap();
+        println!("After gates {:?}", subcircuit_gates);
         println!("The rearranged are equal: {}", c.permutation(16).data == circ.permutation(16).data);
-        println!("New circuit {}", circ.to_string(16));
+        println!("New circuit {:?}", circ.gates);
         println!("start and end designated: {:?}", &circ.gates[start..end+1]);
         println!("Desired sub: {:?}", subcircuit.gates);
     }
