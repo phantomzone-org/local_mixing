@@ -16,7 +16,11 @@ use std::{
     io::Write,
     time::{Instant, Duration},
 };
+use crate::random::random_data::get_canonical;
 use crate::random::random_data::is_convex;
+use dashmap::DashMap;
+use std::sync::Arc;
+
 // Returns a nontrivial identity circuit built from two "friend" circuits
 pub fn random_canonical_id(
     conn: &Connection,
@@ -263,7 +267,7 @@ pub fn compress(
         // canon_simple
         // let t1 = Instant::now();
         let sub_perm = subcircuit.permutation(n);
-        let canon_perm = sub_perm.canon_simple(&bit_shuf);
+        let canon_perm = get_canonical(&sub_perm, &bit_shuf);
         // let canon_simple_time = t1.elapsed();
         // canon_total += canon_simple_time;
         // canon_max = canon_max.max(canon_simple_time);
@@ -312,7 +316,8 @@ pub fn compress(
                     let mut repl = CircuitSeq::from_blob(&blob);
 
                     if repl.gates.len() <= subcircuit.gates.len() {
-                        let rc = repl.permutation(n).canon_simple(&bit_shuf);
+                        let repl_perm = repl.permutation(n);
+                        let rc = get_canonical(&repl_perm, &bit_shuf);
                         if !rc.shuffle.data.is_empty() {
                             repl.rewire(&rc.shuffle, n);
                         }

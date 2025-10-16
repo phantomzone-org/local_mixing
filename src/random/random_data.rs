@@ -16,6 +16,7 @@ use std::thread;
 use std::collections::HashSet;
 use crossbeam::channel::{bounded, unbounded, Sender};
 use rand::prelude::IndexedRandom;
+use dashmap::DashMap;
 use std::{
     fs::OpenOptions,
     io::Write,
@@ -24,6 +25,12 @@ use std::{
         Arc,
     },
 };
+use lru::LruCache;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+pub static CANON_CACHE: Lazy<DashMap<Vec<u8>, (Vec<u8>, Vec<u8>)>> = Lazy::new(|| DashMap::new());
+
 pub struct PathConnectedWires {
     wires: Vec<bool>,
     count: usize,
@@ -596,6 +603,27 @@ pub fn insert_circuits_batch(
     tx.commit()?;
 
     Ok(inserted)
+}
+
+pub fn get_canonical(perm: &Permutation, bit_shuf: &Vec<Vec<usize>>) -> Canonicalization {
+    // Use a simple hash of the subcircuit as the key
+    let key = perm.repr_blob(); 
+
+    // Try to get it from the cache
+    if let Some(cached) = CANON_CACHE.get(&key) {
+        let (perm_blob, shuffle_blob) = &*cached;
+        return Canonicalization {
+            perm: Permutation::from_blob(perm_blob),
+            shuffle: Permutation::from_blob(shuffle_blob),
+        };
+    }
+
+    // compute it
+    let canon = perm.canon_simple(bit_shuf);
+
+    // Store 
+    CANON_CACHE.insert(key, (canon.clone().perm.repr_blob(), canon.clone().shuffle.repr_blob()));
+    canon
 }
 
 impl Permutation {
