@@ -207,7 +207,6 @@ pub fn compress(
     let full_start = Instant::now();
 
     let id = Permutation::id_perm(n);
-
     if c.permutation(n) == id {
         return CircuitSeq { gates: Vec::new() };
     }
@@ -217,6 +216,7 @@ pub fn compress(
         return CircuitSeq { gates: Vec::new() };
     }
 
+    // Initial cleanup
     let cleanup_start = Instant::now();
     let mut i = 0;
     while i < compressed.gates.len().saturating_sub(1) {
@@ -228,12 +228,12 @@ pub fn compress(
         }
     }
     let cleanup_time = cleanup_start.elapsed();
-    println!("Initial cleanup took {:?}", cleanup_time);
 
     if compressed.gates.is_empty() {
         return CircuitSeq { gates: Vec::new() };
     }
 
+    // Timing buckets
     let mut total_random_sub = Duration::ZERO;
     let mut total_canonicalize = Duration::ZERO;
     let mut total_canon_simple = Duration::ZERO;
@@ -243,7 +243,8 @@ pub fn compress(
     let mut total_splice = Duration::ZERO;
     let mut total_no_replacement = Duration::ZERO;
 
-    for trial in 0..trials {
+    // Main loop
+    for _ in 0..trials {
         let random_start = Instant::now();
         let (mut subcircuit, start, end) = random_subcircuit(&compressed);
         total_random_sub += random_start.elapsed();
@@ -261,7 +262,6 @@ pub fn compress(
 
         let perm_blob = canon_perm.perm.repr_blob();
         let sub_m = subcircuit.gates.len();
-
         let mut found_replacement = false;
         let no_replacement_start = Instant::now();
 
@@ -277,7 +277,6 @@ pub fn compress(
                 Ok(s) => s,
                 Err(_) => continue,
             };
-
             let rows = stmt.query([&perm_blob]);
             total_lookup += lookup_start.elapsed();
 
@@ -294,6 +293,7 @@ pub fn compress(
                         let canon_start = Instant::now();
                         let rc = get_canonical(&repl_perm, &bit_shuf);
                         total_canonicalize += canon_start.elapsed();
+
                         let rewire_start = Instant::now();
                         if !rc.shuffle.data.is_empty() {
                             repl.rewire(&rc.shuffle, n);
@@ -322,6 +322,7 @@ pub fn compress(
         }
     }
 
+    // Final cleanup
     let final_cleanup_start = Instant::now();
     let mut i = 0;
     while i < compressed.gates.len().saturating_sub(1) {
@@ -334,9 +335,26 @@ pub fn compress(
     }
     let final_cleanup_time = final_cleanup_start.elapsed();
 
+    // Summary
     let full_time = full_start.elapsed();
+    let total_tracked = total_random_sub
+        + total_canonicalize
+        + total_canon_simple
+        + total_lookup
+        + total_from_blob
+        + total_rewire
+        + total_splice
+        + total_no_replacement
+        + cleanup_time
+        + final_cleanup_time;
 
-    println!("\n=== Compress Timing Summary ===");
+    let missing = if full_time > total_tracked {
+        full_time - total_tracked
+    } else {
+        total_tracked - full_time
+    };
+
+    println!("\nCompress Timing Summary:");
     println!("Total runtime: {:?} (100%)", full_time);
     println!(
         "  Random subcircuit: {:?} ({:.2}%)",
@@ -387,6 +405,11 @@ pub fn compress(
         "  Final cleanup: {:?} ({:.2}%)",
         final_cleanup_time,
         pct(final_cleanup_time, full_time)
+    );
+    println!(
+        "  Unaccounted remainder: {:?} ({:.2}%)",
+        missing,
+        pct(missing, full_time)
     );
 
     compressed
