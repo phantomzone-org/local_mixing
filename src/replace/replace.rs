@@ -416,7 +416,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         assert_eq!(
             &circuit.gates[start..=end],
             &expected_slice[..],
-            "contiguous_convex returned a range that does not match the subcircuit gates"
+            "contiguous_convex returned a range that does not match the subcircuit gates\n {:?} \n {} \n {}", subcircuit_gates, start, end
         );
 
         //let t1 = Instant::now();
