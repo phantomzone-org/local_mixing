@@ -305,18 +305,18 @@ pub fn butterfly_big(
         }
     }
 
-    let mut i = 0;
-    while i < acc.gates.len().saturating_sub(1) {
-        if acc.gates[i] == acc.gates[i + 1] {
-            // remove elements at i and i+1
-            acc.gates.drain(i..=i + 1);
+    // let mut i = 0;
+    // while i < acc.gates.len().saturating_sub(1) {
+    //     if acc.gates[i] == acc.gates[i + 1] {
+    //         // remove elements at i and i+1
+    //         acc.gates.drain(i..=i + 1);
 
-            // step back up to 2 indices, but not below 0
-            i = i.saturating_sub(2);
-        } else {
-            i += 1;
-        }
-    }
+    //         // step back up to 2 indices, but not below 0
+    //         i = i.saturating_sub(2);
+    //     } else {
+    //         i += 1;
+    //     }
+    // }
     //writeln!(file, "Permutation after remove identities 2 is: \n{:?}", acc.permutation(n).data).unwrap();
     println!("Compressed len: {}", acc.gates.len());
 

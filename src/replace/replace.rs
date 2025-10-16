@@ -395,7 +395,15 @@ pub fn compress(
 pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
-
+    let mut i = 0;
+    while i < circuit.gates.len().saturating_sub(1) {
+        if circuit.gates[i] == circuit.gates[i + 1] {
+            circuit.gates.drain(i..=i + 1);
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
+        }
+    }
     for _ in 0..trials {
         let mut subcircuit_gates = vec![];
 
@@ -495,6 +503,15 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         circuit.gates.splice(start..end+1, subcircuit.gates);
         if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
             panic!("splice changed something");
+        }
+    }
+    let mut i = 0;
+    while i < circuit.gates.len().saturating_sub(1) {
+        if circuit.gates[i] == circuit.gates[i + 1] {
+            circuit.gates.drain(i..=i + 1);
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
         }
     }
     circuit
