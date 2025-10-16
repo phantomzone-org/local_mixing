@@ -419,6 +419,26 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
             "contiguous_convex returned a range that does not match the subcircuit gates\n {:?} \n {} \n {}\n Circuit: {:?}", subcircuit_gates, start, end, c.gates
         );
 
+        let actual_slice = &circuit.gates[start..=end];
+
+        if actual_slice != &expected_slice[..] {
+            panic!(
+                "contiguous_convex produced a non-matching contiguous segment!
+        Start: {start}, End: {end}
+        Subcircuit gate indices: {:?}
+        Expected slice ({} gates): {:?}
+        Actual slice ({} gates): {:?}
+        Full circuit ({} gates): {:?}",
+                subcircuit_gates,
+                expected_slice.len(),
+                expected_slice,
+                actual_slice.len(),
+                actual_slice,
+                circuit.gates.len(),
+                circuit.gates,
+            );
+        }
+
         //let t1 = Instant::now();
         let used_wires = subcircuit.used_wires();
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
