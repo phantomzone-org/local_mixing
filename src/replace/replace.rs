@@ -412,6 +412,15 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         // println!("contiguous_convex: {:?}", t_convex);
         let mut subcircuit = CircuitSeq { gates };
 
+        for (i, &gate_idx) in subcircuit_gates.iter().enumerate() {
+            assert_eq!(
+                circuit.gates[gate_idx],
+                subcircuit.gates[i],
+                "Sanity check failed: gate at index {} does not match subcircuit",
+                gate_idx
+            );
+        }
+        
         //let t1 = Instant::now();
         let used_wires = subcircuit.used_wires();
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
