@@ -1294,4 +1294,64 @@ mod tests {
         let com = compress_big(&c, 10, 16, &mut conn);
         println!("compression is okay: {}", com.permutation(16) == c.permutation(16));
     }
+
+    #[test]
+    fn test_convexity() {
+    // Dummy 16-wire circuit with 30 gates
+    let gates: Vec<[u8; 3]> = vec![
+        [1, 15, 6], [4, 15, 10], [9, 7, 5], [6, 0, 3], [0, 15, 2],
+        [9, 10, 13], [9, 7, 15], [6, 11, 1], [2, 5, 15], [11, 8, 1],
+        [3, 1, 0], [14, 1, 10], [8, 4, 2], [1, 6, 5], [9, 15, 13],
+        [7, 3, 1], [13, 11, 9], [7, 3, 1], [9, 15, 13], [1, 6, 5],
+        [8, 4, 2], [14, 1, 10], [3, 1, 0], [11, 8, 1], [2, 5, 15],
+        [6, 11, 1], [9, 7, 15], [9, 10, 13], [0, 15, 2], [6, 0, 3],
+        [9, 7, 5], [4, 15, 10], [1, 15, 6],
+    ];
+
+    let mut c = CircuitSeq { gates };
+    let mut subcircuit_gates = vec![8, 9, 13];
+
+    println!("==================== TEST CONVEXITY ====================");
+    println!("Total gates in circuit: {}", c.gates.len());
+    println!("Original gate list:");
+    for (i, g) in c.gates.iter().enumerate() {
+        println!("  {:>2}: {:?}", i, g);
+    }
+
+    println!("\nSelected subcircuit gate indices: {:?}", subcircuit_gates);
+    println!("Selected subcircuit gates:");
+    for &i in &subcircuit_gates {
+        println!("  {:>2}: {:?}", i, c.gates[i]);
+    }
+
+    let convex = is_convex(16, &c, &subcircuit_gates);
+    println!("\nConvex before contiguous_convex? {}", convex);
+
+    let (start, end) = contiguous_convex(&mut c, &mut subcircuit_gates).unwrap();
+    println!("\nAfter contiguous_convex:");
+    println!("Start index: {}", start);
+    println!("End index:   {}", end);
+    println!("New subcircuit indices: {:?}", subcircuit_gates);
+
+    println!("\nSegment of circuit after adjustment:");
+    for (i, g) in c.gates[start..=end].iter().enumerate() {
+        println!("  {:>2}: {:?}", start + i, g);
+    }
+
+    println!("\nSanity check (should be true):");
+    let mut all_match = true;
+    for (i, &gate_idx) in subcircuit_gates.iter().enumerate() {
+        if c.gates[start + i] != c.gates[gate_idx] {
+            println!(
+                "Mismatch at position {} (circuit idx {})",
+                start + i, gate_idx
+            );
+            all_match = false;
+        }
+    }
+    if all_match {
+        println!("All gates in contiguous range match subcircuit order");
+    }
+    println!("========================================================\n");
+}
 }
