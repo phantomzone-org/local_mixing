@@ -483,6 +483,7 @@ pub fn contiguous_convex(
             }
             for i in 0..non_convex.len() {
                 if non_convex[i] >= start && non_convex[i] < leftmost {
+                    panic!("This shouldn't be possible");
                     non_convex[i] += 1;
                 }
             }
@@ -514,6 +515,7 @@ pub fn contiguous_convex(
             }
             for i in 0..non_convex.len() {
                 if non_convex[i] > rightmost && non_convex[i] <= end {
+                    panic!("Right should be possible either");
                     non_convex[i] -= 1;
                 }
             }
