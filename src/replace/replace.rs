@@ -292,10 +292,11 @@ pub fn compress(
                     total_from_blob += from_blob_start.elapsed();
 
                     if repl.gates.len() <= subcircuit.gates.len() {
-                        // rewiring
-                        let rewire_start = Instant::now();
                         let repl_perm = repl.permutation(n);
+                        let canon_start = Instant::now();
                         let rc = get_canonical(&repl_perm, &bit_shuf);
+                        total_canonicalize += canon_start.elapsed();
+                        let rewire_start = Instant::now();
                         if !rc.shuffle.data.is_empty() {
                             repl.rewire(&rc.shuffle, n);
                         }
