@@ -1386,4 +1386,26 @@ mod tests {
         let new = CircuitSeq::from_string("f62;6ab;8b5;98f;6d4;4ba;5b1;13f;19e;db6;f9d;74d;172;97d;640;145;97d;172;19e;f9d;13f;6ba;145;5b1;74d;640;4ba;6ba;db6;6ab;6d4;98f;8b5;8e3;f62;8b5;f62;98f;5b1;13f;19e;6d4;6ab;4ba;db6;74d;6ba;640;6ba;145;19e;13f;98f;145;5b1;8b5;74d;640;4ba;8b5;db6;6ab;6d4;f62;0ce;f62;98f;5b1;6ab;6d4;db6;4ba;74d;640;145;13f;19e;f9d;172;97d;145;97d;172;19e;f9d;13f;5b1;98f;8b5;6ba;640;74d;4ba;6ba;db6;6ab;6d4;f62;601;f62;8b5;98f;5b1;13f;19e;6ab;6d4;db6;4ba;6ba;640;74d;19e;13f;5b1;98f;8b5;6ba;640;74d;4ba;db6;6ab;6d4;f62;8fb;f62;8b5;98f;5b1;13f;19e;6d4;6ab;db6;4ba;640;74d;145;19e;13f;98f;145;5b1;8b5;6ba;640;6ba;74d;db6;4ba;6ab;6d4;8b5;98f;94a;5b1;13f;19e;6ab;6d4;4ba;145;db6;6ba;f9d;74d;172;97d;640;145;97d;172;74d;f9d;19e;13f;5b1;98f;8b5;640;4ba;6ba;db6;6d4;6ab;f08;f62;8b5;f62;98f;5b1;6ab;6d4;13f;4ba;db6;74d;f9d;19e;172;97d;145;97d;172;f9d;19e;13f;98f;145;5b1;8b5;640;74d;6ba;640;6ba;db6;4ba;6ab;6d4;8b5;98f;5b1;13f;19e;6d4;6ab;04e;4ba;db6;74d;f9d;172;97d;145;97d;172;19e;f9d;13f;98f;145;5b1;8b5;74d;db6;6ab;4ba;6d4;ab6;f62;8b5;f62;5b1;6ab;6d4;4ba;db6;74d;640;6ba;145;98f;145;13f;19e;f9d;19e;f9d;13f;5b1;98f;8b5;74d;640;6ba;4ba;db6;6ab;6d4;f62;fa2;f62;8b5;5b1;13f;98f;19e;6ab;6d4;4ba;db6;74d;640;6ba;f9d;172;97d;145;640;145;97d;172;19e;f9d;13f;5b1;74d;4ba;6ba;db6;6d4;6ab;98f;8b5;f62;976;f62;8b5;98f;5b1;13f;19e;6ab;6d4;db6;4ba;6ba;640;74d;f9d;172;97d;640;97d;172;74d;f9d;19e;13f;98f;5b1;4ba;6ba;db6;6ab;6d4;f62;1a4;8b5;f62;8b5;98f;6ab;6d4;5b1;4ba;145;db6;6ba;145;74d;19e;13f;f9d;19e;f9d;74d;4ba;6ba;db6;6ab;6d4;13f;5b1;98f;8b5;eca;f62;8b5;f62;6d4;6ab;db6;98f;5b1;4ba;13f;19e;74d;19e;13f;98f;5b1;8b5;640;74d;640;6ba;4ba;6ba;db6;6ab;6d4;ab6;f62;8b5;5b1;f62;6d4;4ba;6ab;db6;640;74d;6ba;640;6ba;145;13f;98f;19e;f9d;172;97d;145;172;97d;19e;f9d;13f;5b1;98f;8b5;74d;db6;6ab;4ba;6d4;f62;2e5;8b5;f62;98f;5b1;6ab;6d4;4ba;db6;74d;6ba;640;13f;f9d;19e;74d;19e;f9d;6ba;13f;5b1;98f;8b5;640;db6;6ab;4ba;6d4;f62;8fa;f62;8b5;98f;5b1;13f;19e;6ab;6d4;4ba;db6;74d;f9d;172;97d;145;97d;172;19e;f9d;13f;145;5b1;98f;8b5;74d;4ba;db6;6ab;6d4;8b5;98f;5b1;13f;19e;06a;6d4;6ab;db6;4ba;74d;6ba;640;6ba;f9d;640;19e;f9d;13f;5b1;74d;4ba;db6;6ab;6d4;98f;f62;137;f62;6d4;4ba;6ab;db6;640;6ba;74d;6ba;98f;5b1;145;172;640;145;13f;f9d;19e;172;19e;f9d;13f;5b1;98f;74d;4ba;db6;6ab;6d4;e17;98f;5b1;13f;19e;6ab;6d4;4ba;db6;f9d;6ba;74d;640;f9d;19e;13f;98f;5b1;8b5;74d;640;4ba;6ba;db6;6d4;6ab;f62;38d;f62;8b5;98f;5b1;13f;19e;6d4;6ab;4ba;db6;74d;f9d;172;97d;145;97d;172;19e;f9d;74d;6ba;145;13f;5b1;98f;8b5;6ba;db6;4ba;6ab;6d4;b48;8b5;5b1;6ab;6d4;4ba;db6;74d;640;6ba;145;98f;145;13f;19e;f9d;97d;172;97d;172;74d;f9d;19e;13f;98f;5b1;8b5;640;6ba;4ba;db6;6d4;6ab;f62;a6f;f62;8b5;98f;5b1;13f;19e;6ab;6d4;4ba;db6;640;6ba;74d;145;f9d;6ba;172;97d;640;145;172;97d;f9d;19e;13f;5b1;74d;4ba;db6;6d4;6ab;98f;fd5;6ab;6d4;db6;6ba;4ba;640;74d;6ba;98f;5b1;13f;19e;f9d;19e;f9d;13f;5b1;98f;8b5;640;74d;db6;6ab;4ba;6d4;8c7;f62;8b5;f62;98f;5b1;13f;19e;6d4;4ba;6ab;db6;f9d;74d;172;19e;f9d;13f;98f;172;5b1;85b;8b5;640;6ba;640;6ba;74d;4ba;db6;6ab;6d4;8b5;5b1;98f;13f;19e;6ab;6d4;4ba;db6;74d;640;19e;13f;5b1;98f;8b5;6ba;640;6ba;74d;db6;4ba;6ab;6d4;f62;192;f62;8b5;98f;5b1;19e;6ab;6d4;4ba;db6;6ba;640;6ba;74d;13f;f9d;97d;172;97d;172;19e;f9d;98f;13f;5b1;74d;640;db6;8b5;6ab;4ba;6d4;f62;280;f62;8b5;98f;5b1;13f;19e;6d4;4ba;145;6ab;db6;6ba;74d;640;f9d;172;97d;172;97d;f9d;19e;74d;13f;98f;145;5b1;8b5;640;6ba;db6;4ba;6d4;0d8;6ab;8b5;6d4;6ab;98f;5b1;13f;db6;4ba;640;6ba;f9d;74d;172;19e;97d;145;97d;172;f9d;19e;13f;98f;145;5b1;74d;640;6ba;db6;6ab;4ba;6d4;f62;6ad;f62;5b1;6ab;6d4;db6;4ba;640;145;13f;98f;f9d;74d;172;19e;97d;145;97d;172;f9d;19e;13f;5b1;98f;8b5;6ba;74d;640;6ba;db6;6ab;4ba;6d4;f62;6e4;8b5;f62;5b1;98f;6d4;6ab;db6;6ba;4ba;640;74d;640;13f;f9d;6ba;19e;172;97d;145;172;97d;19e;f9d;13f;98f;145;5b1;74d;4ba;db6;6d4;6ab;f62;abf;f62;6d4;6ab;db6;4ba;640;98f;5b1;19e;74d;640;172;13f;f9d;172;74d;f9d;db6;19e;13f;5b1;4ba;6d4;98f;8b5;6ab;f62;");
         println!("Are they equal? {}", original.permutation(16) == new.permutation(16));
     }
+    use std::fs;
+    #[test]
+    fn verify_easy() {
+        // Read the file
+        let contents = fs::read_to_string("butterfly_recent.txt")
+            .expect("Failed to read butterfly_recent.txt");
+
+        // Split into old and new by the first ':'
+        let (old_str, new_str) = contents
+            .split_once(':')
+            .expect("Invalid format in butterfly_recent.txt");
+
+        // Parse both circuits
+        let old = CircuitSeq::from_string(old_str);
+        let new = CircuitSeq::from_string(new_str);
+
+        // Compare (example)
+        println!(
+            "Are they equal? {}",
+            old.permutation(16) == new.permutation(16)
+        );
+    }
 }

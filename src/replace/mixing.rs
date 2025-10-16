@@ -480,10 +480,6 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     // Start with the input circuit
     println!("Starting len: {}", c.gates.len());
     let mut circuit = c.clone();
-    let circuit_str = circuit.to_string(n);
-    let mut file = File::create("start.txt").expect("Failed to create file");
-    file.write_all(circuit_str.as_bytes())
-        .expect("Failed to write circuit to file");
     // Repeat obfuscate + compress 'rounds' times
     let mut post_len = 0;
     let mut count = 0;
@@ -518,8 +514,6 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     }
     println!("Final len: {}", circuit.gates.len());
     // println!("Final cycle: {:?}", circuit.permutation(n).to_cycle());
-    // Convert the final circuit to string
-    let circuit_str = circuit.to_string(n);
     // println!("Final Permutation: {:?}", circuit.permutation(n).data);
     if circuit.permutation(n).data != c.permutation(n).data {
         panic!(
@@ -530,9 +524,32 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
         );
     }
     // Write to file
-    let mut file = File::create("recent_circuit.txt").expect("Failed to create file");
-    file.write_all(circuit_str.as_bytes())
-        .expect("Failed to write circuit to file");
+    let c_str = c.to_string(n);
+    let circuit_str = circuit.to_string(n);
+    let long_str = format!("{}:{}", c.repr(), circuit.repr());
+
+    // Write start.txt
+    File::create("start.txt")
+        .and_then(|mut f| f.write_all(c_str.as_bytes()))
+        .expect("Failed to write start.txt");
+
+    // Write recent_circuit.txt
+    File::create("recent_circuit.txt")
+        .and_then(|mut f| f.write_all(circuit_str.as_bytes()))
+        .expect("Failed to write recent_circuit.txt");
+
+    // Write butterfly_recent.txt (overwrite)
+    File::create("butterfly_recent.txt")
+        .and_then(|mut f| f.write_all(long_str.as_bytes()))
+        .expect("Failed to write butterfly_recent.txt");
+
+    // Append to butterfly.txt
+    OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("butterfly.txt")
+        .and_then(|mut f| writeln!(f, "{}", long_str))
+        .expect("Failed to append to butterfly.txt");
 
     if circuit.gates == c.gates {
         println!("The obfuscation didn't do anything");
