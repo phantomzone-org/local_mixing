@@ -424,7 +424,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         if actual_slice != &expected_slice[..]
         {
             panic!(
-                "❌ contiguous_convex verification failed!
+                "contiguous_convex verification failed!
         --------------------------------
         Convex before: {}
         Start: {start}, End: {end}
