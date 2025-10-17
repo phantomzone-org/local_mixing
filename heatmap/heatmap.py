@@ -8,10 +8,12 @@ def plot_heatmap(data, save_path):
     points = np.array(data)
     x, y, values = points[:, 0], points[:, 1], points[:, 2]
 
+    # Compute z-scores
     mean = np.mean(values)
     std = np.std(values)
     if std == 0:
         std = 1
+    z_values = (values - mean) / std
 
     x_unique = np.unique(x)
     y_unique = np.unique(y)
@@ -19,7 +21,7 @@ def plot_heatmap(data, save_path):
     y_indices = {val: idx for idx, val in enumerate(y_unique)}
 
     heatmap = np.full((len(y_unique), len(x_unique)), np.nan)
-    for xi, yi, z in zip(x, y, values):
+    for xi, yi, z in zip(x, y, z_values):
         heatmap[y_indices[yi], x_indices[xi]] = z
 
     plt.imshow(
@@ -29,7 +31,7 @@ def plot_heatmap(data, save_path):
         origin='lower',
         extent=[x_unique[0], x_unique[-1], y_unique[0], y_unique[-1]],
     )
-    plt.colorbar(label='Absolute overlap')
+    plt.colorbar(label='Standard deviations from mean')
     plt.xlabel('Circuit 1 gate index')
     plt.ylabel('Circuit 2 gate index')
 
@@ -37,10 +39,9 @@ def plot_heatmap(data, save_path):
     plt.savefig(save_path, dpi=300)
     plt.close()
 
-
 if __name__ == "__main__":
-    save_path = "heatmap.png"  # output file
-    json_path = "heatmap.json"  # always read this file
+    json_path = "heatmap.json"
+    save_path = "heatmap.png"
 
     try:
         with open(json_path, 'r') as f:
