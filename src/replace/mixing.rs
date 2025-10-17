@@ -515,14 +515,19 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     println!("Final len: {}", circuit.gates.len());
     // println!("Final cycle: {:?}", circuit.permutation(n).to_cycle());
     // println!("Final Permutation: {:?}", circuit.permutation(n).data);
-    if circuit.permutation(n).data != c.permutation(n).data {
-        panic!(
-            // "The permutation differs from the original.\nOriginal: {:?}\nNew: {:?}",
-            // c.permutation(n).data,
-            // circuit.permutation(n).data
-            "The permutation differs from the original"
-        );
-    }
+    // if circuit.permutation(n).data != c.permutation(n).data {
+    //     panic!(
+    //         // "The permutation differs from the original.\nOriginal: {:?}\nNew: {:?}",
+    //         // c.permutation(n).data,
+    //         // circuit.permutation(n).data
+    //         "The permutation differs from the original"
+    //     );
+    // }
+    
+    circuit
+    .probably_equal(&c, n, 150_000)
+    .expect("The circuits differ somewhere!");
+
     // Write to file
     let c_str = c.to_string(n);
     let circuit_str = circuit.to_string(n);

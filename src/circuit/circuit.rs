@@ -86,14 +86,14 @@ impl Gate {
     }
 
     pub fn evaluate_gate_list(gate_list: &Vec<Gate>, input_wires: usize) -> usize {
-    let mut current_wires = input_wires;
+        let mut current_wires = input_wires;
 
-    for gate in gate_list {
-        gate.evaluate_gate(&mut current_wires);
+        for gate in gate_list {
+            gate.evaluate_gate(&mut current_wires);
+        }
+
+        current_wires
     }
-
-    current_wires
-}
 
     //give ordering to gates for later canonicalization
     pub fn ordered(&self, other: &Self) -> bool {
@@ -252,12 +252,6 @@ impl Circuit{
 
         Ok(())
     }
-
-    // CAN TWO CIRCUITS WITH DIFFERENT NUMBER OF WIRES BE FUNCTIONALLY EQUIVALENT?????
-    // pub fn functionally_equal()(&self, other_circuit: &Self, num_inputs: usize) -> Result<(), String> {
-    //     let least_num_wires = min(self.num_wires, other_circuit.num_wires);
-    //     if num_inputs > 
-    // }
 
     pub fn evaluate(&self, input_wires: usize) -> usize {
         Gate::evaluate_gate_list(&self.gates, input_wires)
@@ -579,18 +573,6 @@ impl CircuitSeq {
         Circuit{ num_wires: max, gates, }
     }
 
-    // pub fn num_wires(&self) -> usize {
-    //     let mut max = 0;
-    //     for g in &self.gates {
-    //         for &p in g {
-    //             if p as usize > max {
-    //                 max = p as usize;
-    //             }
-    //         }
-    //     }
-    //     max + 1
-    // }
-
     /// Reconstruct CircuitSeq from a BLOB
     pub fn from_blob(blob: &[u8]) -> Self {
         assert!(blob.len() % 3 == 0, "Invalid blob length");
@@ -844,6 +826,25 @@ impl CircuitSeq {
         evolution
     }
 
+    //no check on num_wires
+    pub fn probably_equal(&self, other_circuit: &Self, num_wires: usize, num_inputs: usize) -> Result<(), String> {
+        let mut rng = rand::rng();
+        let mask = (1 << num_wires) - 1;
+
+        for _ in 0..num_inputs {
+            // generate u64, then mask to get the lower num_wires bits
+            let random_input = (rng.random::<u64>() as usize) & mask;
+
+            let self_output = Gate::evaluate_index_list( random_input, &self.gates);
+            let other_output = Gate::evaluate_index_list(random_input, &other_circuit.gates);
+
+            if self_output != other_output {
+                return Err("Circuits are not equal".to_string());
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub fn base_gates(n: usize) -> Vec<[usize; 3]> {
