@@ -262,9 +262,9 @@ fn main() {
 
             if data.trim().is_empty() {
                 println!("Generating random");
-                let c1 = random_circuit(32,30);
+                let c1 = random_circuit(16,30);
                 println!("Starting Len: {}", c1.gates.len());
-                main_butterfly_big(&c1, rounds, &mut conn, 32);
+                main_butterfly_big(&c1, rounds, &mut conn, 16);
             } else {
                 let c = CircuitSeq::from_string(&data);
                 main_butterfly_big(&c, rounds, &mut conn, 32);
