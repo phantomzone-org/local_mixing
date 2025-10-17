@@ -523,7 +523,13 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     //         "The permutation differs from the original"
     //     );
     // }
-    
+    let mut rev_gates = Vec::with_capacity(c.gates.len());
+    for g in c.gates.iter().rev() {
+        rev_gates.push(*g); // copy [u8;3]
+    }
+    let rev = CircuitSeq { gates: rev_gates };
+    let good_id = circuit.concat(&rev);
+
     circuit
     .probably_equal(&c, n, 150_000)
     .expect("The circuits differ somewhere!");
@@ -532,7 +538,7 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     let c_str = c.to_string(n);
     let circuit_str = circuit.to_string(n);
     let long_str = format!("{}:{}", c.repr(), circuit.repr());
-
+    let good_str = format!("{}: {}", good_id.gates.len(), good_id.repr());
     // Write start.txt
     File::create("start.txt")
         .and_then(|mut f| f.write_all(c_str.as_bytes()))
@@ -556,6 +562,12 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
         .and_then(|mut f| writeln!(f, "{}", long_str))
         .expect("Failed to append to butterfly.txt");
 
+    OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("good_id.txt")
+        .and_then(|mut f| writeln!(f, "{}", good_str))
+        .expect("Failed to append to butterfly.txt");
     if circuit.gates == c.gates {
         println!("The obfuscation didn't do anything");
     }

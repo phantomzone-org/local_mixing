@@ -1382,4 +1382,15 @@ mod tests {
             .expect("The circuits differ somewhere!");
         println!("Time to compute permutation on 32 wires: {:?}", t.elapsed());
     }
+
+    #[test]
+    fn test_identity() {
+        let t = Instant::now();
+        let c = CircuitSeq::from_string("123;");
+        let id = CircuitSeq::from_string("123;123;");
+        c
+            .probably_equal(&id, 32, 150_000)
+            .expect("The circuits differ somewhere!");
+        println!("Time to compute permutation on 32 wires: {:?}", t.elapsed());
+    }
 }
