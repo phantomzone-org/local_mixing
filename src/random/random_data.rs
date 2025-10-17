@@ -414,13 +414,14 @@ pub fn find_convex_subcircuit<R: RngCore>(
 pub fn contiguous_convex(
     circuit: &mut CircuitSeq,
     ordered_convex_gates: &mut Vec<usize>,
+    num_wires: usize
 ) -> Option<(usize, usize)> {
     // This should never run
     if ordered_convex_gates.len() < 2 {
         return None;
     }
 
-    if !is_convex(16, circuit, &ordered_convex_gates) {
+    if !is_convex(num_wires, circuit, &ordered_convex_gates) {
         panic!("not convex");
     }
 
@@ -1252,7 +1253,7 @@ mod tests {
         println!("Convexity check passed");
         let mut circ = c.clone();
         println!("Before gates {:?}", subcircuit_gates);
-        let (start, end) = contiguous_convex(&mut circ,  &mut subcircuit_gates).unwrap();
+        let (start, end) = contiguous_convex(&mut circ,  &mut subcircuit_gates, 16).unwrap();
         println!("After gates {:?}", subcircuit_gates);
         println!("The rearranged are equal: {}", c.permutation(16).data == circ.permutation(16).data);
         println!("New circuit {:?}", circ.gates);
@@ -1314,7 +1315,7 @@ mod tests {
         let convex = is_convex(16, &c, &subcircuit_gates);
         println!("\nConvex before contiguous_convex? {}", convex);
 
-        let (start, end) = contiguous_convex(&mut c, &mut subcircuit_gates).unwrap();
+        let (start, end) = contiguous_convex(&mut c, &mut subcircuit_gates, 16).unwrap();
         println!("\nAfter contiguous_convex:");
         println!("Start index: {}", start);
         println!("End index:   {}", end);

@@ -451,7 +451,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
 
         subcircuit_gates.sort();
         //let t0 = Instant::now();
-        let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates).unwrap();
+        let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates, num_wires).unwrap();
         // let t_convex = t0.elapsed();
         // println!("contiguous_convex: {:?}", t_convex);
         let mut subcircuit = CircuitSeq { gates };
