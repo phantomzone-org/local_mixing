@@ -1408,4 +1408,12 @@ mod tests {
             old.permutation(16) == new.permutation(16)
         );
     }
+    use std::time::Instant;
+    #[test]
+    fn test_print() {
+        let t = Instant::now();
+        let c = random_circuit(32,30);
+        let _ = c.permutation(32);
+        println!("Time to compute permutation on 32 wires: {:?}", t.elapsed());
+    }
 }
