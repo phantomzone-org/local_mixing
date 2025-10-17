@@ -281,16 +281,20 @@ fn main() {
 
 pub fn heatmap(num_inputs: usize) {
     // Load circuits from fixed paths
-    let data1 = fs::read_to_string("circuit1.txt")
-        .expect("Failed to read file circuit1.txt");
-    let mut circuit_one = CircuitSeq::from_string(&data1);
+    // Read the file
+    let contents = fs::read_to_string("butterfly_recent.txt")
+        .expect("Failed to read butterfly_recent.txt");
 
-    let data2 = fs::read_to_string("circuit2.txt")
-        .expect("Failed to read file circuit2.txt");
-    let mut circuit_two = CircuitSeq::from_string(&data2);
+    // Split into old and new by the first ':'
+    let (circuit_one_str, circuit_two_str) = contents
+        .split_once(':')
+        .expect("Invalid format in butterfly_recent.txt");
+    // Parse both circuits
+    let mut circuit_one = CircuitSeq::from_string(circuit_one_str);
+    let mut circuit_two = CircuitSeq::from_string(circuit_two_str);
     circuit_one.canonicalize();
     circuit_two.canonicalize();
-    let num_wires = 16; // adjust if needed
+    let num_wires = 32; // adjust if needed
     let circuit_one_len = circuit_one.gates.len();
     let circuit_two_len = circuit_two.gates.len();
 
