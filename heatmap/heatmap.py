@@ -26,11 +26,14 @@ def plot_heatmap(data, save_path):
 
     plt.imshow(
         heatmap,
-        cmap='viridis',
+        cmap='RdYlGn_r',  # reversed so red = 1, purple-ish = -1
         aspect='auto',
         origin='lower',
         extent=[x_unique[0], x_unique[-1], y_unique[0], y_unique[-1]],
+        vmin=vmin,
+        vmax=vmax
     )
+    
     plt.colorbar(label='Standard deviations from mean')
     plt.xlabel('Circuit 1 gate index')
     plt.ylabel('Circuit 2 gate index')
