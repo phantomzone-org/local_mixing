@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import argparse
+from matplotlib.colors import LinearSegmentedColormap
 
-def plot_heatmap(data, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-1, vmax=1):
+def plot_heatmap(data, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-3, vmax=3):
     plt.clf()
     points = np.array(data)
     x, y, values = points[:, 0], points[:, 1], points[:, 2]
@@ -25,14 +26,19 @@ def plot_heatmap(data, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-1, vma
     for xi, yi, z in zip(x, y, z_values):
         heatmap[y_indices[yi], x_indices[xi]] = z
 
+    # Purple = -3, green = 0, red = +3
+    cmap = LinearSegmentedColormap.from_list("purple_green_red", ["purple", "green", "red"])
+
     plt.imshow(
         heatmap,
-        cmap='RdYlGn_r',  # red = 1, purple-ish = -1
+        cmap=cmap,
         aspect='auto',
         origin='lower',
         extent=[x_unique[0], x_unique[-1], y_unique[0], y_unique[-1]],
+        vmin=vmin,
+        vmax=vmax
     )
-    
+
     plt.colorbar(label='Standard deviations from mean')
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -52,7 +58,14 @@ if __name__ == "__main__":
     try:
         with open(args.json, 'r') as f:
             data = json.load(f)
-        plot_heatmap(data['results'], args.output, xlabel=args.xlabel, ylabel=args.ylabel)
+        plot_heatmap(
+            data['results'], 
+            args.output, 
+            xlabel=args.xlabel, 
+            ylabel=args.ylabel,
+            vmin=-3,
+            vmax=3
+        )
         print(f"Heatmap saved to {args.output}")
     except FileNotFoundError:
         print(f"Error: Could not find file {args.json}")
