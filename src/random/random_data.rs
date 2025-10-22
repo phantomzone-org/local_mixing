@@ -1393,4 +1393,68 @@ mod tests {
             .expect("The circuits differ somewhere!");
         println!("Time to compute permutation on 32 wires: {:?}", t.elapsed());
     }
+
+    use super::*;
+    use std::io::{self, BufRead};
+    use std::path::Path;
+
+    #[test]
+    fn split_butterfly_by_size() -> io::Result<()> {
+        // Read all lines from butterfly.txt
+        let path = Path::new("butterfly.txt");
+        let file = fs::File::open(path)?;
+        let reader = io::BufReader::new(file);
+        let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+
+        // Get the last 3 non-empty lines
+        let circuits_raw: Vec<String> = lines
+            .into_iter()
+            .rev()
+            .filter(|l| !l.trim().is_empty())
+            .take(3)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+
+        assert_eq!(
+            circuits_raw.len(),
+            3,
+            "Expected exactly 3 circuits in butterfly.txt"
+        );
+
+        // Parse and measure lengths
+        let mut circuits: Vec<(String, usize)> = circuits_raw
+            .iter()
+            .map(|s| {
+                let c = CircuitSeq::from_string(s);
+                let len = c.gates.len();
+                (s.clone(), len)
+            })
+            .collect();
+
+        // Sort by length
+        circuits.sort_by_key(|(_, len)| *len);
+
+        // Assign smallest, middle, largest
+        let (smallest, middle, largest) =
+            (&circuits[0].0, &circuits[1].0, &circuits[2].0);
+
+        // Convert to repr()
+        let c_small = CircuitSeq::from_string(smallest);
+        let c_mid = CircuitSeq::from_string(middle);
+        let c_large = CircuitSeq::from_string(largest);
+
+        // Write to output files
+        fs::write("circuitOB.txt", c_small.repr())?;
+        fs::write("circuitOA.txt", c_mid.repr())?;
+        fs::write("circuitOOB.txt", c_large.repr())?;
+
+        println!(" Wrote:");
+        println!("  circuitOB.txt (smallest)");
+        println!("  circuitOA.txt (middle)");
+        println!("  circuitOOB.txt (largest)");
+
+        Ok(())
+    }
 }
