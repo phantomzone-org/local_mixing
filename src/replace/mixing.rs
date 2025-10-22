@@ -16,6 +16,8 @@ use rusqlite::OpenFlags;
 use rayon::prelude::*;
 use crate::replace::replace::outward_compress;
 use crate::replace::replace::compress_big;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
@@ -216,19 +218,25 @@ fn merge_combine_blocks(
     blocks: &[CircuitSeq],
     n: usize,
     db_path: &str,
+    progress: &Arc<AtomicUsize>,
+    total: usize,
 ) -> CircuitSeq {
     if blocks.is_empty() {
         return CircuitSeq { gates: vec![] };
     }
     if blocks.len() == 1 {
+        let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
+        if done % 10 == 0 || done == total {
+            println!("Progress: {}/{}", done, total);
+        }
         return blocks[0].clone();
     }
 
     let mid = blocks.len() / 2;
 
     let (left, right) = rayon::join(
-        || merge_combine_blocks(&blocks[..mid], n, db_path),
-        || merge_combine_blocks(&blocks[mid..], n, db_path),
+        || merge_combine_blocks(&blocks[..mid], n, db_path, progress, total),
+        || merge_combine_blocks(&blocks[mid..], n, db_path, progress, total),
     );
 
     let mut conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
@@ -236,6 +244,11 @@ fn merge_combine_blocks(
 
     let combined = left.concat(&right);
     let acc = compress_big(&combined, 200, n, &mut conn);
+
+    let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
+    if done % 10 == 0 || done == total {
+        println!("Progress: {}/{}", done, total);
+    }
 
     acc
 }
@@ -283,7 +296,12 @@ pub fn butterfly_big(
     })
     .collect();
 
-    let mut acc = merge_combine_blocks(&blocks, n, "./circuits.db");
+    let progress = Arc::new(AtomicUsize::new(0));
+    let total = blocks.len() - 1;
+
+    println!("Beginning merge");
+    
+    let mut acc = merge_combine_blocks(&blocks, n, "./circuits.db", &progress, total);
 
     // Add bookends: R ... R*
     acc = r.concat(&acc).concat(&r_inv);
