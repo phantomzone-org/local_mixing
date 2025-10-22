@@ -1400,64 +1400,97 @@ mod tests {
 
 
     #[test]
-fn split_butterfly_unique() -> io::Result<()> {
-    // Read all lines from butterfly.txt
-    let file = fs::File::open("butterfly.txt")?;
-    let reader = io::BufReader::new(file);
+    fn split_butterfly_unique() -> io::Result<()> {
+        // Read all lines from butterfly.txt
+        let file = fs::File::open("butterfly.txt")?;
+        let reader = io::BufReader::new(file);
 
-    // Collect all lines, then take the last 3
-    let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
-    let last_three = lines.iter().rev().take(3).cloned().collect::<Vec<_>>();
-    let last_three = last_three.into_iter().rev().collect::<Vec<_>>(); // preserve original order
+        // Collect all lines, then take the last 5
+        let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+        let last_five = lines.iter().rev().take(5).cloned().collect::<Vec<_>>();
+        let last_five = last_five.into_iter().rev().collect::<Vec<_>>(); // preserve order
 
-    let mut unique_circuits = HashSet::new();
+        let mut unique_circuits = HashSet::new();
 
-    // Extract all circuits split by ':' and trim whitespace
-    for line in last_three {
-        for part in line.split(':') {
-            let trimmed = part.trim();
-            if !trimmed.is_empty() {
-                unique_circuits.insert(trimmed.to_string());
+        // Extract all circuits split by ':' and trim whitespace
+        for line in last_five {
+            for part in line.split(':') {
+                let trimmed = part.trim();
+                if !trimmed.is_empty() {
+                    unique_circuits.insert(trimmed.to_string());
+                }
             }
         }
+
+        // Convert to Vec for sorting by length
+        let mut circuits: Vec<(String, usize)> = unique_circuits
+            .iter()
+            .map(|s| {
+                let c = CircuitSeq::from_string(s);
+                let len = c.gates.len();
+                (s.clone(), len)
+            })
+            .collect();
+
+        circuits.sort_by_key(|(_, len)| *len);
+
+        assert_eq!(
+            circuits.len(),
+            7,
+            "Expected exactly 7 unique circuits, got {}",
+            circuits.len()
+        );
+
+        // Filenames for sorted circuits
+        let filenames = [
+            "circuitB.txt",
+            "circuitA.txt",
+            "circuitOB.txt",
+            "circuitOA.txt",
+            "circuitOOB.txt",
+            "circuitOOA.txt",
+            "circuitOOOB.txt",
+        ];
+
+        // Write each circuit to file using repr()
+        for ((circuit_str, _), filename) in circuits.iter().zip(filenames.iter()) {
+            let circuit = CircuitSeq::from_string(circuit_str);
+            fs::write(filename, circuit.repr())?;
+            println!(" Wrote {} (len = {})", filename, circuit.gates.len());
+        }
+
+        // === Sanity Check ===
+        fn read_circuit(path: &str) -> String {
+            fs::read_to_string(path)
+                .expect(&format!("Failed to read {}", path))
+                .trim()
+                .to_string()
+        }
+
+        let sanity_pairs = [
+            ("circuitA.txt", "circuitOA.txt"),
+            ("circuitOA.txt", "circuitOOA.txt"),
+            ("circuitB.txt", "circuitOB.txt"),
+            ("circuitOB.txt", "circuitOOB.txt"),
+            ("circuitOOB.txt", "circuitOOOB.txt"),
+        ];
+
+        for (a, b) in sanity_pairs {
+            let c1 = read_circuit(a);
+            let c2 = read_circuit(b);
+            let combined = format!("{}:{}", c1, c2);
+
+            // ensure this combined pattern exists in butterfly.txt
+            let full_text = fs::read_to_string("butterfly.txt")?;
+            assert!(
+                full_text.contains(&combined),
+                "Sanity check failed: expected '{}' and '{}' to appear together in butterfly.txt",
+                a,
+                b
+            );
+        }
+
+        println!(" All sanity checks passed.");
+        Ok(())
     }
-
-    // Convert to Vec for sorting
-    let mut circuits: Vec<(String, usize)> = unique_circuits
-        .iter()
-        .map(|s| {
-            let c = CircuitSeq::from_string(s);
-            let len = c.gates.len();
-            (s.clone(), len)
-        })
-        .collect();
-
-    // Sort by circuit length
-    circuits.sort_by_key(|(_, len)| *len);
-
-    assert_eq!(
-        circuits.len(),
-        5,
-        "Expected exactly 5 unique circuits, got {}",
-        circuits.len()
-    );
-
-    // Extract circuits in sorted order
-    let filenames = [
-        "circuitB.txt",
-        "circuitA.txt",
-        "circuitOB.txt",
-        "circuitOA.txt",
-        "circuitOOB.txt",
-    ];
-
-    // Write each to its respective file using repr()
-    for ((circuit_str, _), filename) in circuits.iter().zip(filenames.iter()) {
-        let circuit = CircuitSeq::from_string(circuit_str);
-        fs::write(filename, circuit.repr())?;
-        println!(" Wrote {} (len = {})", filename, circuit.gates.len());
-    }
-
-    Ok(())
-}
 }
