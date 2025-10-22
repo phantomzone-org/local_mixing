@@ -26,16 +26,9 @@ def plot_heatmap(data, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-3, vma
     for xi, yi, z in zip(x, y, z_values):
         heatmap[y_indices[yi], x_indices[xi]] = z
 
-    colors = [
-        (0.0, "#313695"),  # dark purple (low)
-        (0.5, "#66c2a5"),  # yellow (midpoint = 0)
-        (1.0, "#a50026")   # red (high)
-    ]
-    cmap = LinearSegmentedColormap.from_list("purple_green_red", colors)
-
     plt.imshow(
         heatmap,
-        cmap=cmap,
+        cmap= "PuOr",
         aspect='auto',
         origin='lower',
         extent=[x_unique[0], x_unique[-1], y_unique[0], y_unique[-1]],
