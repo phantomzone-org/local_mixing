@@ -343,39 +343,34 @@ pub fn butterfly_big(
     acc
 }
 
-pub fn abutterfly_big(c: &CircuitSeq, 
-    conn: &mut Connection, 
-    n: usize
+pub fn abutterfly_big(
+    c: &CircuitSeq,
+    conn: &mut Connection,
+    n: usize,
 ) -> CircuitSeq {
     println!("Butterfly start: {} gates", c.gates.len());
-
     let mut rng = rand::rng();
-    let mut prev_r: Option<CircuitSeq> = None;
-    let mut prev_r_inv: Option<CircuitSeq> = None;
-
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
+
+    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(15..=25));
+    let mut prev_r_inv = first_r_inv.clone();
 
     for &g in &c.gates {
         let (r, r_inv) = random_id(n as u8, rng.random_range(15..=25));
-        let block = if let (Some(prev_r_inv), Some(prev_r)) = (&prev_r_inv, &prev_r) {
-            prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r)
-        } else {
-            r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r)
-        };
-
+        let block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
         pre_blocks.push(block);
-
-        prev_r = Some(r);
-        prev_r_inv = Some(r_inv);
+        prev_r_inv = r_inv;
     }
 
+    // Parallel compression of each block
     let compressed_blocks: Vec<CircuitSeq> = pre_blocks
         .par_iter()
         .map(|block| {
             let mut thread_conn = Connection::open_with_flags(
                 "circuits.db",
                 OpenFlags::SQLITE_OPEN_READ_ONLY,
-            ).expect("Failed to open read-only connection");
+            )
+            .expect("Failed to open read-only connection");
 
             compress_big(block, 100, n, &mut thread_conn)
         })
@@ -383,15 +378,17 @@ pub fn abutterfly_big(c: &CircuitSeq,
 
     let progress = Arc::new(AtomicUsize::new(0));
     let total = 2 * compressed_blocks.len() - 1;
-    println!("Beginning merge");
-    let mut acc = merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, total);
 
-    let first_r = prev_r.unwrap();
-    let first_r_inv = prev_r_inv.unwrap();
-    acc = first_r.concat(&acc).concat(&first_r_inv);
+    println!("Beginning merge");
+    let mut acc =
+        merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, total);
+
+    // Add global bookends: first_r ... last_r_inv
+    acc = first_r.concat(&acc).concat(&prev_r_inv);
 
     println!("After adding bookends: {} gates", acc.gates.len());
 
+    // Final global compression until stable 3×
     let mut stable_count = 0;
     while stable_count < 3 {
         let before = acc.gates.len();
