@@ -439,12 +439,13 @@ pub fn compress_exhaust(
             i += 1;
         }
     }
-
     if compressed.gates.is_empty() {
         return CircuitSeq { gates: Vec::new() };
     }
-    let mut swap_streak = 0;
+
     let mut changed = true;
+    let mut swap_streak = 0; // track consecutive equal-length replacements
+
     while changed {
         changed = false;
         let len = compressed.gates.len();
@@ -496,18 +497,18 @@ pub fn compress_exhaust(
                                 compressed.gates.splice(start..end, repl.gates);
 
                                 if repl_len < subcircuit.gates.len() {
-                                    // Compression: reset swap streak, restart immediately
+                                    // Shorter replacement: reset swap streak & restart
                                     swap_streak = 0;
                                     changed = true;
                                     break 'outer;
                                 } else {
-                                    // Swap-only (same length)
+                                    // Equal-length replacement: allow up to 3
                                     swap_streak += 1;
                                     if swap_streak <= 3 {
                                         changed = true;
                                         break 'outer;
                                     } else {
-                                        // Exceeded 3 swap-only restarts; continue
+                                        // Exceeded 3 swaps, reset streak but don't restart
                                         swap_streak = 0;
                                     }
                                 }
