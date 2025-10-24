@@ -364,15 +364,27 @@ pub fn abutterfly_big(
 
     // Parallel compression of each block
     let compressed_blocks: Vec<CircuitSeq> = pre_blocks
-        .par_iter()
-        .map(|block| {
+        .into_par_iter()
+        .enumerate()
+        .map(|(i, block)| {
             let mut thread_conn = Connection::open_with_flags(
                 "circuits.db",
                 OpenFlags::SQLITE_OPEN_READ_ONLY,
             )
             .expect("Failed to open read-only connection");
 
-            compress_big(block, 100, n, &mut thread_conn)
+            let before_len = block.gates.len();
+            let compressed_block = compress_big(&block, 100, n, &mut thread_conn);
+
+            println!(
+                "  Block {}: before {} gates → after {} gates",
+                i,
+                before_len,
+                compressed_block.gates.len()
+            );
+            println!("  {}", compressed_block.repr());
+
+            compressed_block
         })
         .collect();
 
@@ -570,9 +582,9 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     let mut count = 0;
     for _ in 0..rounds {
         circuit = if asymmetric {
-            butterfly_big(&circuit, conn, n)
+            abutterfly_big(&circuit, conn, n)
         } else {
-            abutterfly_big(&circuit,conn,n)
+            butterfly_big(&circuit,conn,n)
         };
         if circuit.gates.len() == 0 {
             break;
