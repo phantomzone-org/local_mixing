@@ -443,7 +443,7 @@ pub fn compress_exhaust(
     if compressed.gates.is_empty() {
         return CircuitSeq { gates: Vec::new() };
     }
-
+    let mut swap_streak = 0;
     let mut changed = true;
     while changed {
         changed = false;
@@ -492,14 +492,23 @@ pub fn compress_exhaust(
                                     panic!("Replacement permutation mismatch!");
                                 }
 
-                                // Only restart from beginning if length decreased
-                                if repl.gates.len() < subcircuit.gates.len() {
-                                    compressed.gates.splice(start..end, repl.gates);
+                                let repl_len = repl.gates.len();
+                                compressed.gates.splice(start..end, repl.gates);
+
+                                if repl_len < subcircuit.gates.len() {
+                                    // Compression (shorter): reset streak, restart immediately
+                                    swap_streak = 0;
                                     changed = true;
                                     break 'outer;
                                 } else {
-                                    // Otherwise, just replace in place without restarting
-                                    compressed.gates.splice(start..end, repl.gates);
+                                    // Swap-only (same length)
+                                    swap_streak += 1;
+                                    if swap_streak >= 3 {
+                                        // Restart after 3 swap-only changes
+                                        swap_streak = 0;
+                                        changed = true;
+                                        break 'outer;
+                                    }
                                 }
                             }
                         }
