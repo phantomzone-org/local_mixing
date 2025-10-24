@@ -496,18 +496,19 @@ pub fn compress_exhaust(
                                 compressed.gates.splice(start..end, repl.gates);
 
                                 if repl_len < subcircuit.gates.len() {
-                                    // Compression (shorter): reset streak, restart immediately
+                                    // Compression: reset swap streak, restart immediately
                                     swap_streak = 0;
                                     changed = true;
                                     break 'outer;
                                 } else {
                                     // Swap-only (same length)
                                     swap_streak += 1;
-                                    if swap_streak >= 3 {
-                                        // Restart after 3 swap-only changes
-                                        swap_streak = 0;
+                                    if swap_streak <= 3 {
                                         changed = true;
                                         break 'outer;
+                                    } else {
+                                        // Exceeded 3 swap-only restarts; continue
+                                        swap_streak = 0;
                                     }
                                 }
                             }
