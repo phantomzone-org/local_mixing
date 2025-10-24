@@ -349,7 +349,6 @@ pub fn abutterfly_big(c: &CircuitSeq,
 ) -> CircuitSeq {
     println!("Butterfly start: {} gates", c.gates.len());
 
-    // Step 1: Sequentially generate asymmetric blocks
     let mut rng = rand::rng();
     let mut prev_r: Option<CircuitSeq> = None;
     let mut prev_r_inv: Option<CircuitSeq> = None;
@@ -370,7 +369,6 @@ pub fn abutterfly_big(c: &CircuitSeq,
         prev_r_inv = Some(r_inv);
     }
 
-    // Step 2: Compress blocks in parallel
     let compressed_blocks: Vec<CircuitSeq> = pre_blocks
         .par_iter()
         .map(|block| {
@@ -383,20 +381,17 @@ pub fn abutterfly_big(c: &CircuitSeq,
         })
         .collect();
 
-    // Step 3: Merge blocks sequentially
     let progress = Arc::new(AtomicUsize::new(0));
     let total = 2 * compressed_blocks.len() - 1;
     println!("Beginning merge");
     let mut acc = merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, total);
 
-    // Step 4: Add outer R/R_inv bookends from first block
     let first_r = prev_r.unwrap();
     let first_r_inv = prev_r_inv.unwrap();
     acc = first_r.concat(&acc).concat(&first_r_inv);
 
     println!("After adding bookends: {} gates", acc.gates.len());
 
-    // Step 5: Final global compression until stable 3×
     let mut stable_count = 0;
     while stable_count < 3 {
         let before = acc.gates.len();
