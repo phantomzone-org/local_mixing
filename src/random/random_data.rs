@@ -118,7 +118,7 @@ pub fn random_equivalent_circuits(n: u8) -> (CircuitSeq, CircuitSeq) {
 
         // Compare the new circuit against all previous ones
         for (i, existing) in pool.iter().enumerate() {
-            if new_circuit.probably_equal(existing, n as usize, 150_000).is_ok() {
+            if new_circuit.probably_equal(existing, n as usize, 10_000).is_ok() {
                 println!(
                     "Found equivalent circuits after {} total candidates!",
                     count
