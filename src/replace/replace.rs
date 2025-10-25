@@ -9,6 +9,7 @@ use crate::random::random_data::contiguous_convex;
 use rand::{prelude::IndexedRandom, Rng};
 use rusqlite::{params, Connection, OptionalExtension};
 use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
 use std::{
     cmp::{max, min},
     // used for testing
@@ -445,20 +446,25 @@ pub fn compress_exhaust(
     }
 
     let mut changed = true;
+    let mut seen_positions: HashSet<(usize, usize)> = HashSet::new(); // Track replaced positions globally
+
     while changed {
         changed = false;
         let len = compressed.gates.len();
 
         'outer: for start in 0..len {
-            for end in (start + 2)..=len { // skip lengths 1
-                let mut subcircuit = CircuitSeq {
+            for end in (start + 2)..=len { // skip length 1
+                if seen_positions.contains(&(start, end)) {
+                continue; // skip positions already replaced in this pass
+            }
+                let subcircuit = CircuitSeq {
                     gates: compressed.gates[start..end].to_vec(),
                 };
 
-                subcircuit.canonicalize();
                 let sub_perm = subcircuit.permutation(n);
                 let canon_perm = get_canonical(&sub_perm, bit_shuf);
-                let perm_blob = canon_perm.perm.repr_blob();
+                let sub_blob = canon_perm.perm.repr_blob();
+
                 let sub_m = subcircuit.gates.len();
 
                 for smaller_m in 1..=sub_m {
@@ -472,7 +478,7 @@ pub fn compress_exhaust(
                         Ok(s) => s,
                         Err(_) => continue,
                     };
-                    let rows = stmt.query([&perm_blob]);
+                    let rows = stmt.query([&sub_blob]);
 
                     if let Ok(mut r) = rows {
                         if let Some(row) = r.next().unwrap() {
@@ -491,15 +497,21 @@ pub fn compress_exhaust(
                                 if repl.permutation(n) != sub_perm {
                                     panic!("Replacement permutation mismatch!");
                                 }
+                                
+                                let repl_len = repl.gates.len();
 
-                                // Only restart from beginning if length decreased
-                                if repl.gates.len() < subcircuit.gates.len() {
+                                // Only perform replacement if it actually changes the gates
+                                if repl.gates != subcircuit.gates {
                                     compressed.gates.splice(start..end, repl.gates);
+
+                                    if repl_len < subcircuit.gates.len() {
+                                        seen_positions.clear(); // reset all positions if we shrink
+                                    } else {
+                                        seen_positions.insert((start, end)); // otherwise mark this position
+                                    }
+
                                     changed = true;
                                     break 'outer;
-                                } else {
-                                    // Otherwise, just replace in place without restarting
-                                    compressed.gates.splice(start..end, repl.gates);
                                 }
                             }
                         }
