@@ -101,39 +101,52 @@ pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
     CircuitSeq { gates: circuit }
 }
 
-
-pub fn random_equivalent_circuits(n: u8) -> (CircuitSeq, CircuitSeq) {
+pub fn random_equivalent_circuits_until_found(n: u8) -> (CircuitSeq, CircuitSeq) {
     let mut pool: Vec<CircuitSeq> = Vec::new();
-    let mut count = 0;
+    let mut total_generated = 0;
+    let batch_size = 100_000;
 
     loop {
-        // Generate a new random circuit
-        let m = fastrand::usize(10..=30);
-        let new_circuit = random_circuit(n, m);
-        count += 1;
+        println!("Generating {} new circuits...", batch_size);
 
-        if count % 10_000 == 0 {
-            println!("Generated {} circuits so far...", count);
+        // Generate a new batch of random circuits
+        let new_batch: Vec<CircuitSeq> = (0..batch_size)
+            .map(|_| {
+                let m = fastrand::usize(10..=30);
+                random_circuit(n, m)
+            })
+            .collect();
+
+        total_generated += new_batch.len();
+        println!("Total circuits so far: {}", total_generated);
+
+        // Combine old + new for searching
+        let combined: Vec<&CircuitSeq> = pool.iter().chain(new_batch.iter()).collect();
+
+        // Parallel comparison among all pairs (old+new)
+        if let Some((i, j)) = combined
+            .par_iter()
+            .enumerate()
+            .find_map_any(|(i, &c1)| {
+                for (j, &c2) in combined.iter().enumerate().skip(i + 1) {
+                    if c1.probably_equal(c2, n as usize, 150_000).is_ok() {
+                        return Some((i, j));
+                    }
+                }
+                None
+            })
+        {
+            println!("Found equivalent circuits after generating {} total!", total_generated);
+
+            let c1 = combined[i].clone();
+            let c2 = combined[j].clone();
+            return (c1, c2);
         }
 
-        // Compare the new circuit against all previous ones
-        for (i, existing) in pool.iter().enumerate() {
-            if new_circuit.probably_equal(existing, n as usize, 10_000).is_ok() {
-                println!(
-                    "Found equivalent circuits after {} total candidates!",
-                    count
-                );
-                let c1 = pool.swap_remove(i);
-                let c2 = new_circuit;
-                return (c1, c2);
-            }
-        }
-
-        // Add new circuit to pool after checking
-        pool.push(new_circuit);
+        // No match found, extend the pool and repeat
+        pool.extend(new_batch);
     }
 }
-
 
 pub fn is_convex(num_wires: usize, circuit: &CircuitSeq, convex_gate_ids: &[usize]) -> bool {
     // early exit for too few gates
@@ -1537,7 +1550,7 @@ mod tests {
         let n: u8 = 32;
 
         // Generate two equivalent circuits
-        let (c1, c2) = random_equivalent_circuits(n);
+        let (c1, c2) = random_equivalent_circuits_until_found(n);
 
         if c1.probably_equal(&c2, n as usize, 1_000_000).is_ok() {
            println!("Looks good");
