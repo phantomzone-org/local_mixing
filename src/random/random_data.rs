@@ -106,6 +106,7 @@ pub fn random_equivalent_circuits(n: u8, pool_size: usize) -> (CircuitSeq, Circu
     // Generate c1 with its own random length
     let m1 = fastrand::usize(10..=30);
     let c1 = random_circuit(n, m1);
+    let mut count = 0;
 
     loop {
         // Generate a pool of candidate circuits for c2
@@ -113,6 +114,11 @@ pub fn random_equivalent_circuits(n: u8, pool_size: usize) -> (CircuitSeq, Circu
         for _ in 0..pool_size {
             let m2 = fastrand::usize(10..=30); // independent random length for each candidate
             pool.push(random_circuit(n, m2));
+            count += 1;
+
+            if count % 10_000 == 0 {
+                println!("Generated {} candidate circuits so far...", count);
+            }
         }
 
         // Filter candidates for circuits probably equal to c1
@@ -124,6 +130,7 @@ pub fn random_equivalent_circuits(n: u8, pool_size: usize) -> (CircuitSeq, Circu
             // Pick one randomly from matches
             let index = fastrand::usize(..matches.len());
             let c2 = matches.swap_remove(index);
+            println!("Found equivalent circuit after {} candidates", count);
             return (c1, c2);
         }
     }
