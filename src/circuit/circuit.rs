@@ -648,19 +648,60 @@ impl CircuitSeq {
     pub fn repr(&self) -> String {
         fn wire_to_char(w: u8) -> char {
             match w {
-                0..=9 => (b'0' + w) as char,
-                10..=35 => (b'a' + (w - 10)) as char,
-                36..=61 => (b'A' + (w - 36)) as char,
+                0..=9 => (b'0' + w) as char,          // 0-9
+                10..=35 => (b'a' + (w - 10)) as char, // a-z
+                36..=61 => (b'A' + (w - 36)) as char, // A-Z
+                // Special characters 62..=71
+                62 => '!',
+                63 => '@',
+                64 => '#',
+                65 => '$',
+                66 => '%',
+                67 => '^',
+                68 => '&',
+                69 => '*',
+                70 => '(',
+                71 => ')',
+                // Special characters 72..=82
+                72 => '-',
+                73 => '_',
+                74 => '=',
+                75 => '+',
+                76 => '[',
+                77 => ']',
+                78 => '{',
+                79 => '}',
+                80 => '<',
+                81 => '>',
+                82 => '?',
                 _ => panic!("Invalid wire index: {}", w),
             }
+        }
+
+        const BASE: u8 = 83; // 0..82 is base
+
+        fn encode_wire(mut w: u32) -> String {
+            let mut s = String::new();
+            let mut tildes = 0;
+
+            while w >= BASE as u32 {
+                tildes += 1;
+                w -= BASE as u32;
+            }
+
+            for _ in 0..tildes {
+                s.push('~');
+            }
+            s.push(wire_to_char(w as u8));
+            s
         }
 
         let mut s = String::new();
         for gate in &self.gates {
             for &wire in gate {
-                s.push(wire_to_char(wire));
+                s.push_str(&encode_wire(wire as u32));
             }
-            s.push(';');
+            s.push(';'); // gate separator
         }
         s
     }
@@ -668,29 +709,70 @@ impl CircuitSeq {
     pub fn from_string(s: &str) -> Self {
         fn char_to_wire(c: char) -> u8 {
             match c {
-                '0'..='9' => c as u8 - b'0',
-                'a'..='z' => c as u8 - b'a' + 10,
-                'A'..='Z' => c as u8 - b'A' + 36,
+                '0'..='9' => c as u8 - b'0',          // 0-9
+                'a'..='z' => c as u8 - b'a' + 10,     // 10-35
+                'A'..='Z' => c as u8 - b'A' + 36,     // 36-61
+                '!' => 62,
+                '@' => 63,
+                '#' => 64,
+                '$' => 65,
+                '%' => 66,
+                '^' => 67,
+                '&' => 68,
+                '*' => 69,
+                '(' => 70,
+                ')' => 71,
+                '-' => 72,
+                '_' => 73,
+                '=' => 74,
+                '+' => 75,
+                '[' => 76,
+                ']' => 77,
+                '{' => 78,
+                '}' => 79,
+                '<' => 80,
+                '>' => 81,
+                '?' => 82,
                 _ => panic!("Invalid wire char: {}", c),
             }
         }
+
+        const BASE: u32 = 83;
 
         let gates: Vec<[u8; 3]> = s
             .trim()
             .split(';')
             .filter(|part| !part.is_empty())
             .map(|gate_str| {
-                let chars = gate_str.chars().map(char_to_wire).collect::<Vec<_>>();
-                if chars.len() != 3 {
+                let mut chars = gate_str.chars().peekable();
+                let mut wires = Vec::new();
+
+                while chars.peek().is_some() {
+                    // Count tildes for overflow
+                    let mut overflow = 0;
+                    while chars.peek() == Some(&'~') {
+                        overflow += 1;
+                        chars.next();
+                    }
+
+                    // Next character is the base wire
+                    let c = chars.next().expect("Expected wire character after ~");
+                    let wire = char_to_wire(c) as u32 + overflow * BASE;
+                    wires.push(wire as u8);
+                }
+
+                if wires.len() != 3 {
                     panic!("Each gate must have exactly 3 wires: {:?}", gate_str);
                 }
-                [chars[0], chars[1], chars[2]]
+
+                [wires[0], wires[1], wires[2]]
             })
             .collect();
 
         CircuitSeq { gates }
     }
 
+    //outdated
     pub fn to_string(&self, num_wires: usize) -> String {
         let mut result = String::new();
 
