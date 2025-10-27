@@ -70,8 +70,8 @@ pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
     for _ in 0..m {
         loop {
             // mask for used pins
-            let mut set = [false; 64];
-            for i in n..64 {
+            let mut set = [false; 255];
+            for i in n..255 {
                 set[i as usize] = true; // disable pins >= n
             }
 
@@ -79,7 +79,7 @@ pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
             let mut gate = [0u8; 3];
             for j in 0..3 {
                 loop {
-                    let v = fastrand::u8(..64);
+                    let v = fastrand::u8(..255);
                     if !set[v as usize] {
                         set[v as usize] = true;
                         gate[j] = v;
