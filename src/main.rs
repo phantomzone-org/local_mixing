@@ -90,43 +90,61 @@ fn main() {
                 ),
         )
         .subcommand(
-            Command::new("bbutterfly")
-                .about("Obfuscate and compress an existing circuit via butterfly_big method")
-                .arg(
-                    Arg::new("rounds")
-                        .short('r')
-                        .long("rounds")
-                        .required(true)
-                        .value_parser(clap::value_parser!(usize)),
-                )
-                .arg(
-                    Arg::new("path")
-                        .short('p')
-                        .long("path")
-                        .required(true)
-                        .value_parser(clap::value_parser!(String))
-                        .help("Path to the circuit file"),
-                ),
-        )
-        .subcommand(
-            Command::new("abbutterfly")
-                .about("Obfuscate and compress an existing circuit via asymmetric butterfly_big method")
-                .arg(
-                    Arg::new("rounds")
-                        .short('r')
-                        .long("rounds")
-                        .required(true)
-                        .value_parser(clap::value_parser!(usize)),
-                )
-                .arg(
-                    Arg::new("path")
-                        .short('p')
-                        .long("path")
-                        .required(true)
-                        .value_parser(clap::value_parser!(String))
-                        .help("Path to the circuit file"),
-                ),
-        )
+        Command::new("bbutterfly")
+            .about("Obfuscate and compress an existing circuit via butterfly_big method")
+            .arg(
+                Arg::new("rounds")
+                    .short('r')
+                    .long("rounds")
+                    .required(true)
+                    .value_parser(clap::value_parser!(usize)),
+            )
+            .arg(
+                Arg::new("path")
+                    .short('p')
+                    .long("path")
+                    .required(true)
+                    .value_parser(clap::value_parser!(String))
+                    .help("Path to the circuit file"),
+            )
+            .arg(
+                Arg::new("n")
+                    .short('n')
+                    .long("n")
+                    .required(false)
+                    .default_value("32")
+                    .value_parser(clap::value_parser!(u8))
+                    .help("Number of wires (default: 32)"),
+            ),
+    )
+    .subcommand(
+        Command::new("abbutterfly")
+            .about("Obfuscate and compress an existing circuit via asymmetric butterfly_big method")
+            .arg(
+                Arg::new("rounds")
+                    .short('r')
+                    .long("rounds")
+                    .required(true)
+                    .value_parser(clap::value_parser!(usize)),
+            )
+            .arg(
+                Arg::new("path")
+                    .short('p')
+                    .long("path")
+                    .required(true)
+                    .value_parser(clap::value_parser!(String))
+                    .help("Path to the circuit file"),
+            )
+            .arg(
+                Arg::new("n")
+                    .short('n')
+                    .long("n")
+                    .required(false)
+                    .default_value("32")
+                    .value_parser(clap::value_parser!(u8))
+                    .help("Number of wires (default: 32)"),
+            ),
+    )
         .subcommand(
             Command::new("heatmap")
                 .about("Run the circuit distinguisher and produce a heatmap")
@@ -276,6 +294,7 @@ fn main() {
         Some(("bbutterfly", sub)) => {
             let rounds: usize = *sub.get_one("rounds").unwrap();
             let path: &str = sub.get_one::<String>("path").unwrap().as_str();
+            let n: usize = *sub.get_one("n").unwrap_or(&32); // default to 32 if not provided
             let data = fs::read_to_string("initial.txt").expect("Failed to read initial.txt");
 
             let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
@@ -288,17 +307,19 @@ fn main() {
 
             if data.trim().is_empty() {
                 println!("Generating random");
-                let c1 = random_circuit(16,30);
+                let c1 = random_circuit(n as u8, 30);
                 println!("Starting Len: {}", c1.gates.len());
-                main_butterfly_big(&c1, rounds, &mut conn, 16, false, path);
+                main_butterfly_big(&c1, rounds, &mut conn, n, false, path);
             } else {
                 let c = CircuitSeq::from_string(&data);
-                main_butterfly_big(&c, rounds, &mut conn, 32, false, path);
+                main_butterfly_big(&c, rounds, &mut conn, n, false, path);
             }
         }
+
         Some(("abbutterfly", sub)) => {
             let rounds: usize = *sub.get_one("rounds").unwrap();
             let path: &str = sub.get_one::<String>("path").unwrap().as_str();
+            let n: usize = *sub.get_one("n").unwrap_or(&32); // default to 32 if not provided
             let data = fs::read_to_string("initial.txt").expect("Failed to read initial.txt");
 
             let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
@@ -311,12 +332,12 @@ fn main() {
 
             if data.trim().is_empty() {
                 println!("Generating random");
-                let c1 = random_circuit(16,30);
+                let c1 = random_circuit(n as u8, 30);
                 println!("Starting Len: {}", c1.gates.len());
-                main_butterfly_big(&c1, rounds, &mut conn, 16, true, path);
+                main_butterfly_big(&c1, rounds, &mut conn, n, true, path);
             } else {
                 let c = CircuitSeq::from_string(&data);
-                main_butterfly_big(&c, rounds, &mut conn, 32, true, path);
+                main_butterfly_big(&c, rounds, &mut conn, n, true, path);
             }
         }
         Some(("heatmap", sub)) => {
