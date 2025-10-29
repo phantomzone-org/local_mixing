@@ -23,11 +23,11 @@ use std::io::Write;
 use std::time::Instant;
 use serde_json::json;
 use rand::Rng;
-use plotters::prelude::*;
-use colorgrad;
-use rand::Rng;
-use std::fs;
-use std::time::Instant;
+// use plotters::prelude::*;
+// use colorgrad;
+// use rand::Rng;
+// use std::fs;
+// use std::time::Instant;
 
 fn main() {
     let matches = Command::new("rainbow")
