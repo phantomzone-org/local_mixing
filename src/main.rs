@@ -521,30 +521,29 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) 
     let std = if std == 0.0 { 1.0 } else { std };
     let z_values: Vec<f64> = average.iter().map(|v| (v - mean) / std).collect();
 
-    // Plot heatmap
-    let root = BitMapBackend::new("heatmap.png", (1100, 1024)).into_drawing_area();
+    let max_x = circuit_one_len;
+    let max_y = circuit_two_len;
+
+    // Square cells
+    let cell_size = 20;
+    let heatmap_width = cell_size * max_x;
+    let heatmap_height = cell_size * max_y;
+    let colorbar_width = 40;
+    let margin = 60;
+
+    let total_width = heatmap_width + colorbar_width + 3 * margin;
+    let total_height = heatmap_height + 2 * margin;
+
+    let root = BitMapBackend::new("heatmap.png", (total_width as u32, total_height as u32))
+        .into_drawing_area();
     root.fill(&WHITE)?;
-    let max_x = circuit_one_len + 1;
-    let max_y = circuit_two_len + 1;
 
-    let main_area = root.margin(0, 200, 0, 0);
-    let mut chart = ChartBuilder::on(&main_area)
-        .caption("Circuit Heatmap", ("sans-serif", 30))
-        .margin(10)
-        .x_label_area_size(60)
-        .y_label_area_size(60)
-        .build_cartesian_2d(0..max_x, 0..max_y)?;
-
-    chart.configure_mesh()
-        .x_desc(xlabel)
-        .y_desc(ylabel)
-        .x_label_style(("sans-serif", 20))
-        .y_label_style(("sans-serif", 20))
-        .disable_mesh()
-        .draw()?;
+    // Heatmap area (shifted by margin)
+    let heatmap_area = root.margin(margin as u32, margin as u32, margin as u32, margin as u32);
 
     let grad = spectral_r();
 
+    // Draw heatmap cells
     for i1 in 0..max_x {
         for i2 in 0..max_y {
             let idx = i1 * max_y + i2;
@@ -556,21 +555,36 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) 
                 (c.g * 255.0) as u8,
                 (c.b * 255.0) as u8,
             );
-            chart.draw_series(std::iter::once(Rectangle::new(
-                [(i1, i2), (i1 + 1, i2 + 1)],
+
+            let x0 = i1 * cell_size + margin;
+            let y0 = i2 * cell_size + margin;
+            let x1 = x0 + cell_size;
+            let y1 = y0 + cell_size;
+
+            root.draw(&Rectangle::new(
+                [(x0 as i32, y0 as i32), (x1 as i32, y1 as i32)],
                 color.filled(),
-            )))?;
+            ))?;
         }
     }
 
-    // Draw colorbar manually (like plt.colorbar)
-    let bar_height = 800;
-    let bar_width = 40;
-    let bar_x = 1020;  // right side of plot
-    let bar_y_start = 100;
-    let bar_y_end = bar_y_start + bar_height;
-    let n_steps = 256;
+    // Axes labels
+    root.draw(&Text::new(
+        xlabel,
+        ((margin + heatmap_width / 2) as i32, (margin / 2) as i32),
+        ("sans-serif", 20).into_font(),
+    ))?;
+    root.draw(&Text::new(
+        ylabel,
+        ((margin / 2) as i32, (margin + heatmap_height / 2) as i32),
+        ("sans-serif", 20).into_font().transform(FontTransform::Rotate270),
+    ))?;
 
+    // Draw colorbar to the right of heatmap
+    let bar_x = margin + heatmap_width + 20;
+    let bar_y_start = margin;
+    let bar_height = heatmap_height;
+    let n_steps = 256;
     for i in 0..n_steps {
         let t = i as f64 / (n_steps - 1) as f64;
         let c = grad.at(t);
@@ -579,29 +593,29 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) 
             (c.g * 255.0) as u8,
             (c.b * 255.0) as u8,
         );
-        let y0 = bar_y_start + ((1.0 - t) * bar_height as f64) as i32;
-        let y1 = bar_y_start + ((1.0 - t + 1.0 / n_steps as f64) * bar_height as f64) as i32;
+        let y0 = bar_y_start as i32 + ((1.0 - t) * bar_height as f64) as i32;
+        let y1 = bar_y_start as i32 + ((1.0 - t + 1.0 / n_steps as f64) * bar_height as f64) as i32;
         root.draw(&Rectangle::new(
-            [(bar_x, y0), (bar_x + bar_width, y1)],
+            [(bar_x as i32, y0), ((bar_x + colorbar_width) as i32, y1)],
             color.filled(),
         ))?;
     }
 
-    // Colorbar labels (-3 to 3)
+    // Colorbar labels (-3..3)
     for label in -3..=3 {
-        let y = bar_y_start + ((3.0 - label as f64) / 6.0 * bar_height as f64) as i32;
+        let y = bar_y_start as i32 + ((3.0 - label as f64) / 6.0 * bar_height as f64) as i32;
         root.draw(&Text::new(
             format!("{label}"),
-            (bar_x + bar_width + 10, y + 5),
-            ("sans-serif", 18).into_font(),
+            ((bar_x + colorbar_width + 5) as i32, y + 5),
+            ("sans-serif", 16).into_font(),
         ))?;
     }
 
     // Colorbar title
     root.draw(&Text::new(
-        "Standard deviations from mean",
-        (bar_x - 50, bar_y_end + 50),
-        ("sans-serif", 20).into_font(),
+        "Standard deviations\nfrom mean",
+        (bar_x as i32, bar_y_start as i32 + bar_height as i32 + 20),
+        ("sans-serif", 16).into_font(),
     ))?;
 
     root.present()?;
