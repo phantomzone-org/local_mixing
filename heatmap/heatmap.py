@@ -49,7 +49,16 @@ if __name__ == "__main__":
     if not sys.stdin.isatty():  # data piped in
         try:
             data = json.load(sys.stdin)
-            plot_heatmap(data['results'], "heatmap.png")
+
+            xlabel = data.get('xlabel', 'X-axis')  # use provided label or default
+            ylabel = data.get('ylabel', 'Y-axis')
+
+            plot_heatmap(
+                data['results'],
+                "heatmap.png",
+                xlabel=xlabel,
+                ylabel=ylabel
+            )
             print("Heatmap saved to heatmap.png")
         except Exception as e:
             print("Error:", e)
