@@ -1615,7 +1615,7 @@ mod tests {
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
             .expect("Failed to write test_start.txt");
         shoot_random_gate(&mut id, 100000);
-        let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
+        let mut conn = Connection::open_with_flags("./db/circuits.db",OpenFlags::SQLITE_OPEN_READ_ONLY,).expect("Failed to open DB (read-only)");
         let perms: Vec<Vec<usize>> = (0..7).permutations(7).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
         compress(&mut id, 1_000_000, &mut conn, &bit_shuf, 7);
