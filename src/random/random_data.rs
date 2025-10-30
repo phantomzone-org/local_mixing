@@ -1609,7 +1609,7 @@ mod tests {
     use rusqlite::OpenFlags;
     #[test]
     fn test_shooting() {
-        let (c, c_rev) = random_id(64,20);
+        let (c, c_rev) = random_id(64,200);
         let mut id = c.concat(&c_rev);
         let c_str = id.repr();
         File::create("test_start.txt")
