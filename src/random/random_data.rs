@@ -1609,7 +1609,7 @@ mod tests {
     use rusqlite::OpenFlags;
     #[test]
     fn test_shooting() {
-        let (c, c_rev) = random_id(6,20);
+        let (c, c_rev) = random_id(64,20);
         let mut id = c.concat(&c_rev);
         let c_str = id.repr();
         File::create("test_start.txt")
@@ -1617,10 +1617,8 @@ mod tests {
             .expect("Failed to write test_start.txt");
         shoot_random_gate(&mut id, 100000);
         let mut conn = Connection::open_with_flags("./db/circuits.db",OpenFlags::SQLITE_OPEN_READ_ONLY,).expect("Failed to open DB (read-only)");
-        let perms: Vec<Vec<usize>> = (0..6).permutations(6).collect();
-        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
-        compress(&mut id, 1_000_000, &mut conn, &bit_shuf, 6);
-        println!("{:?}", id.permutation(6).data);
+        compress_big(&mut id, 1_000, 32, &mut conn);
+        assert!(id.probably_equal(&CircuitSeq::from_string("123;123;"), 32, 100000).is_ok());
         println!("Len: {}", id.gates.len());
         let c_str = id.repr();
         File::create("test_compression.txt")
