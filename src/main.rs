@@ -1,5 +1,5 @@
 use clap::{Arg, ArgAction, Command};
-use colorgrad;
+use colorgrad::{CustomGradient, Gradient};
 use itertools::Itertools;
 use plotters::prelude::*;
 use rand::{rngs::OsRng, Rng, TryRngCore};
@@ -543,7 +543,7 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) 
         .disable_mesh()
         .draw()?;
 
-    let grad = colorgrad::preset::spectral().reversed();
+    let grad = spectral_r();
 
     for i1 in 0..max_x {
         for i2 in 0..max_y {
@@ -608,6 +608,25 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) 
     println!("Saved heatmap.png");
 
     Ok(())
+}
+
+fn spectral_r() -> Gradient {
+    CustomGradient::new()
+        .html_colors(&[
+            "#5E4FA2", // reversed order of Spectral
+            "#3288BD",
+            "#66C2A5",
+            "#ABDDA4",
+            "#E6F598",
+            "#FFFFBF",
+            "#FEE08B",
+            "#FDAE61",
+            "#F46D43",
+            "#D53E4F",
+            "#9E0142",
+        ])
+        .build()
+        .unwrap()
 }
 
 pub fn reverse(from_path: &str, dest_path: &str) {
