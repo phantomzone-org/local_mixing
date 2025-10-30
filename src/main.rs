@@ -10,8 +10,8 @@ use std::{
     io::Write,
     path::Path,
     time::Instant,
+    process::Stdio,
 };
-
 use local_mixing::{
     circuit::CircuitSeq,
     rainbow::{
@@ -400,7 +400,6 @@ fn main() {
                 num_inputs
             );
             heatmap(n, num_inputs, xlabel, ylabel);
-            // heatmap(n, num_inputs);
         }
         Some(("reverse", sub)) => {
             let from_path = sub.get_one::<String>("source").unwrap();
@@ -411,71 +410,11 @@ fn main() {
     }
 }
 
-// pub fn heatmap(num_wires: usize, num_inputs: usize) {
-//     // Load circuits from fixed paths
-//     // Read the file
-//     let contents = fs::read_to_string("butterfly_recent.txt")
-//         .expect("Failed to read butterfly_recent.txt");
-
-//     // Split into old and new by the first ':'
-//     let (circuit_one_str, circuit_two_str) = contents
-//         .split_once(':')
-//         .expect("Invalid format in butterfly_recent.txt");
-//     // Parse both circuits
-//     let mut circuit_one = CircuitSeq::from_string(circuit_one_str);
-//     let mut circuit_two = CircuitSeq::from_string(circuit_two_str);
-//     circuit_one.canonicalize();
-//     circuit_two.canonicalize();
-//     let circuit_one_len = circuit_one.gates.len();
-//     let circuit_two_len = circuit_two.gates.len();
-
-//     let mut average = vec![[0f64, 0f64, 0f64]; (circuit_one_len + 1) * (circuit_two_len + 1)];
-//     let mut rng = rand::rng();
-//     let start_time = Instant::now();
-
-//     for i in 0..num_inputs {
-//         if i % 10 == 0 {
-//             println!("{}/{}", i, num_inputs);
-//         }
-
-//         let input_bits: usize = rng.random_range(0..(1 << num_wires));
-
-//         let evolution_one = circuit_one.evaluate_evolution(input_bits);
-//         let evolution_two = circuit_two.evaluate_evolution(input_bits);
-
-//         for i1 in 0..=circuit_one_len {
-//             for i2 in 0..=circuit_two_len {
-//                 let diff = evolution_one[i1] ^ evolution_two[i2];
-//                 let hamming_dist = diff.count_ones() as f64;
-//                 let overlap = (2.0 * hamming_dist / num_wires as f64) - 1.0;
-//                 let abs_overlap = overlap.abs();
-
-//                 let index = i1 * (circuit_two_len + 1) + i2;
-//                 average[index][0] = i1 as f64;
-//                 average[index][1] = i2 as f64;
-//                 average[index][2] += abs_overlap / num_inputs as f64;
-//             }
-//         }
-//     }
-
-//     println!("Time elapsed: {:?}", Instant::now() - start_time);
-
-//     // Write JSON
-//     let output_json = json!({
-//         "circuit-one-len": circuit_one_len,
-//         "circuit-two-len": circuit_two_len,
-//         "results": average,
-//     });
-
-//     let mut file = File::create("heatmap.json")
-//         .expect("Failed to create heatmap.json");
-//     file.write_all(output_json.to_string().as_bytes())
-//         .expect("Failed to write JSON");
-// }
-
-pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) {
     // Load circuits
-    let contents = fs::read_to_string("butterfly_recent.txt")?;
+    let contents = fs::read_to_string("butterfly_recent.txt")
+        .expect("Failed to read butterfly_recent.txt");
+
     let (circuit_one_str, circuit_two_str) = contents
         .split_once(':')
         .expect("Invalid format in butterfly_recent.txt");
@@ -487,8 +426,8 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) 
     let circuit_one_len = circuit_one.gates.len();
     let circuit_two_len = circuit_two.gates.len();
 
-    let mut average = vec![0f64; (circuit_one_len + 1) * (circuit_two_len + 1)];
-    let mut rng = rand::thread_rng();
+    let mut average = vec![[0f64, 0f64, 0f64]; (circuit_one_len + 1) * (circuit_two_len + 1)];
+    let mut rng = rand::rng();
     let start_time = Instant::now();
 
     for i in 0..num_inputs {
@@ -496,7 +435,7 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) 
             println!("{}/{}", i, num_inputs);
         }
 
-        let input_bits: usize = rng.gen_range(0..(1 << num_wires));
+        let input_bits: usize = rng.random_range(0..(1 << num_wires));
         let evolution_one = circuit_one.evaluate_evolution(input_bits);
         let evolution_two = circuit_two.evaluate_evolution(input_bits);
 
@@ -508,139 +447,40 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) 
                 let abs_overlap = overlap.abs();
 
                 let index = i1 * (circuit_two_len + 1) + i2;
-                average[index] += abs_overlap / num_inputs as f64;
+                average[index][0] = i1 as f64;
+                average[index][1] = i2 as f64;
+                average[index][2] += abs_overlap / num_inputs as f64;
             }
         }
     }
 
     println!("Time elapsed: {:?}", Instant::now() - start_time);
 
-    // Compute z-scores
-    let mean: f64 = average.iter().sum::<f64>() / average.len() as f64;
-    let std: f64 = (average.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / average.len() as f64).sqrt();
-    let std = if std == 0.0 { 1.0 } else { std };
-    let z_values: Vec<f64> = average.iter().map(|v| (v - mean) / std).collect();
+    // Prepare JSON for Python
+    let data = json!({
+        "results": average,
+        "xlabel": xlabel,
+        "ylabel": ylabel
+    });
 
-    let max_x = circuit_one_len;
-    let max_y = circuit_two_len;
+    // Call Python script directly
+    let mut child = std::process::Command::new("python")
+        .arg("./heatmap/heatmap.py") 
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .spawn()
+        .expect("Failed to spawn Python script");
 
-    // Square cells
-    let cell_size = 20;
-    let heatmap_width = cell_size * max_x;
-    let heatmap_height = cell_size * max_y;
-    let colorbar_width = 40;
-    let margin = 60;
+    child.stdin.as_mut()
+        .expect("Failed to open stdin")
+        .write_all(data.to_string().as_bytes())
+        .expect("Failed to write JSON to Python stdin");
 
-    let total_width = heatmap_width + colorbar_width + 3 * margin;
-    let total_height = heatmap_height + 2 * margin;
-
-    let root = BitMapBackend::new("heatmap.png", (total_width as u32, total_height as u32))
-        .into_drawing_area();
-    root.fill(&WHITE)?;
-
-    // Heatmap area (shifted by margin)
-    let heatmap_area = root.margin(margin as u32, margin as u32, margin as u32, margin as u32);
-
-    let grad = spectral_r();
-
-    // Draw heatmap cells
-    for i1 in 0..max_x {
-        for i2 in 0..max_y {
-            let idx = i1 * max_y + i2;
-            let z = z_values[idx].clamp(-3.0, 3.0);
-            let normalized = (z + 3.0) / 6.0;
-            let c = grad.at(normalized);
-            let color = RGBColor(
-                (c.r * 255.0) as u8,
-                (c.g * 255.0) as u8,
-                (c.b * 255.0) as u8,
-            );
-
-            let x0 = i1 * cell_size + margin;
-            let y0 = i2 * cell_size + margin;
-            let x1 = x0 + cell_size;
-            let y1 = y0 + cell_size;
-
-            root.draw(&Rectangle::new(
-                [(x0 as i32, y0 as i32), (x1 as i32, y1 as i32)],
-                color.filled(),
-            ))?;
-        }
+    let status = child.wait().expect("Failed to wait on Python process");
+    if !status.success() {
+        eprintln!("Python script failed with status {:?}", status.code());
     }
-
-    // Axes labels
-    root.draw(&Text::new(
-        xlabel,
-        ((margin + heatmap_width / 2) as i32, (margin / 2) as i32),
-        ("sans-serif", 20).into_font(),
-    ))?;
-    root.draw(&Text::new(
-        ylabel,
-        ((margin / 2) as i32, (margin + heatmap_height / 2) as i32),
-        ("sans-serif", 20).into_font().transform(FontTransform::Rotate270),
-    ))?;
-
-    // Draw colorbar to the right of heatmap
-    let bar_x = margin + heatmap_width + 20;
-    let bar_y_start = margin;
-    let bar_height = heatmap_height;
-    let n_steps = 256;
-    for i in 0..n_steps {
-        let t = i as f64 / (n_steps - 1) as f64;
-        let c = grad.at(t);
-        let color = RGBColor(
-            (c.r * 255.0) as u8,
-            (c.g * 255.0) as u8,
-            (c.b * 255.0) as u8,
-        );
-        let y0 = bar_y_start as i32 + ((1.0 - t) * bar_height as f64) as i32;
-        let y1 = bar_y_start as i32 + ((1.0 - t + 1.0 / n_steps as f64) * bar_height as f64) as i32;
-        root.draw(&Rectangle::new(
-            [(bar_x as i32, y0), ((bar_x + colorbar_width) as i32, y1)],
-            color.filled(),
-        ))?;
-    }
-
-    // Colorbar labels (-3..3)
-    for label in -3..=3 {
-        let y = bar_y_start as i32 + ((3.0 - label as f64) / 6.0 * bar_height as f64) as i32;
-        root.draw(&Text::new(
-            format!("{label}"),
-            ((bar_x + colorbar_width + 5) as i32, y + 5),
-            ("sans-serif", 16).into_font(),
-        ))?;
-    }
-
-    // Colorbar title
-    root.draw(&Text::new(
-        "Standard deviations\nfrom mean",
-        (bar_x as i32, bar_y_start as i32 + bar_height as i32 + 20),
-        ("sans-serif", 16).into_font(),
-    ))?;
-
-    root.present()?;
-    println!("Saved heatmap.png");
-
-    Ok(())
-}
-
-fn spectral_r() -> Gradient {
-    CustomGradient::new()
-        .html_colors(&[
-            "#5E4FA2", // reversed order of Spectral
-            "#3288BD",
-            "#66C2A5",
-            "#ABDDA4",
-            "#E6F598",
-            "#FFFFBF",
-            "#FEE08B",
-            "#FDAE61",
-            "#F46D43",
-            "#D53E4F",
-            "#9E0142",
-        ])
-        .build()
-        .unwrap()
 }
 
 pub fn reverse(from_path: &str, dest_path: &str) {

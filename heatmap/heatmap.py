@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import os
 import argparse
 from matplotlib.colors import LinearSegmentedColormap
-
-def plot_heatmap(data, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-3, vmax=3):
+import sys 
+def plot_heatmap(results, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-3, vmax=3):
     plt.clf()
-    points = np.array(data)
+    points = np.array(results)
     x, y, values = points[:, 0], points[:, 1], points[:, 2]
 
     # Compute z-scores
@@ -28,7 +28,7 @@ def plot_heatmap(data, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-3, vma
 
     plt.imshow(
         heatmap,
-        cmap= "Spectral_r",
+        cmap="Spectral_r",
         aspect='auto',
         origin='lower',
         extent=[x_unique[0], x_unique[-1], y_unique[0], y_unique[-1]],
@@ -44,29 +44,12 @@ def plot_heatmap(data, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-3, vma
     plt.savefig(save_path, dpi=300)
     plt.close()
 
+# New CLI mode to read JSON from stdin
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Plot heatmap from JSON results.")
-    parser.add_argument("--json", default="heatmap.json", help="Path to JSON file (default: heatmap.json)")
-    parser.add_argument("--output", default="heatmap.png", help="Output PNG file (default: heatmap.png)")
-    parser.add_argument("--xlabel", default="Circuit 1 gate index", help="Label for X axis")
-    parser.add_argument("--ylabel", default="Circuit 2 gate index", help="Label for Y axis")
-    args = parser.parse_args()
-
-    try:
-        with open(args.json, 'r') as f:
-            data = json.load(f)
-        plot_heatmap(
-            data['results'], 
-            args.output, 
-            xlabel=args.xlabel, 
-            ylabel=args.ylabel,
-            vmin=-3,
-            vmax=3
-        )
-        print(f"Heatmap saved to {args.output}")
-    except FileNotFoundError:
-        print(f"Error: Could not find file {args.json}")
-    except json.JSONDecodeError:
-        print(f"Error: Invalid JSON file {args.json}")
-    except KeyError:
-        print("Error: JSON file does not contain 'results' key")
+    if not sys.stdin.isatty():  # data piped in
+        try:
+            data = json.load(sys.stdin)
+            plot_heatmap(data['results'], "heatmap.png")
+            print("Heatmap saved to heatmap.png")
+        except Exception as e:
+            print("Error:", e)
