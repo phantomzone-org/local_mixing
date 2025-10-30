@@ -1606,6 +1606,7 @@ mod tests {
         println!("Generated circuits written to c1.txt and c2.txt");
     }
     use crate::replace::replace::random_id;
+    use rusqlite::OpenFlags;
     #[test]
     fn test_shooting() {
         let (c, c_rev) = random_id(6,20);
