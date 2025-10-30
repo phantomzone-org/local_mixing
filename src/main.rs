@@ -473,7 +473,7 @@ fn main() {
 //         .expect("Failed to write JSON");
 // }
 
-fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Load circuits
     let contents = fs::read_to_string("butterfly_recent.txt")?;
     let (circuit_one_str, circuit_two_str) = contents
@@ -522,12 +522,13 @@ fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) -> R
     let z_values: Vec<f64> = average.iter().map(|v| (v - mean) / std).collect();
 
     // Plot heatmap
-    let root = BitMapBackend::new("heatmap.png", (1024, 1024)).into_drawing_area();
+    let root = BitMapBackend::new("heatmap.png", (1100, 1024)).into_drawing_area();
     root.fill(&WHITE)?;
     let max_x = circuit_one_len + 1;
     let max_y = circuit_two_len + 1;
 
-    let mut chart = ChartBuilder::on(&root)
+    let main_area = root.margin(0, 200, 0, 0);
+    let mut chart = ChartBuilder::on(&main_area)
         .caption("Circuit Heatmap", ("sans-serif", 30))
         .margin(10)
         .x_label_area_size(60)
@@ -542,60 +543,71 @@ fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str) -> R
         .disable_mesh()
         .draw()?;
 
-    let color_scale = |z: f64| {
-        let normalized = ((z + 3.0) / 6.0).clamp(0.0, 1.0);
-        spectral_r_256(normalized)
-    };
+    let grad = colorgrad::preset::spectral().reversed();
 
     for i1 in 0..max_x {
         for i2 in 0..max_y {
             let idx = i1 * max_y + i2;
+            let z = z_values[idx].clamp(-3.0, 3.0);
+            let normalized = (z + 3.0) / 6.0;
+            let c = grad.at(normalized);
+            let color = RGBColor(
+                (c.r * 255.0) as u8,
+                (c.g * 255.0) as u8,
+                (c.b * 255.0) as u8,
+            );
             chart.draw_series(std::iter::once(Rectangle::new(
                 [(i1, i2), (i1 + 1, i2 + 1)],
-                color_scale(z_values[idx]).filled(),
+                color.filled(),
             )))?;
         }
     }
+
+    // Draw colorbar manually (like plt.colorbar)
+    let bar_height = 800;
+    let bar_width = 40;
+    let bar_x = 1020;  // right side of plot
+    let bar_y_start = 100;
+    let bar_y_end = bar_y_start + bar_height;
+    let n_steps = 256;
+
+    for i in 0..n_steps {
+        let t = i as f64 / (n_steps - 1) as f64;
+        let c = grad.at(t);
+        let color = RGBColor(
+            (c.r * 255.0) as u8,
+            (c.g * 255.0) as u8,
+            (c.b * 255.0) as u8,
+        );
+        let y0 = bar_y_start + ((1.0 - t) * bar_height as f64) as i32;
+        let y1 = bar_y_start + ((1.0 - t + 1.0 / n_steps as f64) * bar_height as f64) as i32;
+        root.draw(&Rectangle::new(
+            [(bar_x, y0), (bar_x + bar_width, y1)],
+            color.filled(),
+        ))?;
+    }
+
+    // Colorbar labels (-3 to 3)
+    for label in -3..=3 {
+        let y = bar_y_start + ((3.0 - label as f64) / 6.0 * bar_height as f64) as i32;
+        root.draw(&Text::new(
+            format!("{label}"),
+            (bar_x + bar_width + 10, y + 5),
+            ("sans-serif", 18).into_font(),
+        ))?;
+    }
+
+    // Colorbar title
+    root.draw(&Text::new(
+        "Standard deviations from mean",
+        (bar_x - 50, bar_y_end + 50),
+        ("sans-serif", 20).into_font(),
+    ))?;
 
     root.present()?;
     println!("Saved heatmap.png");
 
     Ok(())
-}
-
-// Spectral_r 256-step colormap
-fn spectral_r_256(v: f64) -> RGBColor {
-    let v = v.clamp(0.0, 1.0);
-    let control_points = [
-        (158, 1, 66),
-        (213, 62, 79),
-        (244, 109, 67),
-        (253, 174, 97),
-        (254, 224, 139),
-        (230, 245, 152),
-        (171, 221, 164),
-        (102, 194, 165),
-        (50, 136, 189),
-        (94, 79, 162),
-    ];
-
-    let n = control_points.len() - 1;
-    let scaled = v * n as f64;
-    let i = scaled.floor() as usize;
-    let t = scaled - i as f64;
-
-    if i >= n {
-        return RGBColor(control_points[n].0, control_points[n].1, control_points[n].2);
-    }
-
-    let (r1, g1, b1) = control_points[i];
-    let (r2, g2, b2) = control_points[i + 1];
-
-    RGBColor(
-        (r1 as f64 * (1.0 - t) + r2 as f64 * t) as u8,
-        (g1 as f64 * (1.0 - t) + g2 as f64 * t) as u8,
-        (b1 as f64 * (1.0 - t) + b2 as f64 * t) as u8,
-    )
 }
 
 pub fn reverse(from_path: &str, dest_path: &str) {
