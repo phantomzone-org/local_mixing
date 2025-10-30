@@ -1623,9 +1623,6 @@ mod tests {
         println!("{:?}", id.permutation(7).data);
         println!("Len: {}", id.gates.len());
         let c_str = id.repr();
-        File::create("test_start.txt")
-            .and_then(|mut f| f.write_all(c_str.as_bytes()))
-            .expect("Failed to write test_start.txt");
         File::create("test_compression.txt")
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
             .expect("Failed to write test_compression.txt");
