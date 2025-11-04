@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import os
 import sys 
 
-def plot_heatmap(results, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-0, vmax=None):
+def plot_heatmap(results, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-0, vmax=1):
     plt.clf()
     points = np.array(results)
     x, y, values = points[:, 0], points[:, 1], points[:, 2]
@@ -20,7 +20,7 @@ def plot_heatmap(results, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-0, 
 
     plt.imshow(
         heatmap,
-        cmap="Spectral_r",
+        cmap="RdYlGn_r",
         aspect='auto',
         origin='lower',
         extent=[x_unique[0], x_unique[-1], y_unique[0], y_unique[-1]],
@@ -28,7 +28,7 @@ def plot_heatmap(results, save_path, xlabel="X-axis", ylabel="Y-axis", vmin=-0, 
         vmax=vmax
     )
 
-    plt.colorbar(label='Average raw hamming diff')
+    plt.colorbar(label='Average hamming diff')
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
 
