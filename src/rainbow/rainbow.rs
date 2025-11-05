@@ -43,7 +43,6 @@ pub fn build_from(
     store: &Arc<HashMap<Vec<u8>, PersistPermStore>>,
 ) -> impl ParallelIterator<Item = Vec<usize>>{
     let n_base = base_gates(num_wires).len();
-
     store
         .par_iter() // parallelize over each stored permutation since threads are independent
         .flat_map_iter(move |(_key, perm)| {
@@ -210,6 +209,7 @@ pub fn main_rainbow_load(n: usize, m: usize, _load: &str) {
     if m == 1 {
         let n_base = base_gates.len();
 
+<<<<<<< HEAD
         let circuits = 
             (0..n_base)
                 .into_par_iter()
@@ -224,6 +224,23 @@ pub fn main_rainbow_load(n: usize, m: usize, _load: &str) {
             .for_each(|pr| process_pr(pr, &circuit_store));
 
         done.store(1, Ordering::Relaxed);
+=======
+    let circuits = build_from(n, m, &store_arc);
+    let one_circuit = (0..base_gates.len())
+            .into_par_iter()
+            .map(|g| vec![g]); // wrap each gate in a Vec
+    let circuit_store: Arc<DashMap<Vec<u8>, PermStore>> = Arc::new(DashMap::new());
+    let done = Arc::new(AtomicI64::new(0));
+
+    spawn_progress_tracker(total_circuits, Arc::clone(&done));
+    if m == 1 {
+        build_circuit_rayon(n, m, one_circuit, base_gates)
+            .for_each(|pr| process_pr(pr, &circuit_store));
+    } else {
+        build_circuit_rayon(n, m, circuits, base_gates)
+            .for_each(|pr| process_pr(pr, &circuit_store));
+    }
+>>>>>>> 2b2a0a9 (m=1 case)
 
         save_circuit_store(n, m, &circuit_store);
     } else {
