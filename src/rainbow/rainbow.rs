@@ -199,22 +199,43 @@ pub fn main_rainbow_load(n: usize, m: usize, _load: &str) {
 
     canonical::init(n);
 
-    let store = Persist::load(n, m);
-    let store_arc = Arc::new(store);
-    let prev_count: i64 = store_arc.values().map(|p| p.circuits.len() as i64).sum();
-    let total_circuits = 2 * prev_count * (base_gates.len() as i64);
+    if m == 1 {
+        let n_base = base_gates.len();
 
-    let circuits = build_from(n, m, &store_arc);
+        let circuits = 
+            (0..n_base)
+                .into_par_iter()
+                .map(|i| vec![i]);
+            
+        let circuit_store: Arc<DashMap<Vec<u8>, PermStore>> = Arc::new(DashMap::new());
+        let done = Arc::new(AtomicI64::new(0));
 
-    let circuit_store: Arc<DashMap<Vec<u8>, PermStore>> = Arc::new(DashMap::new());
-    let done = Arc::new(AtomicI64::new(0));
+        spawn_progress_tracker(n_base as i64, Arc::clone(&done));
 
-    spawn_progress_tracker(total_circuits, Arc::clone(&done));
+        build_circuit_rayon(n, m, circuits, base_gates)
+            .for_each(|pr| process_pr(pr, &circuit_store));
 
-    build_circuit_rayon(n, m, circuits, base_gates)
-        .for_each(|pr| process_pr(pr, &circuit_store));
+        done.store(1, Ordering::Relaxed);
 
-    done.store(1, Ordering::Relaxed);
+        save_circuit_store(n, m, &circuit_store);
+    } else {
+        let store = Persist::load(n, m);
+        let store_arc = Arc::new(store);
+        let prev_count: i64 = store_arc.values().map(|p| p.circuits.len() as i64).sum();
+        let total_circuits = 2 * prev_count * (base_gates.len() as i64);
 
-    save_circuit_store(n, m, &circuit_store);
+        let circuits = build_from(n, m, &store_arc);
+
+        let circuit_store: Arc<DashMap<Vec<u8>, PermStore>> = Arc::new(DashMap::new());
+        let done = Arc::new(AtomicI64::new(0));
+
+        spawn_progress_tracker(total_circuits, Arc::clone(&done));
+
+        build_circuit_rayon(n, m, circuits, base_gates)
+            .for_each(|pr| process_pr(pr, &circuit_store));
+
+        done.store(1, Ordering::Relaxed);
+
+        save_circuit_store(n, m, &circuit_store);
+    }
 }
