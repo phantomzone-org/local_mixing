@@ -518,7 +518,7 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str, 
         let input_bits: usize = rng.random_range(0..(1 << num_wires));
         let evolution_one = circuit_one.evaluate_evolution(input_bits);
         let evolution_two = circuit_two.evaluate_evolution(input_bits);
-        if flag {
+        if !flag {
             for i1 in 0..=circuit_one_len {
                 for i2 in 0..=circuit_two_len {
                     let diff = evolution_one[i1] ^ evolution_two[i2];
