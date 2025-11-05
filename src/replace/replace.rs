@@ -418,6 +418,7 @@ pub fn compress_exhaust(
     n: usize,
 ) -> CircuitSeq {
     let id = Permutation::id_perm(n);
+
     if c.permutation(n) == id {
         return CircuitSeq { gates: Vec::new() };
     }
@@ -449,11 +450,11 @@ pub fn compress_exhaust(
         changed = false;
         let len = compressed.gates.len();
 
-        'outer: for start in 0..len {
-            for end in (start + 2)..=len { // skip length 1
+        'outer: for start in 0..len-2 {
+            for end in (start + 2)..len { // skip length 1
                 if seen_positions.contains(&(start, end)) {
-                continue; // skip positions already replaced in this pass
-            }
+                    continue; // skip positions already replaced in this pass
+                }
                 let subcircuit = CircuitSeq {
                     gates: compressed.gates[start..end].to_vec(),
                 };
@@ -502,9 +503,6 @@ pub fn compress_exhaust(
                                     let delta = repl_len as isize - old_len as isize; // ≤ 0 always
                                     let r_len = repl.gates.len();
                                     compressed.gates.splice(start..end, repl.gates);
-
-                                    let r_start = start;
-                                    let r_end = start + repl_len;
                                     
                                     if r_len < subcircuit.gates.len() {
                                         // Update seen_positions
@@ -512,7 +510,7 @@ pub fn compress_exhaust(
 
                                         for &(a, b) in &seen_positions {
                                             // If it overlaps the replaced region, discard it
-                                            if !(b <= r_start || a >= end) {
+                                            if !(b <= start || a >= end) {
                                                 continue;
                                             }
 
@@ -533,7 +531,7 @@ pub fn compress_exhaust(
                                     }
 
                                     // Mark the new replaced range
-                                    seen_positions.insert((r_start, r_end));
+                                    seen_positions.insert((start, end));
 
                                     changed = true;
                                     break 'outer;
