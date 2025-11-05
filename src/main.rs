@@ -12,6 +12,7 @@ use std::{
     time::Instant,
     process::Stdio,
 };
+use local_mixing::replace::replace::expand_big;
 use local_mixing::{
     circuit::CircuitSeq,
     rainbow::{
