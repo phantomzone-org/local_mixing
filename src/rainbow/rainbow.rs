@@ -84,31 +84,39 @@ pub fn build_from(
 
 pub fn build_circuit_rayon(
     n: usize,
-    m: usize,
+    _m: usize,
     circuits: impl ParallelIterator<Item = Vec<usize>> + Send,
-    base_gates: Arc<Vec<[u8;3]>>,
+    base_gates: Arc<Vec<[u8; 3]>>,
 ) -> impl ParallelIterator<Item = PR> + Send {
-    circuits.flat_map(move |cc| {
+    circuits.filter_map(move |circuit| {
         CKT_CHECK.fetch_add(1, Ordering::Relaxed);
 
-        let mut ckt_buffer = vec![[0;3]; m];
-        for (i, &g) in cc.iter().enumerate() {
-            ckt_buffer[i] = base_gates[g].clone();
-        }
+        // Convert indices → gates ([usize;3] → [u8;3])
+        let mut c = CircuitSeq {
+            gates: circuit
+                .iter()
+                .map(|&i| {
+                    base_gates[i]
+                })
+                .collect(),
+        };
 
-        let mut c = CircuitSeq { gates: ckt_buffer };
         c.canonicalize();
 
         if c.adjacent_id() {
             SKIP_ID.fetch_add(1, Ordering::Relaxed);
-            return vec![].into_par_iter();
+            return None;
         }
 
         let per = c.permutation(n);
         let can_per = per.canonical();
         let is_canonical = per == can_per.perm;
 
-        vec![PR { p: can_per.perm, r: c.repr_blob(), canonical: is_canonical }].into_par_iter()
+        Some(PR {
+            p: can_per.perm,
+            r: c.repr_blob(),
+            canonical: is_canonical,
+        })
     })
 }
 
