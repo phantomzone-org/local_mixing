@@ -475,7 +475,7 @@ pub fn expand(
         let sub_m = subcircuit.gates.len();
         let mut found_replacement = false;
 
-        for smaller_m in (sub_m..=max).rev() {
+        for smaller_m in (sub_m..=sub_m+1).rev() {
             let table = format!("n{}m{}", n, smaller_m);
             let query = format!(
                 "SELECT circuit FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1",
@@ -848,7 +848,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         let perms: Vec<Vec<usize>> = (0..num_wires).permutations(num_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
 
-        let subcircuit_temp = expand(&subcircuit, 100, conn, &bit_shuf, num_wires);
+        let subcircuit_temp = expand(&subcircuit, 10, conn, &bit_shuf, num_wires);
 
         if subcircuit.permutation(num_wires) != subcircuit_temp.permutation(num_wires) {
             panic!("Compress changed something");
