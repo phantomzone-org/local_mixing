@@ -465,7 +465,7 @@ pub fn expand(
                     let blob: Vec<u8> = row.get(0).expect("Failed to get blob");
                     let mut repl = CircuitSeq::from_blob(&blob);
 
-                    if repl.gates.len() <= subcircuit.gates.len() {
+                    if repl.gates.len() >= subcircuit.gates.len() {
                         let repl_perm = repl.permutation(n);
                         let rc = get_canonical(&repl_perm, &bit_shuf);
 
@@ -660,6 +660,9 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
             let random_max_wires = rng.random_range(3..=7);
             let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
             if !gates.is_empty() {
+                if set_size > 12 {
+                    println!("Large replacement");
+                }
                 subcircuit_gates = gates;
                 break;
             }
@@ -772,6 +775,79 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
     circuit
 }
 
+pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection) -> CircuitSeq {
+    let mut circuit = c.clone();
+    let mut rng = rand::rng();
+
+    for i in 0..trials {
+        if i % 20 == 0 {
+            println!("{} trials so far, {} more to go", i, trials - i);
+        }
+        let mut subcircuit_gates = vec![];
+
+        for set_size in (3..=16).rev() {
+            let random_max_wires = rng.random_range(3..=7);
+            let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
+            if !gates.is_empty() {
+                if set_size > 12 {
+                    println!("Large replacement");
+                }
+                subcircuit_gates = gates;
+                break;
+            }
+        }
+
+        if subcircuit_gates.is_empty() {
+            return circuit;
+        }
+        
+        let mut gates: Vec<[u8;3]> = vec![[0,0,0]; subcircuit_gates.len()];
+        for (i, g) in subcircuit_gates.iter().enumerate() {
+            gates[i] = circuit.gates[*g];
+        }
+
+        subcircuit_gates.sort();
+        let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates, num_wires).unwrap();
+        let mut subcircuit = CircuitSeq { gates };
+        let expected_slice: Vec<_> = subcircuit_gates.iter().map(|&i| circuit.gates[i]).collect();
+        let actual_slice = &circuit.gates[start..=end];
+
+        if actual_slice != &expected_slice[..] {
+            break;
+        }
+
+        let used_wires = subcircuit.used_wires();
+        subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
+
+        let num_wires = used_wires.len();
+        let perms: Vec<Vec<usize>> = (0..num_wires).permutations(num_wires).collect();
+        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+
+        let subcircuit_temp = expand(&subcircuit, 100, conn, &bit_shuf, num_wires);
+
+        if subcircuit.permutation(num_wires) != subcircuit_temp.permutation(num_wires) {
+            panic!("Compress changed something");
+        }
+        subcircuit = subcircuit_temp;
+
+        subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
+
+        circuit.gates.splice(start..end+1, subcircuit.gates);
+        if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
+            panic!("splice changed something");
+        }
+    }
+    let mut i = 0;
+    while i < circuit.gates.len().saturating_sub(1) {
+        if circuit.gates[i] == circuit.gates[i + 1] {
+            circuit.gates.drain(i..=i + 1);
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
+        }
+    }
+    circuit
+}
 
 // inflate. u8 is the size of the random circuit used to obfuscate over 2 
 // This tries to mix and hide original gate

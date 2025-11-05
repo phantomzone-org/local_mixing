@@ -24,7 +24,7 @@ use local_mixing::{
         replace::{compress, random_canonical_id, random_id},
     },
 };
-
+use local_mixing::replace::replace::compress_big;
 fn main() {
     let matches = Command::new("rainbow")
         .about("Rainbow circuit generator")
@@ -224,6 +224,34 @@ fn main() {
                         .value_parser(clap::value_parser!(usize))
                         .help("Number of gates in the circuit"),
                 )
+        )
+        .subcommand(
+            Command::new("compress")
+                .about("Run compression trials on a circuit file")
+                .arg(
+                    Arg::new("r")
+                        .short('r')
+                        .long("trials")
+                        .required(true)
+                        .value_parser(clap::value_parser!(usize))
+                        .help("Number of compression trials"),
+                )
+                .arg(
+                    Arg::new("p")
+                        .short('p')
+                        .long("path")
+                        .required(true)
+                        .value_parser(clap::value_parser!(String))
+                        .help("Path to the starting circuit file"),
+                )
+                .arg(
+                    Arg::new("n")
+                        .short('n')
+                        .long("wires")
+                        .required(true)
+                        .value_parser(clap::value_parser!(usize))
+                        .help("Number of wires in the circuit"),
+                ),
         )
         .get_matches();
 
@@ -434,6 +462,29 @@ fn main() {
             let dest_path = sub.get_one::<String>("dest").unwrap();
             reverse(from_path, dest_path);
         }
+        Some(("compress", sub)) => {
+            let r: usize = *sub.get_one("r").expect("Missing -r <trials>");
+            let p: &String = sub.get_one("p").expect("Missing -p <path>");
+            let n: usize = *sub.get_one("n").expect("Missing -n <wires>");
+
+            let contents = fs::read_to_string(p)
+                .unwrap_or_else(|_| panic!("Failed to read circuit file at {}", p));
+
+            let circuit = CircuitSeq::from_string(&contents);
+
+            let mut conn = Connection::open_with_flags("./circuits.db",rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,)
+            .expect("Failed to open ./circuits.db in read-only mode");
+
+            // Call your compression logic
+            let compressed = compress_big(&circuit, r, n, &mut conn);
+
+            let mut file = fs::File::create("compressed.txt")
+                .expect("Failed to create compressed.txt");
+            write!(file, "{}", compressed.repr())
+                .expect("Failed to write compressed circuit to file");
+
+            println!("Compressed circuit written to compressed.txt");
+        }
         _ => unreachable!(),
     }
 }
@@ -472,13 +523,11 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str, 
                 for i2 in 0..=circuit_two_len {
                     let diff = evolution_one[i1] ^ evolution_two[i2];
                     let hamming_dist = diff.count_ones() as f64;
-                    let overlap = (2.0 * hamming_dist / num_wires as f64) - 1.0;
-                    let abs_overlap = overlap.abs();
 
                     let index = i1 * (circuit_two_len + 1) + i2;
                     average[index][0] = i1 as f64;
                     average[index][1] = i2 as f64;
-                    average[index][2] += abs_overlap / num_inputs as f64;
+                    average[index][2] += hamming_dist / num_inputs as f64;
                 }
             }
         } else {

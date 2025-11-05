@@ -1650,4 +1650,18 @@ mod tests {
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
             .expect("Failed to write test_compression.txt");
     }
+
+    #[test]
+    fn test_build_circuit() {
+        let gate = "5hx;";
+        let (r, a) = random_id(64, 20);
+
+        let combined = format!("{}{}{}", r.repr(), gate, a.repr());
+
+        let mut file = File::create("circuitRxR.txt").expect("Failed to create file");
+        file.write_all(combined.as_bytes())
+            .expect("Failed to write to file");
+
+        println!("Wrote circuit to circuitRxR.txt:\n{}", combined);
+    }
 }
