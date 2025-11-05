@@ -1472,12 +1472,24 @@ mod tests {
     #[test]
     fn test_identity() {
         let t = Instant::now();
-        let c = CircuitSeq::from_string("123;");
-        let id = CircuitSeq::from_string("123;123;");
+
+        // Hardcoded circuit to compare
+        let c = CircuitSeq::from_string("123;123;");
+
+        // Load circuitA from file
+        let contents = fs::read_to_string("circuitOOA_64.txt")
+            .expect("Failed to read");
+        let circuit_a = CircuitSeq::from_string(&contents);
+
+        // Compare circuits
         c
-            .probably_equal(&id, 32, 150_000)
+            .probably_equal(&circuit_a, 64, 150_000)
             .expect("The circuits differ somewhere!");
-        println!("Time to compute permutation on 32 wires: {:?}", t.elapsed());
+
+        println!(
+            "Time to compute permutation on 64 wires: {:?}",
+            t.elapsed()
+        );
     }
 
     use super::*;

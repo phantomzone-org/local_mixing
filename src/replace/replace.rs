@@ -125,7 +125,6 @@ pub fn random_id(n: u8, m: usize) -> (CircuitSeq, CircuitSeq) {
     (circuit, rev)
 }
 
-//TODO: look into if this is the best way to do things
 // Return a random subcircuit, its starting index (gate), and ending index
 pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
     let len = circuit.gates.len();
@@ -437,7 +436,9 @@ pub fn expand(
 
     for _ in 0..trials {
         let (mut subcircuit, start, end) = random_subcircuit(&expanded);
-
+        if subcircuit.gates.len() >= max {
+            break;
+        }
         subcircuit.canonicalize();
 
         let sub_perm = subcircuit.permutation(n);
@@ -656,13 +657,10 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         }
         let mut subcircuit_gates = vec![];
 
-        for set_size in (3..=16).rev() {
+        for set_size in (3..=20).rev() {
             let random_max_wires = rng.random_range(3..=7);
             let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
             if !gates.is_empty() {
-                if set_size > 12 {
-                    println!("Large replacement");
-                }
                 subcircuit_gates = gates;
                 break;
             }
