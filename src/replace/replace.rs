@@ -679,9 +679,9 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         }
     }
     for i in 0..trials {
-        if i % 20 == 0 {
-            println!("{} trials so far, {} more to go", i, trials - i);
-        }
+        // if i % 20 == 0 {
+        //     println!("{} trials so far, {} more to go", i, trials - i);
+        // }
         let mut subcircuit_gates = vec![];
 
         for set_size in (3..=20).rev() {
@@ -805,18 +805,15 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
     let mut rng = rand::rng();
 
     for i in 0..trials {
-        if i % 20 == 0 {
-            println!("{} trials so far, {} more to go", i, trials - i);
-        }
+        // if i % 20 == 0 {
+        //     println!("{} trials so far, {} more to go", i, trials - i);
+        // }
         let mut subcircuit_gates = vec![];
 
         for set_size in (3..=16).rev() {
             let random_max_wires = rng.random_range(3..=7);
             let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
             if !gates.is_empty() {
-                if set_size > 12 {
-                    println!("Large replacement");
-                }
                 subcircuit_gates = gates;
                 break;
             }
