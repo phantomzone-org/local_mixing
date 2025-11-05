@@ -528,7 +528,7 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str, 
                     let index = i1 * (circuit_two_len + 1) + i2;
                     average[index][0] = i1 as f64;
                     average[index][1] = i2 as f64;
-                    average[index][2] += hamming_dist / num_inputs as f64;
+                    average[index][2] += overlap / num_inputs as f64;
                 }
             }
         } else {
