@@ -475,7 +475,7 @@ pub fn expand(
         let sub_m = subcircuit.gates.len();
         let mut found_replacement = false;
 
-        for smaller_m in (sub_m..=max).rev() {
+        for smaller_m in (sub_m..=std::cmp::min(sub_m+2,max)).rev() {
             let table = format!("n{}m{}", n, smaller_m);
             let query = format!(
                 "SELECT circuit FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1",

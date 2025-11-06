@@ -57,15 +57,6 @@ impl Gate {
             || self.pins[2] == other_gate.pins[0]
     }
 
-    //to evaluate a gate, we use the control function table we built in constants.rs
-    // #[inline]
-    // pub fn evaluate_gate(&self, state: &mut usize) {
-    //     let index = ((self.control_function as usize) << 2)
-    //                 | (((*state >> self.pins[1]) & 1) << 1)
-    //                 | (((*state >> self.pins[2])) & 1);
-    //     *state ^= (CONTROL_FUNC_TABLE[index] as usize) << self.pins[0];
-    //}
-
     //only consider r57
     #[inline]
     pub fn evaluate_gate(&self, state: &mut usize) -> usize {
