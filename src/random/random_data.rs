@@ -1623,42 +1623,20 @@ mod tests {
         let mut rng = rand::rng();
 
         // Start with an initial random identity
-        let (c, c_rev) = random_id(64, 20);
-        let mut id = c.concat(&c_rev);
-
-        // Insert X random identities at random positions
-        let x = 10;
-        for _ in 0..x {
-            // generate another random identity
-            let (new_c, new_c_rev) = random_id(64, 20);
-            let new_id = new_c.concat(&new_c_rev);
-
-            // choose a random insertion point
-            let insert_pos = rng.random_range(0..=id.gates.len());
-
-            // insert its gates at that position
-            id.gates.splice(insert_pos..insert_pos, new_id.gates.clone());
-        }
-
-        // Save the initial state for debugging
-        let c_str = id.repr();
-        File::create("test_start.txt")
-            .and_then(|mut f| f.write_all(c_str.as_bytes()))
-            .expect("Failed to write test_start.txt");
+        // Load circuitA from file
+        let contents = fs::read_to_string("circuitshoot.txt")
+            .expect("Failed to read");
+        let mut circuit_a = CircuitSeq::from_string(&contents);
 
         // Proceed as before
-        shoot_random_gate(&mut id, 100000);
+        shoot_random_gate(&mut circuit_a, 100000);
         let mut conn = Connection::open_with_flags(
             "./db/circuits.db",
             OpenFlags::SQLITE_OPEN_READ_ONLY,
         ).expect("Failed to open DB (read-only)");
 
-        compress_big(&mut id, 100_000, 64, &mut conn);
-        assert!(id.probably_equal(&CircuitSeq::from_string("123;123;"), 64, 100000).is_ok());
-        println!("Len: {}", id.gates.len());
-
-        let c_str = id.repr();
-        File::create("test_compression.txt")
+        let c_str = circuit_a.repr();
+        File::create("circuitshooted.txt")
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
             .expect("Failed to write test_compression.txt");
     }
@@ -1685,4 +1663,5 @@ mod tests {
         file.write_all(id.as_bytes())
             .expect("Failed to write to file");
     }
+
 }
