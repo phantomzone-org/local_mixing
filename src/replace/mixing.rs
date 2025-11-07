@@ -364,7 +364,7 @@ pub fn abutterfly_big(
     let mut prev_r_inv = first_r_inv.clone();
 
     for &g in &c.gates {
-        let (r, r_inv) = random_id(n as u8, rng.random_range(15..=25));
+        let (r, r_inv) = random_id(n as u8, rng.random_range(100..=200));
         let mut block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
         //shoot_random_gate(&mut block, 1_000);
         pre_blocks.push(block);
