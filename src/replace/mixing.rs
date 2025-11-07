@@ -259,7 +259,7 @@ pub fn butterfly_big(
 ) -> CircuitSeq {
     // Pick one random R
     let mut rng = rand::rng();
-    let (r, r_inv) = random_id(n as u8, rng.random_range(15..=25)); 
+    let (r, r_inv) = random_id(n as u8, rng.random_range(100..=200)); 
 
     println!("Butterfly start: {} gates", c.gates.len());
 
@@ -296,7 +296,7 @@ pub fn butterfly_big(
             "  Block {}: before {} gates → after {} gates  {}",
             i, before_len, after_len, color_line
         );
-        
+
         println!("  {}", compressed_block.repr());
 
         compressed_block
