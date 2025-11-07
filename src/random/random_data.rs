@@ -1676,4 +1676,13 @@ mod tests {
 
         println!("Wrote circuit to circuitRxR.txt:\n{}", combined);
     }
+
+    #[test]
+    fn test_gen_id() {
+        let (r, a) = random_id(64, 500);
+        let id = r.concat(&a).repr();
+        let mut file = File::create("circuitlongid.txt").expect("Failed to create file");
+        file.write_all(id.as_bytes())
+            .expect("Failed to write to file");
+    }
 }
