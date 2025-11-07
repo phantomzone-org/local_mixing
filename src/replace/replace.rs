@@ -845,7 +845,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         let perms: Vec<Vec<usize>> = (0..num_wires).permutations(num_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
 
-        let subcircuit_temp = expand(&subcircuit, 10, conn, &bit_shuf, num_wires);
+        let subcircuit_temp = expand(&subcircuit, 3, conn, &bit_shuf, num_wires);
 
         if subcircuit.permutation(num_wires) != subcircuit_temp.permutation(num_wires) {
             panic!("Compress changed something");
