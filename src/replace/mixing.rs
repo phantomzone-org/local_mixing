@@ -281,14 +281,22 @@ pub fn butterfly_big(
         //shoot_random_gate(&mut gi, 100_000);
         // compress the block
         let compressed_block = compress_big(&expand_big(&gi, 10, n, &mut conn), 100, n, &mut conn);
+        let before_len = r_inv.gates.len() * 2 + 1;
+        let after_len = compressed_block.gates.len();
+            
+        let color_line = if after_len < before_len {
+            "\x1b[32m──────────────\x1b[0m" // green
+            } else if after_len > before_len {
+                "\x1b[31m──────────────\x1b[0m" // red
+            } else {
+                "\x1b[90m──────────────\x1b[0m" // gray
+        };
 
         println!(
-            "  Block {}: before {} gates → after {} gates",
-            i,
-            r_inv.gates.len() * 2 + 1, // approximate size
-            compressed_block.gates.len()
+            "  Block {}: before {} gates → after {} gates  {}",
+            i, before_len, after_len, color_line
         );
-
+        
         println!("  {}", compressed_block.repr());
 
         compressed_block
@@ -376,14 +384,21 @@ pub fn abutterfly_big(
 
             let before_len = block.gates.len();
             let compressed_block = compress_big(&expand_big(&block, 10, n, &mut thread_conn), 100, n, &mut thread_conn);
+            let after_len = compressed_block.gates.len();
+            
+            let color_line = if after_len < before_len {
+                "\x1b[32m──────────────\x1b[0m" // green
+                } else if after_len > before_len {
+                    "\x1b[31m──────────────\x1b[0m" // red
+                } else {
+                    "\x1b[90m──────────────\x1b[0m" // gray
+            };
 
             println!(
-                "  Block {}: before {} gates → after {} gates",
-                i,
-                before_len,
-                compressed_block.gates.len()
+                "  Block {}: before {} gates → after {} gates  {}",
+                i, before_len, after_len, color_line
             );
-            println!("  {}", compressed_block.repr());
+            //println!("  {}", compressed_block.repr());
 
             compressed_block
         })
