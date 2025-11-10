@@ -1,4 +1,4 @@
-use crate::circuit::{CircuitSeq, Permutation};
+use crate::circuit::{Permutation};
 
 use bincode;
 use serde::{Deserialize, Serialize};

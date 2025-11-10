@@ -1,12 +1,11 @@
 use clap::{Arg, ArgAction, Command};
-use colorgrad::{CustomGradient, Gradient};
 use itertools::Itertools;
 use plotters::prelude::*;
-use rand::{rngs::OsRng, Rng, TryRngCore};
+use rand::{Rng};
 use rusqlite::{Connection, OpenFlags};
 use serde_json::json;
 use std::{
-    fs::{self, File},
+    fs::{self},
     io::Write,
     path::Path,
     time::Instant,
@@ -22,7 +21,7 @@ use local_mixing::{
     random::random_data::{build_from_sql, main_random, random_circuit},
     replace::{
         mixing::{main_butterfly, main_butterfly_big, main_mix},
-        replace::{compress, random_canonical_id, random_id},
+        replace::{random_canonical_id},
     },
 };
 use local_mixing::replace::replace::compress_big;
@@ -679,8 +678,8 @@ pub fn analyze_gate_to_wires(circuit: &CircuitSeq, num_wires: usize, x: &str) ->
         .build_cartesian_2d(0f64..num_wires as f64, 0f64..(max_count as f64 + 1.0))?;
 
     let x_label = format!("Wire Index ({})", x);
-    chart.configure_mesh()
-        .x_desc(x)
+    let _ = chart.configure_mesh()
+        .x_desc(x_label)
         .y_desc("Gate Touch Count")
         .draw();
 

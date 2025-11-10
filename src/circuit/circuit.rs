@@ -1,18 +1,10 @@
 //Basic implementation for circuit, gate, and permutations
-use crate::circuit::control_functions::GateControlFunc;
-use crate::rainbow::database::PersistPermStore;
-
-// use crossbeam::channel::{unbounded, Receiver};
 use rand::{seq::SliceRandom, Rng};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max as std_max,
     collections::{HashSet, HashMap},
-    sync::Arc,
 };
-use rayon::prelude::*;
-use smallvec::SmallVec;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Gate{
@@ -690,7 +682,7 @@ pub fn base_gates(n: usize) -> Vec<[u8; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rainbow::init;
+    // use crate::rainbow::init;
     // #[test]
     // fn test_to_circuit_and_canon() {
     //     init(3);

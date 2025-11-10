@@ -2,7 +2,7 @@ use crate::{
     circuit::circuit::CircuitSeq,
     replace::replace::{compress, compress_big, obfuscate, outward_compress, random_id, expand_big},
 };
-use crate::random::random_data::shoot_random_gate;
+// use crate::random::random_data::shoot_random_gate;
 use itertools::Itertools;
 use rand::Rng;
 use rayon::prelude::*;
@@ -81,42 +81,6 @@ pub fn butterfly(
 
     println!("Butterfly start: {} gates", c.gates.len());
 
-    // Build blocks: [R* gᵢ R]
-    // let mut blocks: Vec<CircuitSeq> = Vec::new();
-    // // for (i, g) in c.gates.iter().enumerate() {
-    // //     let gi = CircuitSeq { gates: vec![*g] };   // wrap gate as circuit
-    // //     let block = r_inv.clone()
-    // //         .concat(&gi)
-    // //         .concat(&r.clone());
-
-    // //     let compressed_block = compress(&block, 100_000, conn, bit_shuf, n);
-
-    // //     println!(
-    // //         "  Block {}: before {} gates → after {} gates",
-    // //         i,
-    // //         block.gates.len(),
-    // //         compressed_block.gates.len()
-    // //     );
-
-    // //     blocks.push(compressed_block);
-    // // }
-
-    // for (i, g) in c.gates.iter().enumerate() {
-    //     let gi = CircuitSeq { gates: vec![*g] }; // wrap the single gate as a CircuitSeq
-
-    //     // Outward compression with r and gi
-    //     let compressed_block = outward_compress(&gi, &r, 100_000, conn, bit_shuf, n);
-
-    //     println!(
-    //         "  Block {}: before {} gates → after {} gates",
-    //         i,
-    //         r_inv.gates.len() * 2 + 1, // approximate size before compress
-    //         compressed_block.gates.len()
-    //     );
-
-    //     blocks.push(compressed_block);
-    // }
-
     let r = &r;           // reference is enough; read-only
     let r_inv = &r_inv;   // same
     let bit_shuf = &bit_shuf;
@@ -174,7 +138,6 @@ pub fn butterfly(
     println!("After adding bookends: {} gates", acc.gates.len());
 
     // Final global compression (until stable 3x)
-    let mut prev_len = acc.gates.len();
     let mut stable_count = 0;
     while stable_count < 3 {
         let before = acc.gates.len();
@@ -186,7 +149,6 @@ pub fn butterfly(
             println!("  Final compression stable {}/3 at {} gates", stable_count, after);
         } else {
             println!("  Final compression reduced: {} → {} gates", before, after);
-            prev_len = after;
             stable_count = 0;
         }
     }
@@ -239,7 +201,7 @@ fn merge_combine_blocks(
     let mut conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .expect("Failed to open read-only DB");
 
-    let mut combined = left.concat(&right);
+    let combined = left.concat(&right);
     // shoot_random_gate(&mut combined, 100_000);
     
     let acc = compress_big(&combined, 200, n, &mut conn);
@@ -272,7 +234,7 @@ pub fn butterfly_big(
         .enumerate()
         .map(|(i, &g)| {
             // wrap single gate as CircuitSeq
-            let mut gi = r_inv.concat(&CircuitSeq { gates: vec![g] }).concat(&r);
+            let gi = r_inv.concat(&CircuitSeq { gates: vec![g] }).concat(&r);
             // create a read-only connection per thread
             let mut conn = Connection::open_with_flags(
             "circuits.db",
@@ -365,7 +327,7 @@ pub fn abutterfly_big(
 
     for &g in &c.gates {
         let (r, r_inv) = random_id(n as u8, rng.random_range(100..=200));
-        let mut block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
+        let block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
         //shoot_random_gate(&mut block, 1_000);
         pre_blocks.push(block);
         prev_r_inv = r_inv;

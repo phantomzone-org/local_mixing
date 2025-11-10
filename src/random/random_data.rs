@@ -3,18 +3,16 @@ use crate::{
     rainbow::canonical::{self, CandSet, Canonicalization},
 };
 
-use crossbeam::channel::{bounded, unbounded, Sender};
+use crossbeam::channel::{bounded};
 use dashmap::DashMap;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use rand::{
     prelude::IndexedRandom,
-    rngs::StdRng,
-    Rng, RngCore, SeedableRng,
+    Rng, RngCore,
 };
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
-    prelude::*,
     slice::ParallelSlice,
 };
 use rusqlite::{params, Connection, Result};
@@ -25,11 +23,10 @@ use std::{
     io::Write,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, 
     },
     thread,
 };
-use lru::LruCache;
 
 pub static CANON_CACHE: Lazy<DashMap<Vec<u8>, (Vec<u8>, Vec<u8>)>> = Lazy::new(|| DashMap::new());
 
@@ -104,7 +101,6 @@ pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
 }
 
 use std::collections::HashMap;
-use rayon::prelude::*;
 
 pub fn random_equivalent_circuits_until_found(n: u8) -> (CircuitSeq, CircuitSeq) {
     // final_state → list of circuits producing that state
@@ -121,7 +117,7 @@ pub fn random_equivalent_circuits_until_found(n: u8) -> (CircuitSeq, CircuitSeq)
         }
 
         // Compute final state starting from 0
-        let mut state = Gate::evaluate_index_list(0, &circuit.gates);
+        let state = Gate::evaluate_index_list(0, &circuit.gates);
 
         // Check if we’ve seen this state before
         if let Some(existing_list) = state_map.get_mut(&(state as u64)) {
@@ -503,7 +499,6 @@ pub fn contiguous_convex(
             for i in 0..non_convex.len() {
                 if non_convex[i] >= start && non_convex[i] < leftmost {
                     panic!("This shouldn't be possible");
-                    non_convex[i] += 1;
                 }
             }
             start += 1;
@@ -535,7 +530,6 @@ pub fn contiguous_convex(
             for i in 0..non_convex.len() {
                 if non_convex[i] > rightmost && non_convex[i] <= end {
                     panic!("Right should be possible either");
-                    non_convex[i] -= 1;
                 }
             }
             end -= 1;
@@ -1267,7 +1261,6 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
 mod tests {
     use super::*;
     use rusqlite::Connection;
-    use std::fs::OpenOptions;
     use crate::replace::replace::compress_big;
     #[test]
     fn test_check_cycles_n3m3() -> Result<()> {
@@ -1492,10 +1485,7 @@ mod tests {
         );
     }
 
-    use super::*;
     use std::io::{self, BufRead};
-    use std::path::Path;
-
 
     #[test]
     fn split_butterfly_unique() -> io::Result<()> {
@@ -1591,8 +1581,6 @@ mod tests {
         println!(" All sanity checks passed.");
         Ok(())
     }
-
-    use super::*;
     use std::fs::File;
     use std::io::Write;
 
@@ -1617,11 +1605,8 @@ mod tests {
         println!("Generated circuits written to c1.txt and c2.txt");
     }
     use crate::replace::replace::random_id;
-    use rusqlite::OpenFlags;
     #[test]
     fn test_shooting() {
-        let mut rng = rand::rng();
-
         // Start with an initial random identity
         // Load circuitA from file
         let contents = fs::read_to_string("circuitshoot.txt")
