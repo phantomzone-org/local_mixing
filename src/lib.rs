@@ -12,6 +12,8 @@ use numpy::ndarray::Array2;
 
 #[pyfunction]
 fn heatmap(py: Python<'_>, num_wires: usize, num_inputs: usize, flag: bool) -> Py<PyArray2<f64>> {
+    println!("Running heatmap on {} inputs", num_inputs);
+    
     // Load circuits
     let contents = fs::read_to_string("butterfly_recent.txt")
         .expect("Failed to read butterfly_recent.txt");
