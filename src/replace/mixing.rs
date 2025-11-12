@@ -248,10 +248,12 @@ pub fn butterfly_big(
             
         let color_line = if after_len < before_len {
             "\x1b[32m──────────────\x1b[0m" // green
-            } else if after_len > before_len {
-                "\x1b[31m──────────────\x1b[0m" // red
-            } else {
-                "\x1b[90m──────────────\x1b[0m" // gray
+        } else if after_len > before_len {
+            "\x1b[31m──────────────\x1b[0m" // red
+        } else if gi.gates != compressed_block.gates {
+            "\x1b[35m──────────────\x1b[0m" // purple
+        } else {
+            "\x1b[90m──────────────\x1b[0m" // gray
         };
 
         println!(
@@ -350,10 +352,12 @@ pub fn abutterfly_big(
             
             let color_line = if after_len < before_len {
                 "\x1b[32m──────────────\x1b[0m" // green
-                } else if after_len > before_len {
-                    "\x1b[31m──────────────\x1b[0m" // red
-                } else {
-                    "\x1b[90m──────────────\x1b[0m" // gray
+            } else if after_len > before_len {
+                "\x1b[31m──────────────\x1b[0m" // red
+            } else if block.gates != compressed_block.gates {
+                "\x1b[35m──────────────\x1b[0m" // purple
+            } else {
+                "\x1b[90m──────────────\x1b[0m" // gray
             };
 
             println!(
@@ -439,10 +443,12 @@ pub fn abutterfly_big_delay_bookends(
             
             let color_line = if after_len < before_len {
                 "\x1b[32m──────────────\x1b[0m" // green
-                } else if after_len > before_len {
-                    "\x1b[31m──────────────\x1b[0m" // red
-                } else {
-                    "\x1b[90m──────────────\x1b[0m" // gray
+            } else if after_len > before_len {
+                "\x1b[31m──────────────\x1b[0m" // red
+            } else if block.gates != compressed_block.gates {
+                "\x1b[35m──────────────\x1b[0m" // purple
+            } else {
+                "\x1b[90m──────────────\x1b[0m" // gray
             };
 
             println!(
