@@ -83,19 +83,18 @@ fn heatmap(py: Python<'_>, num_wires: usize, num_inputs: usize, flag: bool) -> P
 }
 
 #[pyfunction]
-fn heatmap_slice(py: Python<'_>, num_wires: usize, num_inputs: usize, flag: bool, x1: usize, x2: usize, y1: usize, y2: usize) -> Py<PyArray2<f64>> {
+fn heatmap_slice(py: Python<'_>, num_wires: usize, num_inputs: usize, flag: bool, x1: usize, x2: usize, y1: usize, y2: usize, c1_path: &str,
+    c2_path: &str) -> Py<PyArray2<f64>> {
     println!("Running heatmap on {} inputs", num_inputs);
     io::stdout().flush().unwrap();
     // Load circuits
-    let contents = fs::read_to_string("butterfly_recent.txt")
-        .expect("Failed to read butterfly_recent.txt");
+    let circuit_one_str = fs::read_to_string(c1_path)
+        .unwrap_or_else(|_| panic!("Failed to read circuit file: {}", c1_path));
+    let circuit_two_str = fs::read_to_string(c2_path)
+        .unwrap_or_else(|_| panic!("Failed to read circuit file: {}", c2_path));
 
-    let (circuit_one_str, circuit_two_str) = contents
-        .split_once(':')
-        .expect("Invalid format in butterfly_recent.txt");
-
-    let mut circuit_one = CircuitSeq::from_string(circuit_one_str);
-    let mut circuit_two = CircuitSeq::from_string(circuit_two_str);
+    let mut circuit_one = CircuitSeq::from_string(&circuit_one_str);
+    let mut circuit_two = CircuitSeq::from_string(&circuit_two_str);
     circuit_one.canonicalize();
     circuit_two.canonicalize();
 

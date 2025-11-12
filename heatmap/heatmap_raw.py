@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
                 print(f"Computing slice x[{x_start}:{x_end}], y[{y_start}:{y_end}]...")
                 results = heatmap_rust.heatmap_slice(
-                    args.n, args.i, flag, x_start, x_end, y_start, y_end
+                    args.n, args.i, flag, x_start, x_end, y_start, y_end, args.c1, args.c2
                 )
 
                 output_dir = "./heatmap_pieces"
