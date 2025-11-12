@@ -20,7 +20,7 @@ use local_mixing::{
     },
     random::random_data::{build_from_sql, main_random, random_circuit},
     replace::{
-        mixing::{main_butterfly, main_butterfly_big, main_mix},
+        mixing::{main_butterfly, main_butterfly_big, main_mix, main_butterfly_big_bookendsless},
         replace::{random_canonical_id},
     },
 };
@@ -145,6 +145,13 @@ fn main() {
                     .default_value("32")
                     .value_parser(clap::value_parser!(usize))
                     .help("Number of wires (default: 32)"),
+            )
+            .arg(
+                Arg::new("bookendless")
+                    .short('b')
+                    .long("bookendless")
+                    .help("Enable bookendless mode")
+                    .action(clap::ArgAction::SetTrue),
             ),
     )
         .subcommand(
@@ -443,6 +450,7 @@ fn main() {
             let path: &str = sub.get_one::<String>("path").unwrap().as_str();
             let n: usize = *sub.get_one("n").unwrap_or(&32); // default to 32 if not provided
             let data = fs::read_to_string("initial.txt").expect("Failed to read initial.txt");
+            let bookendless = sub.get_flag("bookendless"); 
 
             let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
             conn.execute_batch(
@@ -456,10 +464,18 @@ fn main() {
                 println!("Generating random");
                 let c1 = random_circuit(n as u8, 30);
                 println!("Starting Len: {}", c1.gates.len());
-                main_butterfly_big(&c1, rounds, &mut conn, n, true, path);
+                if bookendless {
+                    main_butterfly_big_bookendsless(&c1, rounds, &mut conn, n, true, path);
+                } else {
+                    main_butterfly_big(&c1, rounds, &mut conn, n, true, path);
+                }
             } else {
                 let c = CircuitSeq::from_string(&data);
-                main_butterfly_big(&c, rounds, &mut conn, n, true, path);
+                if bookendless {
+                    main_butterfly_big_bookendsless(&c, rounds, &mut conn, n, true, path);
+                } else {
+                    main_butterfly_big(&c, rounds, &mut conn, n, true, path);
+                }
             }
         }
         Some(("heatmap", sub)) => {
@@ -566,7 +582,7 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str, 
         } else {
             rng.random_range(0..=usize::MAX)
         };
-        
+
         let evolution_one = circuit_one.evaluate_evolution(input_bits);
         let evolution_two = circuit_two.evaluate_evolution(input_bits);
         if !flag {

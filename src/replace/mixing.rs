@@ -406,7 +406,7 @@ pub fn abutterfly_big_delay_bookends(
     c: &CircuitSeq,
     conn: &mut Connection,
     n: usize,
-) -> CircuitSeq {
+) -> (CircuitSeq, CircuitSeq, CircuitSeq) {
     println!("Butterfly start: {} gates", c.gates.len());
     let mut rng = rand::rng();
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
@@ -462,10 +462,7 @@ pub fn abutterfly_big_delay_bookends(
     let mut acc =
         merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, total);
 
-    // Add global bookends: first_r ... last_r_inv
-    acc = first_r.concat(&acc).concat(&prev_r_inv);
-
-    println!("After adding bookends: {} gates", acc.gates.len());
+    println!("After merging: {} gates", acc.gates.len());
 
     // Final global compression until stable 3×
     let mut stable_count = 0;
@@ -487,7 +484,7 @@ pub fn abutterfly_big_delay_bookends(
     println!("Compressed len: {}", acc.gates.len());
     println!("Butterfly done: {} gates", acc.gates.len());
 
-    acc
+    (acc, first_r, prev_r_inv)
 }
 
 pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) {
@@ -698,6 +695,117 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     // }
     // let rev = CircuitSeq { gates: rev_gates };
     // let good_id = circuit.concat(&rev);
+
+    circuit
+    .probably_equal(&c, n, 150_000)
+    .expect("The circuits differ somewhere!");
+
+    // Write to file
+    let c_str = c.repr();
+    let circuit_str = circuit.repr();
+    let long_str = format!("{}:{}", c.repr(), circuit.repr());
+    // let good_str = format!("{}: {}", good_id.gates.len(), good_id.repr());
+    // Write start.txt
+    File::create("start.txt")
+        .and_then(|mut f| f.write_all(c_str.as_bytes()))
+        .expect("Failed to write start.txt");
+
+    // Write recent_circuit.txt
+    File::create("recent_circuit.txt")
+        .and_then(|mut f| f.write_all(circuit_str.as_bytes()))
+        .expect("Failed to write recent_circuit.txt");
+
+    File::create(save)
+        .and_then(|mut f| f.write_all(circuit_str.as_bytes()))
+        .expect("Failed to write recent_circuit.txt");
+
+    // Write butterfly_recent.txt (overwrite)
+    File::create("butterfly_recent.txt")
+        .and_then(|mut f| f.write_all(long_str.as_bytes()))
+        .expect("Failed to write butterfly_recent.txt");
+
+    // Append to butterfly.txt
+    OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("butterfly.txt")
+        .and_then(|mut f| writeln!(f, "{}", long_str))
+        .expect("Failed to append to butterfly.txt");
+    if circuit.gates == c.gates {
+        println!("The obfuscation didn't do anything");
+    }
+
+    println!("Final circuit written to recent_circuit.txt");
+}
+
+pub fn main_butterfly_big_bookendsless(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, _asymmetric: bool, save: &str) {
+    // Start with the input circuit
+    println!("Starting len: {}", c.gates.len());
+    let mut circuit = c.clone();
+    // Repeat obfuscate + compress 'rounds' times
+    let mut post_len = 0;
+    let mut count = 0;
+    let mut beginning = CircuitSeq { gates: Vec::new() };
+    let mut end= CircuitSeq { gates: Vec::new() };
+    for _ in 0..rounds {
+        let (new_circuit, b, e) = abutterfly_big_delay_bookends(&circuit, conn, n);
+        beginning = beginning.concat(&b);
+        end = e.concat(&end);
+        circuit = new_circuit;
+        if circuit.gates.len() == 0 {
+            break;
+        }
+        
+        if circuit.gates.len() == post_len {
+            count += 1;
+        } else {
+            post_len = circuit.gates.len();
+            count = 0;
+        }
+
+        if count > 2 {
+            break;
+        }
+        let mut i = 0;
+        while i < circuit.gates.len().saturating_sub(1) {
+            if circuit.gates[i] == circuit.gates[i + 1] {
+                // remove elements at i and i+1
+                circuit.gates.drain(i..=i + 1);
+
+                // step back up to 2 indices, but not below 0
+                i = i.saturating_sub(2);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    println!("Adding bookends");
+    beginning = compress_big(&beginning, 100, n, conn);
+    end = compress_big(&end, 100, n, conn);
+    circuit = beginning.concat(&circuit).concat(&end);
+    let mut c1 = CircuitSeq{ gates: circuit.gates[0..circuit.gates.len()/2].to_vec() };
+    let mut c2 = CircuitSeq{ gates: circuit.gates[circuit.gates.len()/2..].to_vec() };
+    c1 = compress_big(&c1, 1_000, n, conn);
+    c2 = compress_big(&c2, 1_000, n, conn);
+    circuit = c1.concat(&c2);
+    let mut stable_count = 0;
+    while stable_count < 3 {
+        let before = circuit.gates.len();
+        //shoot_random_gate(&mut acc, 100_000);
+        circuit = compress_big(&circuit, 1_000, n, conn);
+        let after = circuit.gates.len();
+
+        if after == before {
+            stable_count += 1;
+            println!("  Final compression stable {}/3 at {} gates", stable_count, after);
+        } else {
+            println!("  Final compression reduced: {} → {} gates", before, after);
+            stable_count = 0;
+        }
+    }
+
+    println!("Final len: {}", circuit.gates.len());
 
     circuit
     .probably_equal(&c, n, 150_000)

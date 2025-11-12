@@ -3,6 +3,7 @@ import numpy as np
 import local_mixing as heatmap_rust 
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 
 def plot_heatmap(results, save_path, xlabel, ylabel, vmin=0.0, vmax=1.0):
     points = np.array(results, dtype=float)
@@ -46,19 +47,60 @@ def plot_heatmap(results, save_path, xlabel, ylabel, vmin=0.0, vmax=1.0):
     plt.savefig(save_path, dpi=300)
     plt.close()
 
+def count_semicolons(path):
+    """Counts semicolons in a circuit file (for circuit length)."""
+    with open(path, "r") as f:
+        text = f.read()
+    return text.count(";")  # number of gates
+
 # --- Call Rust and plot ---
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate circuit heatmap using Rust backend")
     parser.add_argument("--n", type=int, required=True, help="Number of wires")
     parser.add_argument("--i", type=int, required=True, help="Number of input samples")
-    flag = False
     parser.add_argument("--x", type=str, required=True, help="Label for X-axis")
     parser.add_argument("--y", type=str, required=True, help="Label for Y-axis")
-    output = "./heatmap.png"
-
+    parser.add_argument("--pieces", action="store_true", help="Break heatmap into pieces if too large")
+    parser.add_argument("--c1", type=str, required=False, help="Path to first circuit file")
+    parser.add_argument("--c2", type=str, required=False, help="Path to second circuit file")
+    parser.add_argument("--chunk", type=int, default=10_000, help="Size of each chunk (default 10000)")
     args = parser.parse_args()
-    print(f" Generating results")
-    results = heatmap_rust.heatmap(args.n, args.i, flag)
 
-    plot_heatmap(results, output, xlabel=args.x, ylabel=args.y)
-    print(f" Heatmap saved to {output}")
+    flag = False
+
+    if args.pieces:
+        if not args.c1 or not args.c2:
+            raise ValueError("--c1 and --c2 are required when --pieces is used")
+
+        # Determine circuit lengths from files
+        c1_len = count_semicolons(args.c1)
+        c2_len = count_semicolons(args.c2)
+        print(f"Circuit lengths: c1={c1_len}, c2={c2_len}")
+
+        # Compute slices
+        chunk = args.chunk
+        for x_start in range(0, c1_len + 1, chunk):
+            x_end = min(x_start + chunk - 1, c1_len)
+            for y_start in range(0, c2_len + 1, chunk):
+                y_end = min(y_start + chunk - 1, c2_len)
+
+                print(f"Computing slice x[{x_start}:{x_end}], y[{y_start}:{y_end}]...")
+                results = heatmap_rust.heatmap_slice(
+                    args.n, args.i, flag, x_start, x_end, y_start, y_end
+                )
+
+                output_dir = "./heatmap_pieces"
+                os.makedirs(output_dir, exist_ok=True)
+                output_path = os.path.join(
+                    output_dir, f"heatmap_x{x_start}-{x_end}_y{y_start}-{y_end}.png"
+                )
+
+                plot_heatmap(results, output_path, xlabel=args.x, ylabel=args.y)
+                print(f"Saved {output_path}")
+
+    else:
+        print("Generating full heatmap...")
+        results = heatmap_rust.heatmap(args.n, args.i, flag)
+        output = "./heatmap.png"
+        plot_heatmap(results, output, xlabel=args.x, ylabel=args.y)
+        print(f"Heatmap saved to {output}")
