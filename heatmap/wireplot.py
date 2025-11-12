@@ -16,9 +16,8 @@ def char_to_wire(c: str) -> int:
     else:
         raise ValueError(f"Invalid wire char: {c}")
 
-def plot_wire_dotplot(circuit_str, num_wires, x_label_str, save_path):
+def plot_wire_scatter(circuit_str, num_wires, x_label_str, save_path):
     gates = [g.strip() for g in circuit_str.split(";") if g.strip()]
-
     total_counts = np.zeros(num_wires, dtype=int)
     active_counts = np.zeros(num_wires, dtype=int)
 
@@ -26,7 +25,6 @@ def plot_wire_dotplot(circuit_str, num_wires, x_label_str, save_path):
         if len(gate) < 3:
             continue
         wires = [char_to_wire(c) for c in gate[:3]]
-
         for i, w in enumerate(wires):
             total_counts[w] += 1
             if i == 0:
@@ -35,25 +33,23 @@ def plot_wire_dotplot(circuit_str, num_wires, x_label_str, save_path):
     x = np.arange(num_wires)
 
     plt.figure(figsize=(16, 6))
-    plt.scatter(x - 0.1, total_counts, color="blue", s=50, label="Total gates")
-    plt.scatter(x + 0.1, active_counts, color="red", s=50, label="Active gates")
-
-    for xi in x:
-        plt.axvline(x=xi, color='gray', linestyle=':', linewidth=0.5)
+    plt.scatter(x, total_counts, color="blue", s=30, label="Total gates", alpha=0.7)
+    plt.scatter(x, active_counts, color="red", s=30, label="Active gates", alpha=0.7)
 
     plt.xticks(x)
     plt.xlabel(f"Wire Index ({x_label_str})")
     plt.ylabel("Gate Count")
-    plt.title("Gate Counts per Wire (Dot Plot)")
+    plt.title("Gate Counts per Wire (Scatter Plot)")
+    plt.grid(True, linestyle=":", linewidth=0.5, alpha=0.6)
     plt.legend()
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"Saved wire dot plot to {save_path}")
+    print(f"Saved wire scatter plot to {save_path}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Wire dot plot for circuit gates (0-63 wires)")
+    parser = argparse.ArgumentParser(description="Scatter plot for gate counts per wire (0–63 wires)")
     parser.add_argument("--c", type=str, required=True, help="Path to circuit file")
     parser.add_argument("--n", type=int, required=True, help="Number of wires (max 64)")
     parser.add_argument("--x", type=str, required=True, help="Label for X-axis")
@@ -62,5 +58,5 @@ if __name__ == "__main__":
     with open(args.c, "r") as f:
         circuit_str = f.read().strip()
 
-    output = "wire_dotplot.png"
-    plot_wire_dotplot(circuit_str, args.n, args.x, output)
+    output = "wire_scatter.png"
+    plot_wire_scatter(circuit_str, args.n, args.x, output)
