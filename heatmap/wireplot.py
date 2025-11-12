@@ -24,8 +24,8 @@ def plot_wire_dotplot(circuit_str, num_wires, x_label_str, save_path):
 
     for gate in gates:
         if len(gate) < 3:
-            continue 
-        wires = [char_to_wire(c) for c in gate[:3]] 
+            continue
+        wires = [char_to_wire(c) for c in gate[:3]]
 
         for i, w in enumerate(wires):
             total_counts[w] += 1
@@ -33,13 +33,18 @@ def plot_wire_dotplot(circuit_str, num_wires, x_label_str, save_path):
                 active_counts[w] += 1
 
     x = np.arange(num_wires)
-    plt.figure(figsize=(14, 6))
-    plt.scatter(x, total_counts, color="blue", s=20, label="Total gates")
-    plt.scatter(x, active_counts, color="red", s=20, label="Active gates")
 
+    plt.figure(figsize=(16, 6))
+    plt.scatter(x - 0.1, total_counts, color="blue", s=50, label="Total gates")
+    plt.scatter(x + 0.1, active_counts, color="red", s=50, label="Active gates")
+
+    for xi in x:
+        plt.axvline(x=xi, color='gray', linestyle=':', linewidth=0.5)
+
+    plt.xticks(x)
     plt.xlabel(f"Wire Index ({x_label_str})")
     plt.ylabel("Gate Count")
-    plt.title("Gate Counts per Wire")
+    plt.title("Gate Counts per Wire (Dot Plot)")
     plt.legend()
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
