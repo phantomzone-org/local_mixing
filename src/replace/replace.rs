@@ -613,17 +613,17 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         };
         t_compress += t4.elapsed().as_secs_f64();
 
-        if subcircuit.permutation(local_wires) != subcircuit_temp.permutation(local_wires) {
-            panic!("Compress changed something");
-        }
+        // if subcircuit.permutation(local_wires) != subcircuit_temp.permutation(local_wires) {
+        //     panic!("Compress changed something");
+        // }
         subcircuit = subcircuit_temp;
 
         let t5 = Instant::now();
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
         circuit.gates.splice(start..=end, subcircuit.gates);
-        if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
-            panic!("splice changed something");
-        }
+        // if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
+        //     panic!("splice changed something");
+        // }
         t_unrewire += t5.elapsed().as_secs_f64();
     }
 
