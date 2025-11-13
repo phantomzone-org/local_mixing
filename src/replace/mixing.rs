@@ -2,7 +2,7 @@ use crate::{
     circuit::circuit::CircuitSeq,
     replace::replace::{compress, compress_big, obfuscate, outward_compress, random_id, expand_big},
 };
-// use crate::random::random_data::shoot_random_gate;
+use crate::random::random_data::shoot_random_gate;
 use itertools::Itertools;
 use rand::Rng;
 use rayon::prelude::*;
@@ -405,7 +405,6 @@ pub fn abutterfly_big(
     acc
 }
 
-//TODO
 pub fn abutterfly_big_delay_bookends(
     c: &CircuitSeq,
     conn: &mut Connection,
@@ -414,14 +413,14 @@ pub fn abutterfly_big_delay_bookends(
     println!("Butterfly start: {} gates", c.gates.len());
     let mut rng = rand::rng();
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
-
-    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(10..=20));
+    let mut c = c.clone();
+    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(20..=100));
     let mut prev_r_inv = first_r_inv.clone();
-
+    shoot_random_gate(&mut c, 100_000);
     for &g in &c.gates {
-        let (r, r_inv) = random_id(n as u8, rng.random_range(10..=20));
-        let block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
-        //shoot_random_gate(&mut block, 1_000);
+        let (r, r_inv) = random_id(n as u8, rng.random_range(20..=100));
+        let mut block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
+        shoot_random_gate(&mut block, 1_000);
         pre_blocks.push(block);
         prev_r_inv = r_inv;
     }

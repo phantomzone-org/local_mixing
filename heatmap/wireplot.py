@@ -30,16 +30,20 @@ def plot_wire_scatter(circuit_str, num_wires, x_label_str, save_path):
             if i == 0:
                 active_counts[w] += 1
 
+    sorted_indices = np.argsort(-total_counts)
+    sorted_total = total_counts[sorted_indices]
+    sorted_active = active_counts[sorted_indices]
+
     x = np.arange(num_wires)
 
     plt.figure(figsize=(16, 6))
-    plt.scatter(x, total_counts, color="blue", s=30, label="Total gates", alpha=0.7)
-    plt.scatter(x, active_counts, color="red", s=30, label="Active gates", alpha=0.7)
+    plt.scatter(x, sorted_total, color="blue", s=30, label="Total gates", alpha=0.7)
+    plt.scatter(x, sorted_active, color="red", s=30, label="Active gates", alpha=0.7)
 
-    plt.xticks(x)
+    plt.xticks(x, sorted_indices)
     plt.xlabel(f"Wire Index ({x_label_str})")
     plt.ylabel("Gate Count")
-    plt.title("Gate Counts per Wire (Scatter Plot)")
+    plt.title("Gate Counts per Wire (Sorted by Total Count, Descending)")
     plt.grid(True, linestyle=":", linewidth=0.5, alpha=0.6)
     plt.legend()
     plt.tight_layout()
