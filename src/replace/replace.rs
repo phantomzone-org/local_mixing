@@ -541,6 +541,8 @@ pub fn compress_exhaust(
 pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
+
+    // Initial deduplication
     let mut i = 0;
     while i < circuit.gates.len().saturating_sub(1) {
         if circuit.gates[i] == circuit.gates[i + 1] {
@@ -550,10 +552,8 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
             i += 1;
         }
     }
-    for _i in 0..trials {
-        // if i % 20 == 0 {
-        //     println!("{} trials so far, {} more to go", i, trials - i);
-        // }
+
+    for _ in 0..trials {
         let mut subcircuit_gates = vec![];
 
         for set_size in (3..=20).rev() {
@@ -568,24 +568,17 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         if subcircuit_gates.is_empty() {
             continue
         }
-        
-        let mut gates: Vec<[u8;3]> = vec![[0,0,0]; subcircuit_gates.len()];
-        for (i, g) in subcircuit_gates.iter().enumerate() {
-            gates[i] = circuit.gates[*g];
-        }
 
+        let gates: Vec<[u8; 3]> = subcircuit_gates.iter().map(|&g| circuit.gates[g]).collect();
         subcircuit_gates.sort();
 
         let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates, num_wires).unwrap();
-
         let mut subcircuit = CircuitSeq { gates };
 
         let expected_slice: Vec<_> = subcircuit_gates.iter().map(|&i| circuit.gates[i]).collect();
-
         let actual_slice = &circuit.gates[start..=end];
 
-        if actual_slice != &expected_slice[..]
-        {
+        if actual_slice != &expected_slice[..] {
             continue
         }
 
@@ -597,25 +590,44 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
 
         let subcircuit_temp = if subcircuit.gates.len() <= 200 {
-            // compress_exhaust(&subcircuit, conn, &bit_shuf, num_wires)
             compress(&subcircuit, 100, conn, &bit_shuf, sub_num_wires)
         } else {
             println!("Too big for exhaust: Len = {}", subcircuit.gates.len());
             compress(&subcircuit, 25_000, conn, &bit_shuf, sub_num_wires)
         };
+
         if subcircuit.permutation(sub_num_wires) != subcircuit_temp.permutation(sub_num_wires) {
             panic!("Compress changed something");
         }
-        subcircuit = subcircuit_temp;
 
+        subcircuit = subcircuit_temp;
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
 
-        circuit.gates.splice(start..end+1, subcircuit.gates);
+        let repl_len = subcircuit.gates.len();
+        let old_len = end - start + 1;
+
+        if repl_len == old_len {
+            for i in 0..repl_len {
+                circuit.gates[start + i] = subcircuit.gates[i];
+            }
+        } else if repl_len < old_len {
+            for i in 0..repl_len {
+                circuit.gates[start + i] = subcircuit.gates[i];
+            }
+            for i in (end + 1)..circuit.gates.len() {
+                circuit.gates[i - (old_len - repl_len)] = circuit.gates[i];
+            }
+            circuit.gates.truncate(circuit.gates.len() - (old_len - repl_len));
+        } else {
+            panic!("Replacement grew, which is not allowed");
+        }
 
         circuit
-        .probably_equal(&c, num_wires, 150_000)
-        .expect("Splice changed something");
-        }
+            .probably_equal(&c, num_wires, 150_000)
+            .expect("Splice changed something");
+    }
+
+    // Final deduplication
     let mut i = 0;
     while i < circuit.gates.len().saturating_sub(1) {
         if circuit.gates[i] == circuit.gates[i + 1] {
@@ -625,8 +637,10 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
             i += 1;
         }
     }
+
     circuit
 }
+
 
 pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection) -> CircuitSeq {
     let mut circuit = c.clone();
