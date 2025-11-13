@@ -598,7 +598,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
 
         let subcircuit_temp = if subcircuit.gates.len() <= 200 {
             // compress_exhaust(&subcircuit, conn, &bit_shuf, num_wires)
-            compress(&subcircuit, 200, conn, &bit_shuf, sub_num_wires)
+            compress(&subcircuit, 100, conn, &bit_shuf, sub_num_wires)
         } else {
             println!("Too big for exhaust: Len = {}", subcircuit.gates.len());
             compress(&subcircuit, 25_000, conn, &bit_shuf, sub_num_wires)
