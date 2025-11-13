@@ -12,10 +12,10 @@ use rusqlite::{Connection};
 use std::{
     cmp::{max, min},
     collections::{HashSet},
-    // fs::OpenOptions, // used for testing
-    // io::Write,
-    // sync::Arc,
-    // time::{Duration, Instant},
+    fs::OpenOptions, // used for testing
+    io::Write,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 // Returns a nontrivial identity circuit built from two "friend" circuits
@@ -538,11 +538,24 @@ pub fn compress_exhaust(
     compressed
 }
 
+
 pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
+    // Accumulators for timing
+    let mut time_dedup_init = 0;
+    let mut time_convex_find = 0;
+    let mut time_contiguous = 0;
+    let mut time_rewire = 0;
+    let mut time_permutations = 0;
+    let mut time_compress = 0;
+    let mut time_unrewire = 0;
+    let mut time_replace = 0;
+    let mut time_check_eq = 0;
+
     // Initial deduplication
+    let start_time = Instant::now();
     let mut i = 0;
     while i < circuit.gates.len().saturating_sub(1) {
         if circuit.gates[i] == circuit.gates[i + 1] {
@@ -552,57 +565,72 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
             i += 1;
         }
     }
+    time_dedup_init += start_time.elapsed().as_millis();
 
     for _ in 0..trials {
         let mut subcircuit_gates = vec![];
 
+        let convex_find_start = Instant::now();
         for set_size in (3..=20).rev() {
             let random_max_wires = rng.random_range(3..=7);
             let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
             if !gates.is_empty() {
                 subcircuit_gates = gates;
-                break
+                break;
             }
         }
+        time_convex_find += convex_find_start.elapsed().as_millis();
 
         if subcircuit_gates.is_empty() {
-            continue
+            continue;
         }
 
         let gates: Vec<[u8; 3]> = subcircuit_gates.iter().map(|&g| circuit.gates[g]).collect();
         subcircuit_gates.sort();
 
+        let contiguous_start = Instant::now();
         let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates, num_wires).unwrap();
+        time_contiguous += contiguous_start.elapsed().as_millis();
+
         let mut subcircuit = CircuitSeq { gates };
 
         let expected_slice: Vec<_> = subcircuit_gates.iter().map(|&i| circuit.gates[i]).collect();
         let actual_slice = &circuit.gates[start..=end];
-
         if actual_slice != &expected_slice[..] {
-            continue
+            continue;
         }
 
+        let rewire_start = Instant::now();
         let used_wires = subcircuit.used_wires();
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
+        time_rewire += rewire_start.elapsed().as_millis();
 
+        let perm_start = Instant::now();
         let sub_num_wires = used_wires.len();
         let perms: Vec<Vec<usize>> = (0..sub_num_wires).permutations(sub_num_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+        time_permutations += perm_start.elapsed().as_millis();
 
+        let compress_start = Instant::now();
         let subcircuit_temp = if subcircuit.gates.len() <= 200 {
             compress(&subcircuit, 100, conn, &bit_shuf, sub_num_wires)
         } else {
             println!("Too big for exhaust: Len = {}", subcircuit.gates.len());
             compress(&subcircuit, 25_000, conn, &bit_shuf, sub_num_wires)
         };
+        time_compress += compress_start.elapsed().as_millis();
 
         if subcircuit.permutation(sub_num_wires) != subcircuit_temp.permutation(sub_num_wires) {
             panic!("Compress changed something");
         }
 
         subcircuit = subcircuit_temp;
-        subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
 
+        let unrewire_start = Instant::now();
+        subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
+        time_unrewire += unrewire_start.elapsed().as_millis();
+
+        let replace_start = Instant::now();
         let repl_len = subcircuit.gates.len();
         let old_len = end - start + 1;
 
@@ -621,13 +649,16 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         } else {
             panic!("Replacement grew, which is not allowed");
         }
+        time_replace += replace_start.elapsed().as_millis();
 
+        let check_start = Instant::now();
         circuit
             .probably_equal(&c, num_wires, 150_000)
             .expect("Splice changed something");
+        time_check_eq += check_start.elapsed().as_millis();
     }
 
-    // Final deduplication
+    let final_dedup_start = Instant::now();
     let mut i = 0;
     while i < circuit.gates.len().saturating_sub(1) {
         if circuit.gates[i] == circuit.gates[i + 1] {
@@ -637,6 +668,18 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
             i += 1;
         }
     }
+    time_dedup_init += final_dedup_start.elapsed().as_millis();
+
+    println!("Timing summary (ms):");
+    println!("Initial + final dedup: {}", time_dedup_init);
+    println!("Finding convex subcircuit: {}", time_convex_find);
+    println!("Contiguous convex: {}", time_contiguous);
+    println!("Rewire subcircuit: {}", time_rewire);
+    println!("Permutations: {}", time_permutations);
+    println!("Compression: {}", time_compress);
+    println!("Unrewire: {}", time_unrewire);
+    println!("Replacement: {}", time_replace);
+    println!("Equality check: {}", time_check_eq);
 
     circuit
 }
@@ -807,5 +850,61 @@ mod tests {
 
         // Assert that the permutation exists in at least one table
         assert!(found, "Permutation not found in any table!");
+    }
+    use std::fs;
+    #[test]
+    fn test_compression_big_time() {
+        let total_start = Instant::now();
+
+        // // ---------- FIRST TEST ----------
+        // let t1_start = Instant::now();
+        // let n = 64;
+        // let str1 = "circuitQQF_64.txt";
+        // let data1 = fs::read_to_string(str1).expect("Failed to read circuitQQF_64.txt");
+        // let mut stable_count = 0;
+        // let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+        // let mut acc = CircuitSeq::from_string(&data1);
+        // while stable_count < 3 {
+        //     let before = acc.gates.len();
+        //     acc = compress_big(&acc, 1_000, n, &mut conn);
+        //     let after = acc.gates.len();
+
+        //     if after == before {
+        //         stable_count += 1;
+        //         println!("  Final compression stable {}/3 at {} gates", stable_count, after);
+        //     } else {
+        //         println!("  Final compression reduced: {} → {} gates", before, after);
+        //         stable_count = 0;
+        //     }
+        // }
+        // let t1_duration = t1_start.elapsed();
+        // println!(" First compression finished in {:.2?}", t1_duration);
+
+        // ---------- SECOND TEST ----------
+        let t2_start = Instant::now();
+        let str2 = "circuitOA_64.txt";
+        let data2 = fs::read_to_string(str2).expect("Failed to read circuitF.txt");
+        let mut stable_count = 0;
+        let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+        let mut acc = CircuitSeq::from_string(&data2);
+        while stable_count < 3 {
+            let before = acc.gates.len();
+            acc = compress_big(&acc, 1_000, 64, &mut conn);
+            let after = acc.gates.len();
+
+            if after == before {
+                stable_count += 1;
+                println!("  Final compression stable {}/3 at {} gates", stable_count, after);
+            } else {
+                println!("  Final compression reduced: {} → {} gates", before, after);
+                stable_count = 0;
+            }
+        }
+        let t2_duration = t2_start.elapsed();
+        println!(" Second compression finished in {:.2?}", t2_duration);
+
+        // ---------- TOTAL ----------
+        let total_duration = total_start.elapsed();
+        println!(" Total test duration: {:.2?}", total_duration);
     }
 }
