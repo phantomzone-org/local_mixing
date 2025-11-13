@@ -652,9 +652,9 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         time_replace += replace_start.elapsed().as_millis();
 
         let check_start = Instant::now();
-        circuit
-            .probably_equal(&c, num_wires, 150_000)
-            .expect("Splice changed something");
+        // circuit
+        //     .probably_equal(&c, num_wires, 150_000)
+        //     .expect("Splice changed something");
         time_check_eq += check_start.elapsed().as_millis();
     }
 

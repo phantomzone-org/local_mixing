@@ -237,7 +237,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
 ) -> (Vec<usize>, usize) {
     let num_gates = circuit.gates.len();
     let mut search_attempts = 0;
-    let max_attempts = 10_000;
+    let max_attempts = 10;
 
     loop {
         search_attempts += 1;
