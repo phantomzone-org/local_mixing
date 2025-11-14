@@ -1447,7 +1447,7 @@ mod tests {
         // Compare (example)
         println!(
             "Are they equal? {}",
-            old.permutation(16) == new.permutation(16)
+            old.probably_equal(&new,64,100000).is_ok()
         );
     }
     use std::time::Instant;
