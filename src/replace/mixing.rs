@@ -299,7 +299,8 @@ pub fn butterfly_big(
     // Pick one random R
     let mut rng = rand::rng();
     let (r, r_inv) = random_id(n as u8, rng.random_range(50..=100)); 
-
+    let mut c = c.clone();
+    shoot_random_gate(&mut c, 500_000);
     println!("Butterfly start: {} gates", c.gates.len());
 
     let r = &r;           // reference is enough; read-only
@@ -311,7 +312,8 @@ pub fn butterfly_big(
         .enumerate()
         .map(|(i, &g)| {
             // wrap single gate as CircuitSeq
-            let gi = r_inv.concat(&CircuitSeq { gates: vec![g] }).concat(&r);
+            let mut gi = r_inv.concat(&CircuitSeq { gates: vec![g] }).concat(&r);
+            shoot_random_gate(&mut gi, 1_000);
             // create a read-only connection per thread
             let mut conn = Connection::open_with_flags(
             "circuits.db",
@@ -338,7 +340,7 @@ pub fn butterfly_big(
             i, before_len, after_len, color_line
         );
 
-        println!("  {}", compressed_block.repr());
+        // println!("  {}", compressed_block.repr());
 
         compressed_block
     })
