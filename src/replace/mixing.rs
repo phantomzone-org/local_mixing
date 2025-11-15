@@ -493,7 +493,7 @@ pub fn abutterfly_big_delay_bookends(
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
     let mut c = c.clone();
     // let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(20..=100));
-    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(20..=30));
+    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(50..=150));
     let mut prev_r_inv = first_r_inv.clone();
     shoot_random_gate(&mut c, 100_000);
     for &g in &c.gates {
