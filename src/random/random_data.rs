@@ -1644,5 +1644,4 @@ mod tests {
         file.write_all(id.as_bytes())
             .expect("Failed to write to file");
     }
-
 }
