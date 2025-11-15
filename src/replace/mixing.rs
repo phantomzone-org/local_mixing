@@ -377,7 +377,7 @@ pub fn butterfly_big(
         let mut rng = rand::rng();
 
         let chunks = split_into_random_chunks(&acc.gates, k, &mut rng);
-
+        println!("{} Chuknks", chunks.len());
         let compressed_chunks: Vec<Vec<[u8;3]>> =
         chunks
             .into_par_iter()
