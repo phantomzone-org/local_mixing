@@ -382,6 +382,7 @@ pub fn butterfly_big(
         chunks
             .into_par_iter()
             .map(|chunk| {
+                println!("Inside block: rayon threads = {}", rayon::current_num_threads());
                 let sub = CircuitSeq { gates: chunk };
                 let mut thread_conn = Connection::open_with_flags(
                     "circuits.db",
