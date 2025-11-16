@@ -298,7 +298,7 @@ pub fn butterfly_big(
 ) -> CircuitSeq {
     // Pick one random R
     let mut rng = rand::rng();
-    let (r, r_inv) = random_id(n as u8, rng.random_range(50..=100)); 
+    let (r, r_inv) = random_id(n as u8, rng.random_range(150..=200)); 
     let mut c = c.clone();
     shoot_random_gate(&mut c, 500_000);
     println!("Butterfly start: {} gates", c.gates.len());
@@ -435,11 +435,11 @@ pub fn abutterfly_big(
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
     let mut c = c.clone();
     shoot_random_gate(&mut c, 500_000);
-    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(50..=100));
+    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(150..=200));
     let mut prev_r_inv = first_r_inv.clone();
     
     for &g in &c.gates {
-        let (r, r_inv) = random_id(n as u8, rng.random_range(50..=100));
+        let (r, r_inv) = random_id(n as u8, rng.random_range(150..=200));
         let mut block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
         shoot_random_gate(&mut block, 1_000);
         pre_blocks.push(block);
@@ -558,12 +558,12 @@ pub fn abutterfly_big_delay_bookends(
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
     let mut c = c.clone();
     // let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(20..=100));
-    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(50..=100));
+    let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(150..=200));
     let mut prev_r_inv = first_r_inv.clone();
     shoot_random_gate(&mut c, 100_000);
     for &g in &c.gates {
         // let (r, r_inv) = random_id(n as u8, rng.random_range(20..=100));
-        let (r, r_inv) = random_id(n as u8, rng.random_range(50..=100));
+        let (r, r_inv) = random_id(n as u8, rng.random_range(150..=200));
         let mut block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
         shoot_random_gate(&mut block, 1_000);
         pre_blocks.push(block);
