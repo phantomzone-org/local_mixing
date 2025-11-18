@@ -158,26 +158,17 @@ pub fn expand_m1(
         CKT_I.fetch_add(1, Ordering::Relaxed);
         c.canonicalize();
 
-        // skip if adjacent ID (should almost never happen for 1-gate circuits, but follow same rules)
-        if c.adjacent_id() {
-            SKIP_ID.fetch_add(1, Ordering::Relaxed);
-            continue;
-        }
-
         // compute permutation
         let p = c.permutation(n);
         let ph = p.repr_blob();
         let ip = p.invert().repr_blob();
         let own_inv = ph == ip;
 
-        if own_inv {
-            OWN_INV_COUNT.fetch_add(1, Ordering::Relaxed);
-        }
+        OWN_INV_COUNT.fetch_add(1, Ordering::Relaxed);
 
-        // skip if inverse already stored
         if !own_inv && circuit_store.contains_key(&ip) {
             SKIP_INV.fetch_add(1, Ordering::Relaxed);
-            continue;
+            continue
         }
 
         let mut entry = circuit_store
