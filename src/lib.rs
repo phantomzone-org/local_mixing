@@ -25,8 +25,8 @@ fn heatmap(py: Python<'_>, num_wires: usize, num_inputs: usize, flag: bool) -> P
 
     let mut circuit_one = CircuitSeq::from_string(circuit_one_str);
     let mut circuit_two = CircuitSeq::from_string(circuit_two_str);
-    // circuit_one.canonicalize();
-    // circuit_two.canonicalize();
+    circuit_one.canonicalize();
+    circuit_two.canonicalize();
     let circuit_one_len = circuit_one.gates.len();
     let circuit_two_len = circuit_two.gates.len();
 
