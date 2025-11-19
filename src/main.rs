@@ -517,7 +517,7 @@ fn main() {
             let mut conn = Connection::open_with_flags("./circuits.db",rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,)
             .expect("Failed to open ./circuits.db in read-only mode");
 
-            // Call your compression logic
+            // Call compression logic
             let compressed = compress_big(&expand_big(&circuit, r/100, n, &mut conn), r, n, &mut conn);
 
             let mut file = fs::File::create("compressed.txt")
