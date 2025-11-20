@@ -177,7 +177,6 @@ pub fn build_and_process_all(
             circuits_list
                 .par_iter()
                 .for_each(|circuit| {
-                    CKT_I.fetch_add(1, Ordering::Relaxed);
                     base_gates
                         .par_iter()
                         .for_each(|base_gate| {
@@ -196,6 +195,9 @@ pub fn build_and_process_all(
                             q2.canonicalize();
                             let c2_blob = q2.repr_blob();
                             let q2_blob = q2.permutation(n).repr_blob();
+
+                            CKT_I.fetch_add(2, Ordering::Relaxed);
+
                             {
                                 let mut entry = circuit_store
                                     .entry(q1_blob.clone())
@@ -233,32 +235,58 @@ fn save_circuit_store(n: usize, m: usize, circuit_store: &DashMap<Vec<u8>, HashS
     println!("Circuits that are own inverse: {}", OWN_INV_COUNT.load(Ordering::Relaxed));
 }
 
-/// Spawn a thread to track progress
 fn spawn_progress_tracker(total_circuits: i64, done: Arc<AtomicI64>) {
     thread::spawn(move || {
         let start = Instant::now();
-        let mut last_count = 0;
+
+        let mut last_ci = 0f64;
+        let mut last_time = start;
+
         loop {
             thread::sleep(Duration::from_secs(1));
-            if done.load(Ordering::Relaxed) != 0 { break }
+
+            if done.load(Ordering::SeqCst) != 0 {
+                break;
+            }
+
+            let ci = CKT_I.load(Ordering::SeqCst) as f64;
+            let now = Instant::now();
 
             let elapsed = start.elapsed().as_secs_f64();
-            let ci = CKT_I.load(Ordering::Relaxed) as f64;
-            if elapsed < 1.0 || ci < 10.0 || last_count == 0 { last_count = ci as i64; continue; }
+            let dt = now.duration_since(last_time).as_secs_f64();
+            last_time = now;
 
-            let kper_second = ci / elapsed / 1000.0;
-            let now_kper = (ci - last_count as f64) / 1000.0;
-            let eta = ((total_circuits as f64 - ci) / kper_second / 1000.0) as i32;
+            if elapsed < 0.5 {
+                continue;
+            }
+            
+            let inst_kps = if dt > 0.0 {
+                (ci - last_ci) / dt / 1000.0
+            } else {
+                0.0
+            };
+            last_ci = ci;
+
+            let avg_kps = if elapsed > 0.0 {
+                ci / elapsed / 1000.0
+            } else {
+                0.0
+            };
+
+            let rem = (total_circuits as f64 - ci).max(0.0);
+            let eta = if avg_kps > 1e-9 {
+                (rem / (avg_kps * 1000.0)) as i64
+            } else {
+                -1
+            };
 
             println!(
-                "@ {:.2}M circuits, now {:.2}k/s, avg {:.2}k/s ETA: {} sec",
+                "@ {:.2}M circuits | now {:.2}k/s | avg {:.2}k/s | ETA {}s",
                 ci / 1_000_000.0,
-                now_kper,
-                kper_second,
+                inst_kps,
+                avg_kps,
                 eta
             );
-
-            last_count = ci as i64;
         }
     });
 }
