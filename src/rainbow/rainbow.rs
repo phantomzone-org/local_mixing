@@ -288,7 +288,7 @@ pub fn main_rainbow_load(n: usize, m: usize, _load: &str) {
         let circuit_store: Arc<DashMap<Vec<u8>, Vec<Vec<u8>>>> = Arc::new(DashMap::new());
         let done = Arc::new(AtomicI64::new(0));
 
-        expand_m1(n, &circuit_store);
+        // expand_m1(n, &circuit_store);
 
         done.store(1, Ordering::Relaxed);
 
