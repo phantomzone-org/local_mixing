@@ -290,7 +290,7 @@ pub fn main_rainbow_load(n: usize, m: usize, _load: &str) {
 
         spawn_progress_tracker(total_circuits, Arc::clone(&done));
 
-        build_and_process_all(&store_arc, &circuit_store, base_gates);
+        build_and_process_all(n, &store_arc, &circuit_store, base_gates);
 
         done.store(1, Ordering::Relaxed);
 
