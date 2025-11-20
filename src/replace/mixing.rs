@@ -385,6 +385,17 @@ pub fn butterfly_big(
     // Final global compression (until stable 3x)
     let mut stable_count = 0;
     while stable_count < 3 {
+        let mut milestone = initial_milestone(acc.gates.len());
+        if acc.gates.len() <= milestone {
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("bcircuitlist.txt")
+                .expect("Could not open bcircuitlist.txt");
+
+            writeln!(f, "{}", acc.repr()).unwrap();
+            milestone = next_milestone(milestone);
+        }
         let before = acc.gates.len();
 
         let k = if before > 10_000 {
@@ -532,7 +543,7 @@ pub fn abutterfly_big(
             writeln!(f, "{}", acc.repr()).unwrap();
             milestone = next_milestone(milestone);
         }
-        
+
         let before = acc.gates.len();
 
         let k = if before > 10_000 {
