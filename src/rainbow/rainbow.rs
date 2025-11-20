@@ -177,6 +177,7 @@ pub fn build_and_process_all(
             circuits_list
                 .par_iter()
                 .for_each(|circuit| {
+                    CKT_I.fetch_add(1, Ordering::Relaxed);
                     base_gates
                         .par_iter()
                         .for_each(|base_gate| {
