@@ -231,7 +231,7 @@ fn save_circuit_store(n: usize, m: usize, circuit_store: &DashMap<Vec<u8>, HashS
             v.clone(),
         );
     }
-    Persist::save(n, m, &save_map);
+    Persist::save(n, m, save_map);
 
     println!("Canonical perms stored: {}", circuit_store.len());
     println!("Total circuits checked: {}", CKT_CHECK.load(Ordering::Relaxed));

@@ -23,14 +23,14 @@ pub struct Persist {
 }
 
 impl Persist {
-    pub fn save(n: usize, m: usize, store: &HashMap<Vec<u8>, HashSet<Vec<u8>>>) {
+    pub fn save(n: usize, m: usize, store: HashMap<Vec<u8>, HashSet<Vec<u8>>>) {
         let file = File::create(format!("./db/n{}m{}.bin", n, m))
             .expect("Failed to create file");
         let writer = BufWriter::new(file);
         let persist = Persist {
             wires: n,
             gates: m,
-            store: store.clone(),
+            store: store,
         };
         bincode::serialize_into(writer, &persist)
             .expect("Failed to serialize Persist");
