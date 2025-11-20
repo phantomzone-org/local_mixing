@@ -186,7 +186,9 @@ pub fn build_and_process_all(
                             let mut q1 = CircuitSeq::from_blob(&prepend_version);
                             q1.canonicalize();
                             let c1_blob = q1.repr_blob();
-                            let q1_blob = q1.permutation(n).repr_blob(); 
+                            let q1_perm = q1.permutation(n);
+                            let q1_blob = q1_perm.repr_blob();
+                            let q1_inv_blob = q1_perm.invert().repr_blob();
 
                             let mut append_version = Vec::with_capacity(circuit.len() + 3);
                             append_version.extend_from_slice(circuit);
@@ -194,10 +196,12 @@ pub fn build_and_process_all(
                             let mut q2 = CircuitSeq::from_blob(&append_version);
                             q2.canonicalize();
                             let c2_blob = q2.repr_blob();
-                            let q2_blob = q2.permutation(n).repr_blob();
+                            let q2_perm = q2.permutation(n);
+                            let q2_blob= q2_perm.repr_blob();
+                            let q2_inv_blob = q2_perm.invert().repr_blob();
 
                             CKT_I.fetch_add(2, Ordering::Relaxed);
-                            if !q1.adjacent_id()
+                            if !q1.adjacent_id() && !circuit_store.contains_key(&q1_inv_blob)
                             {
                                 let mut entry = circuit_store
                                     .entry(q1_blob.clone())
@@ -205,7 +209,7 @@ pub fn build_and_process_all(
                                 entry.insert(c1_blob);
                             }
 
-                            if !q2.adjacent_id()
+                            if !q2.adjacent_id() && !circuit_store.contains_key(&q2_inv_blob)
                             {
                                 let mut entry = circuit_store
                                     .entry(q2_blob.clone())
