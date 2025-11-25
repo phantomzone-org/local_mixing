@@ -64,6 +64,7 @@ if __name__ == "__main__":
     parser.add_argument("--c1", type=str, required=False, help="Path to first circuit file")
     parser.add_argument("--c2", type=str, required=False, help="Path to second circuit file")
     parser.add_argument("--chunk", type=int, default=10_000, help="Size of each chunk (default 10000)")
+    parser.add_argument("--path", type=str, default="./heatmap.png", help="Path to the heatmap generation")
     args = parser.parse_args()
 
     flag = False
@@ -89,7 +90,7 @@ if __name__ == "__main__":
                     args.n, args.i, flag, x_start, x_end, y_start, y_end, args.c1, args.c2
                 )
 
-                output_dir = "./heatmap_pieces"
+                output_dir = args.path
                 os.makedirs(output_dir, exist_ok=True)
                 output_path = os.path.join(
                     output_dir, f"heatmap_x{x_start}-{x_end}_y{y_start}-{y_end}.png"
@@ -100,7 +101,7 @@ if __name__ == "__main__":
 
     else:
         print("Generating full heatmap...")
-        results = heatmap_rust.heatmap(args.n, args.i, flag)
-        output = "./heatmap.png"
+        results = heatmap_rust.heatmap(args.n, args.i, flag, args.c1, args.c2)
+        output = args.path
         plot_heatmap(results, output, xlabel=args.x, ylabel=args.y)
         print(f"Heatmap saved to {output}")
