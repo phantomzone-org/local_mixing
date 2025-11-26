@@ -15,12 +15,16 @@ use std::sync::{
     Arc,
     atomic::{AtomicI64, Ordering},
 };
+use std::io::Write;
 use std::thread;
 use std::time::{Duration, Instant};
 use crate::random::random_data::base_gates;
 use smallvec::SmallVec;
 use dashmap::DashSet;
 use crate::fs;
+use std::fs::File;
+use std::io::BufWriter;
+use std::io::BufReader;
 
 // PR struct
 #[derive(Clone)]
@@ -228,49 +232,44 @@ pub fn save_circuit_store(
     n: usize,
     m: usize,
     store: Arc<DashMap<Vec<u8>, HashSet<Vec<u8>>>>,
-)
-{
-    let dir = format!("persistn{n}m{m}");
-    fs::create_dir_all(&dir).unwrap();
+) {
+    let path = format!("persistn{n}m{m}.bin");
+    let file = File::create(&path).unwrap();
+    let mut writer = BufWriter::new(file);
 
-    let keys: Vec<Vec<u8>> = store
-        .iter()
-        .map(|entry| entry.key().clone())
-        .collect();
-
-    keys.into_par_iter().for_each(|key| {
+    let keys: Vec<Vec<u8>> = store.iter().map(|r| r.key().clone()).collect();
+    for key in keys {
         if let Some((k, v)) = store.remove(&key) {
-            let path = format!("{}/{}", &dir, hex::encode(&k));
-            let encoded = bincode::serialize(&v).unwrap();
-            std::fs::write(path, encoded).unwrap();
+            bincode::serialize_into(&mut writer, &(k, v)).unwrap();
         }
-    });
-
-    drop(store);
-
-    let mut result = HashMap::new();
-
-    for entry in fs::read_dir(&dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-
-        let key_hex = entry.file_name().into_string().unwrap();
-        let key = hex::decode(&key_hex).unwrap();
-
-        let data = std::fs::read(path).unwrap();
-        let val: HashSet<Vec<u8>> = bincode::deserialize(&data).unwrap();
-
-        result.insert(key, val);
     }
 
-    fs::remove_dir_all(&dir).unwrap();
+    drop(store);
+    writer.flush().unwrap();
 
-    println!("Canonical perms stored: {}", result.len());
-    println!("Total circuits checked: {}", CKT_CHECK.load(Ordering::Relaxed));
-    println!("Skipped trivial ID circuits: {}", SKIP_ID.load(Ordering::Relaxed));
-    println!("Skipped inverse circuits: {}", SKIP_INV.load(Ordering::Relaxed));
-    println!("Circuits that are own inverse: {}", OWN_INV_COUNT.load(Ordering::Relaxed));
+    let file = File::open(&path).unwrap();
+    let mut reader = BufReader::new(file);
+    let mut result = HashMap::new();
 
+    loop {
+        match bincode::deserialize_from::<_, (Vec<u8>, HashSet<Vec<u8>>)>(&mut reader) {
+            Ok((k, v)) => {
+                result.insert(k, v);
+            }
+            Err(e) => {
+                if let bincode::ErrorKind::Io(ref io_err) = *e {
+                    if io_err.kind() == std::io::ErrorKind::UnexpectedEof {
+                        break;
+                    }
+                }
+                panic!("Deserialization error: {:?}", e);
+            }
+        }
+    }
+
+    std::fs::remove_file(&path).unwrap();
+
+    println!("Loaded {} entries", result.len());
     Persist::save(n, m, result);
 }
 
