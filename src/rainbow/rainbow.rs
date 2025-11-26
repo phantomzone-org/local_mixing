@@ -20,6 +20,8 @@ use std::time::{Duration, Instant};
 use crate::random::random_data::base_gates;
 use smallvec::SmallVec;
 use dashmap::DashSet;
+use crate::fs;
+
 // PR struct
 #[derive(Clone)]
 pub struct PR {
@@ -222,22 +224,54 @@ pub fn build_and_process_all(
 }
 
 /// Convert DashMap into HashMap and save
-fn save_circuit_store(n: usize, m: usize, circuit_store: &DashMap<Vec<u8>, HashSet<Vec<u8>>>) {
-    let mut save_map = HashMap::new();
-    for r in circuit_store.iter() {
-        let v = r.value();
-        save_map.insert(
-            r.key().clone(),
-            v.clone(),
-        );
-    }
-    Persist::save(n, m, save_map);
+pub fn save_circuit_store(
+    n: usize,
+    m: usize,
+    store: Arc<DashMap<Vec<u8>, HashSet<Vec<u8>>>>,
+)
+{
+    let dir = format!("persistn{n}m{m}");
+    fs::create_dir_all(&dir).unwrap();
 
-    println!("Canonical perms stored: {}", circuit_store.len());
+    let keys: Vec<Vec<u8>> = store
+        .iter()
+        .map(|entry| entry.key().clone())
+        .collect();
+
+    keys.into_par_iter().for_each(|key| {
+        if let Some((k, v)) = store.remove(&key) {
+            let path = format!("{}/{}", &dir, hex::encode(&k));
+            let encoded = bincode::serialize(&v).unwrap();
+            std::fs::write(path, encoded).unwrap();
+        }
+    });
+
+    drop(store);
+
+    let mut result = HashMap::new();
+
+    for entry in fs::read_dir(&dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+
+        let key_hex = entry.file_name().into_string().unwrap();
+        let key = hex::decode(&key_hex).unwrap();
+
+        let data = std::fs::read(path).unwrap();
+        let val: HashSet<Vec<u8>> = bincode::deserialize(&data).unwrap();
+
+        result.insert(key, val);
+    }
+
+    fs::remove_dir_all(&dir).unwrap();
+
+    println!("Canonical perms stored: {}", result.len());
     println!("Total circuits checked: {}", CKT_CHECK.load(Ordering::Relaxed));
     println!("Skipped trivial ID circuits: {}", SKIP_ID.load(Ordering::Relaxed));
     println!("Skipped inverse circuits: {}", SKIP_INV.load(Ordering::Relaxed));
     println!("Circuits that are own inverse: {}", OWN_INV_COUNT.load(Ordering::Relaxed));
+
+    Persist::save(n, m, result);
 }
 
 fn spawn_progress_tracker(total_circuits: i64, done: Arc<AtomicI64>) {
@@ -312,7 +346,7 @@ pub fn main_rainbow_load(n: usize, m: usize, _load: &str) {
 
         done.store(1, Ordering::Relaxed);
 
-        save_circuit_store(n, m, &circuit_store);
+        save_circuit_store(n, m, circuit_store);
     } else {
         let store = Persist::load(n, m);
         let store_arc = Arc::new(store);
@@ -328,6 +362,6 @@ pub fn main_rainbow_load(n: usize, m: usize, _load: &str) {
 
         done.store(1, Ordering::Relaxed);
 
-        save_circuit_store(n, m, &circuit_store);
+        save_circuit_store(n, m, circuit_store);
     }
 }

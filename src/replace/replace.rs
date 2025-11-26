@@ -4,8 +4,9 @@ use crate::{
         contiguous_convex, find_convex_subcircuit, get_canonical, 
         random_circuit,
     },
+    rainbow::Persist
 };
-
+use rand::prelude::IteratorRandom;
 use itertools::Itertools;
 use rand::{Rng};
 use rusqlite::{Connection};
@@ -683,6 +684,93 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
     circuit
 }
 
+pub fn compress_bin(
+    c: &CircuitSeq,
+    trials: usize,
+    bit_shuf: &Vec<Vec<usize>>,
+    n: usize,
+) -> CircuitSeq {
+
+    let id = Permutation::id_perm(n);
+    if c.permutation(n) == id {
+        return CircuitSeq { gates: Vec::new() };
+    }
+
+    let mut compressed = c.clone();
+    if compressed.gates.is_empty() {
+        return CircuitSeq { gates: Vec::new() };
+    }
+
+    let mut i = 0;
+    while i < compressed.gates.len().saturating_sub(1) {
+        if compressed.gates[i] == compressed.gates[i + 1] {
+            compressed.gates.drain(i..=i + 1);
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
+        }
+    }
+
+    if compressed.gates.is_empty() {
+        return CircuitSeq { gates: Vec::new() };
+    }
+
+    // Main loop
+    for _ in 0..trials {
+        let (mut subcircuit, start, end) = random_subcircuit(&compressed);
+
+        subcircuit.canonicalize();
+
+        let sub_perm = subcircuit.permutation(n);
+        let canon_perm = get_canonical(&sub_perm, &bit_shuf);
+
+        let perm_blob = canon_perm.perm.repr_blob();
+        let sub_m = subcircuit.gates.len();
+
+        for smaller_m in 1..=sub_m {
+            let list = Persist::load(n, smaller_m);
+
+            if let Some(rows) = list.get(&perm_blob) {
+                if let Some(blob) = rows.iter().choose(&mut rand::rng()) {
+
+                    let mut repl = CircuitSeq::from_blob(blob);
+
+                    if repl.gates.len() <= subcircuit.gates.len() {
+                        let repl_perm = repl.permutation(n);
+                        let rc = get_canonical(&repl_perm, &bit_shuf);
+
+                        if !rc.shuffle.data.is_empty() {
+                            repl.rewire(&rc.shuffle, n);
+                        }
+                        repl.rewire(&canon_perm.shuffle.invert(), n);
+
+                        if repl.permutation(n) != sub_perm {
+                            panic!("Replacement permutation mismatch!");
+                        }
+
+                        compressed.gates.splice(start..end, repl.gates);
+                        break;
+                    }
+                }
+            }
+        }
+
+    }
+
+    // // Final cleanup
+    let mut i = 0;
+    while i < compressed.gates.len().saturating_sub(1) {
+        if compressed.gates[i] == compressed.gates[i + 1] {
+            compressed.gates.drain(i..=i + 1);
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
+        }
+    }
+
+    compressed
+}
+
 pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
@@ -703,7 +791,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         }
 
         if subcircuit_gates.is_empty() {
-            return circuit;
+            return circuit
         }
         
         let mut gates: Vec<[u8;3]> = vec![[0,0,0]; subcircuit_gates.len()];
