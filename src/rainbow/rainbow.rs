@@ -238,15 +238,16 @@ pub fn save_circuit_store(
     let mut writer = std::io::BufWriter::new(
         std::fs::File::create(&path).unwrap()
     );
-
+    let mut circuit_count: usize = 0;
     let keys: Vec<Vec<u8>> = store.iter().map(|r| r.key().clone()).collect();
 
     for key in keys {
         if let Some((k, v)) = store.remove(&key) {
+            circuit_count += v.len();
             bincode::serialize_into(&mut writer, &(k, v)).unwrap();
         }
     }
-
+    println!("{} Circuits added", circuit_count);
     writer.flush().unwrap();
     drop(store); // free memory
 }
