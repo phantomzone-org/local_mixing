@@ -37,25 +37,36 @@ impl Persist {
     }
 
     //correctly loads the file for m-1 db
-    pub fn load(n: usize, m: usize) -> HashMap<Vec<u8>, Vec<Vec<u8>>> {
-        let filename = format!("./db/n{}m{}.bin", n, m - 1);
+    pub fn load(
+        n: usize,
+        m: usize,
+    ) -> HashMap<Vec<u8>, Vec<Vec<u8>>> {
+        let path = format!("./db/n{n}m{m}.bin");
+        let mut reader = std::io::BufReader::new(
+            std::fs::File::open(&path).unwrap()
+        );
 
-        let file = File::open(&filename)
-            .unwrap_or_else(|_| panic!("Failed to open file: {}", filename));
-        let reader = BufReader::new(file);
+        let mut map = HashMap::new();
 
-        let persist: Persist = bincode::deserialize_from(reader)
-            .expect("Failed to deserialize Persist");
-
-        if persist.gates != m - 1 || persist.wires != n {
-            panic!(
-                "Database size does not match: load has n={}, m={}; requested n={}, m={}",
-                persist.wires, persist.gates, n, m
-            );
+        loop {
+            match bincode::deserialize_from::<_, (Vec<u8>, Vec<Vec<u8>>)>(&mut reader) {
+                Ok((k, v)) => {
+                    map.insert(k, v);
+                }
+                Err(e) => {
+                    if let bincode::ErrorKind::Io(ref io_err) = *e {
+                        if io_err.kind() == std::io::ErrorKind::UnexpectedEof {
+                            break;
+                        }
+                    }
+                    panic!("Deserialization error: {:?}", e);
+                }
+            }
         }
 
-        persist.store
+        map
     }
+
 }
 
 pub fn make_persist(perm: Permutation, circuits: HashMap<Vec<u8>, bool>, count: usize) -> PersistPermStore {

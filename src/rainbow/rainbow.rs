@@ -228,23 +228,27 @@ pub fn build_and_process_all(
         });
 }
 
-/// Convert DashMap into HashMap and save
+/// store the dashmap 
 pub fn save_circuit_store(
     n: usize,
     m: usize,
     store: Arc<DashMap<Vec<u8>, Vec<Vec<u8>>>>,
 ) {
+    let path = format!("./db/n{n}m{m}.bin");
+    let mut writer = std::io::BufWriter::new(
+        std::fs::File::create(&path).unwrap()
+    );
+
     let keys: Vec<Vec<u8>> = store.iter().map(|r| r.key().clone()).collect();
 
-    let result: HashMap<Vec<u8>, Vec<Vec<u8>>> = keys
-        .into_par_iter()
-        .filter_map(|key| store.remove(&key))
-        .collect();
+    for key in keys {
+        if let Some((k, v)) = store.remove(&key) {
+            bincode::serialize_into(&mut writer, &(k, v)).unwrap();
+        }
+    }
 
-    drop(store);
-
-    println!("Loaded {} entries", result.len());
-    Persist::save(n, m, result);
+    writer.flush().unwrap();
+    drop(store); // free memory
 }
 
 fn spawn_progress_tracker(total_circuits: i64, done: Arc<AtomicI64>) {
