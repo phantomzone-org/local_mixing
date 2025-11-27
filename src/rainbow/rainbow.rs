@@ -209,7 +209,7 @@ pub fn build_and_process_all(
                             CKT_I.fetch_add(2, Ordering::Relaxed);
                             if !q1.adjacent_id() && !circuit_store.contains_key(&q1_inv_blob)
                             {
-                                let mut entry = circuit_store.entry(q2_blob.clone()).or_insert(Vec::new());
+                                let mut entry = circuit_store.entry(q1_blob.clone()).or_insert(Vec::new());
 
                                 if !entry.iter().any(|v| *v == c2_blob) {
                                     entry.push(c1_blob);
