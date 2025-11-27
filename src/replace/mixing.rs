@@ -174,122 +174,164 @@ pub fn butterfly(
 }
 
 // TODO change this so its faster. just do less merging
-fn merge_combine_blocks(
-    blocks: &[CircuitSeq],
-    n: usize,
-    db_path: &str,
-    progress: &Arc<AtomicUsize>,
-    total: usize,
-) -> CircuitSeq {
-    if blocks.is_empty() {
-        return CircuitSeq { gates: vec![] };
-    }
-    if blocks.len() == 1 {
-        let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
-        if done % 10 == 0 || done == total {
-            println!("Progress: {}/{}", done, total);
-        }
-        return blocks[0].clone();
-    }
-
-    let mid = blocks.len() / 2;
-
-    let (left, right) = rayon::join(
-        || merge_combine_blocks(&blocks[..mid], n, db_path, progress, total),
-        || merge_combine_blocks(&blocks[mid..], n, db_path, progress, total),
-    );
-
-    let mut conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .expect("Failed to open read-only DB");
-
-    let combined = left.concat(&right);
-    // shoot_random_gate(&mut combined, 100_000);
-    
-    let acc = compress_big(&combined, 200, n, &mut conn);
-
-    let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
-    if done % 10 == 0 || done == total {
-        println!("Progress: {}/{}", done, total);
-    }
-
-    acc
-}
-
-// pub fn merge_combine_blocks(
+// fn merge_combine_blocks(
 //     blocks: &[CircuitSeq],
 //     n: usize,
 //     db_path: &str,
 //     progress: &Arc<AtomicUsize>,
+//     total: usize,
 // ) -> CircuitSeq {
-//     println!("Phase 1: Pairwise merge");
-//     let total_1 = (blocks.len()+1)/2;
-//     let pairs: Vec<CircuitSeq> = blocks
-//         .par_chunks(2)
-//         .map(|chunk| {
-//             let mut conn = Connection::open_with_flags(
-//                 db_path,
-//                 OpenFlags::SQLITE_OPEN_READ_ONLY,
-//             )
-//             .expect("Failed to open DB");
-
-//             let combined = if chunk.len() == 2 {
-//                 chunk[0].concat(&chunk[1])
-//             } else {
-//                 chunk[0].clone()
-//             };
-
-//             let compressed = compress_big(&combined, 30, n, &mut conn);
-
-//             let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
-//             if done % 10 == 0 {
-//                 println!("Phase 1 progress: {}/{}", done, total_1);
-//             }
-
-//             compressed
-//         })
-//         .collect();
-
-//     println!("Phase 2: 4-way merge");
-//     progress.store(0, Ordering::Relaxed);
-//     let chunk_size = (pairs.len() + 3) / 4;
-//     let phase2_results: Vec<CircuitSeq> = pairs
-//         .par_chunks(chunk_size)
-//         .map(|chunk| {
-//             let mut conn = Connection::open_with_flags(
-//                 db_path,
-//                 OpenFlags::SQLITE_OPEN_READ_ONLY,
-//             )
-//             .expect("Failed to open DB");
-
-//             let mut combined = CircuitSeq { gates: vec![] };
-//             for block in chunk {
-//                 combined = combined.concat(block);
-//             }
-
-//             let compressed = compress_big(&combined, 100, n, &mut conn);
-
-//             let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
-//             println!("Phase 2 partial done: {}/4", done);
-
-//             compressed
-//         })
-//         .collect();
-
-//     println!("Phase 3: Final merge");
-//     // Final combination and compression
-//     let mut conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-//         .expect("Failed to open DB");
-
-//     let mut final_combined = CircuitSeq { gates: vec![] };
-//     for part in phase2_results {
-//         final_combined = final_combined.concat(&part);
+//     if blocks.is_empty() {
+//         return CircuitSeq { gates: vec![] };
+//     }
+//     if blocks.len() == 1 {
+//         let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
+//         if done % 10 == 0 || done == total {
+//             println!("Progress: {}/{}", done, total);
+//         }
+//         return blocks[0].clone();
 //     }
 
-//     let final_compressed = compress_big(&final_combined, 1000, n, &mut conn);
+//     let mid = blocks.len() / 2;
 
-//     println!("All phases complete");
-//     final_compressed
+//     let (left, right) = rayon::join(
+//         || merge_combine_blocks(&blocks[..mid], n, db_path, progress, total),
+//         || merge_combine_blocks(&blocks[mid..], n, db_path, progress, total),
+//     );
+
+//     let mut conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+//         .expect("Failed to open read-only DB");
+
+//     let combined = left.concat(&right);
+//     // shoot_random_gate(&mut combined, 100_000);
+    
+//     let acc = compress_big(&combined, 200, n, &mut conn);
+
+//     let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
+//     if done % 10 == 0 || done == total {
+//         println!("Progress: {}/{}", done, total);
+//     }
+
+//     acc
 // }
+
+pub fn merge_combine_blocks(
+    blocks: &[CircuitSeq],
+    n: usize,
+    db_path: &str,
+    progress: &Arc<AtomicUsize>,
+    _total: usize,
+) -> CircuitSeq {
+    println!("Phase 1: Pairwise merge");
+    let total_1 = (blocks.len()+1)/2;
+    let pairs: Vec<CircuitSeq> = blocks
+        .par_chunks(2)
+        .map(|chunk| {
+            let mut conn = Connection::open_with_flags(
+                db_path,
+                OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .expect("Failed to open DB");
+
+            let combined = if chunk.len() == 2 {
+                chunk[0].concat(&chunk[1])
+            } else {
+                chunk[0].clone()
+            };
+
+            let compressed = compress_big(&combined, 30, n, &mut conn);
+
+            let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
+            if done % 10 == 0 {
+                println!("Phase 1 progress: {}/{}", done, total_1);
+            }
+
+            compressed
+        })
+        .collect();
+
+    println!("Phase 2: Offset pairwise merge");
+
+    // Skip the first block
+    let mut phase2_blocks = Vec::new();
+    phase2_blocks.push(pairs[0].clone());
+
+    // Pair the rest starting from index 1
+    let rest = &pairs[1..];
+
+    let total_2 = (rest.len() + 1) / 2;
+    let progress2 = AtomicUsize::new(0);
+
+    let phase2_pairs: Vec<CircuitSeq> = rest
+        .par_chunks(2)
+        .map(|chunk| {
+            let mut conn = Connection::open_with_flags(
+                db_path,
+                OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .expect("Failed to open DB");
+
+            let combined = if chunk.len() == 2 {
+                chunk[0].concat(&chunk[1])
+            } else {
+                chunk[0].clone()
+            };
+
+            let compressed = compress_big(&combined, 30, n, &mut conn);
+
+            let done = progress2.fetch_add(1, Ordering::Relaxed) + 1;
+            if done % 10 == 0 {
+                println!("Phase 2 progress: {}/{}", done, total_2);
+            }
+
+            compressed
+        })
+        .collect();
+
+    // Prepend the untouched first block
+    phase2_blocks.extend(phase2_pairs);
+
+    println!("Phase 3: 4-way merge");
+    progress.store(0, Ordering::Relaxed);
+    let chunk_size = (pairs.len() + 3) / 4;
+    let phase2_results: Vec<CircuitSeq> = pairs
+        .par_chunks(chunk_size)
+        .map(|chunk| {
+            let mut conn = Connection::open_with_flags(
+                db_path,
+                OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .expect("Failed to open DB");
+
+            let mut combined = CircuitSeq { gates: vec![] };
+            for block in chunk {
+                combined = combined.concat(block);
+            }
+
+            let compressed = compress_big(&combined, 200, n, &mut conn);
+
+            let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
+            println!("Phase 2 partial done: {}/4", done);
+
+            compressed
+        })
+        .collect();
+
+    println!("Phase 4: Final merge");
+    // Final combination and compression
+    let mut conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .expect("Failed to open DB");
+
+    let mut final_combined = CircuitSeq { gates: vec![] };
+    for part in phase2_results {
+        final_combined = final_combined.concat(&part);
+    }
+
+    let final_compressed = compress_big(&final_combined, 1000, n, &mut conn);
+
+    println!("All phases complete");
+    final_compressed
+}
 
 fn initial_milestone(acc: usize) -> usize {
     if acc >= 10_000 {
@@ -597,7 +639,7 @@ pub fn abutterfly_big(
 
     println!("Compressed len: {}", acc.gates.len());
     println!("Butterfly done: {} gates", acc.gates.len());
-
+    crate::replace::replace::print_compress_timers();
     acc
 }
 
