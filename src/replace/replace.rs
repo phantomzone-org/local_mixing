@@ -18,6 +18,10 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use std::sync::atomic::AtomicU64;
+
+static PERMUTATION_TIME: AtomicU64 = AtomicU64::new(0);
+static SQL_LOOKUP_TIME: AtomicU64 = AtomicU64::new(0);
 
 // Returns a nontrivial identity circuit built from two "friend" circuits
 pub fn random_canonical_id(
@@ -220,7 +224,6 @@ pub fn compress(
     bit_shuf: &Vec<Vec<usize>>,
     n: usize,
 ) -> CircuitSeq {
-
     let id = Permutation::id_perm(n);
     if c.permutation(n) == id {
         return CircuitSeq { gates: Vec::new() };
@@ -231,6 +234,7 @@ pub fn compress(
         return CircuitSeq { gates: Vec::new() };
     }
 
+    // Collapse double gates
     let mut i = 0;
     while i < compressed.gates.len().saturating_sub(1) {
         if compressed.gates[i] == compressed.gates[i + 1] {
@@ -245,33 +249,66 @@ pub fn compress(
         return CircuitSeq { gates: Vec::new() };
     }
 
-    // Main loop
+    let max = match n {
+        8 => 3,
+        7 => 3,
+        6 => 4,
+        5 => 5,
+        4 => 6,
+        3 => 12,
+        _ => 0,
+    };
+
     for _ in 0..trials {
         let (mut subcircuit, start, end) = random_subcircuit(&compressed);
-
         subcircuit.canonicalize();
 
+        // !!!
         let sub_perm = subcircuit.permutation(n);
-        let canon_perm = get_canonical(&sub_perm, &bit_shuf);
 
-        let perm_blob = canon_perm.perm.repr_blob();
-        let sub_m = subcircuit.gates.len();
-        let max = if n == 8 {
-            3
-        } else if n == 7 {
-            3
-        } else if n == 6 {
-            4
-        } else if n == 5 {
-            5
-        } else if n == 4 {
-            6
-        } else if n == 3 {
-            12
+        let (perm_blob, shuf_blob) = if subcircuit.gates.len() <= max {
+            let table = format!("n{}m{}", n, subcircuit.gates.len());
+            let query = format!("SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1", table);
+
+            match conn.prepare(&query) {
+                Ok(mut stmt) => {
+                    match stmt.query([&subcircuit.repr_blob()]) {
+                        Ok(mut rows) => {
+                            match rows.next() {
+                                Ok(Some(row)) => {
+                                    // Found in database
+                                    let perm: Vec<u8> = row.get(0).unwrap();
+                                    let shuf: Vec<u8> = row.get(1).unwrap();
+                                    (perm, shuf)
+                                }
+                                Ok(None) => {
+                                    // Not found → compute canonical
+                                    let canon = get_canonical(&sub_perm, &bit_shuf);
+                                    (
+                                        canon.perm.repr_blob(),
+                                        canon.shuffle.repr_blob()
+                                    )
+                                }
+                                Err(_) => continue,
+                            }
+                        }
+                        Err(_) => continue,
+                    }
+                }
+                Err(_) => continue,
+            }
         } else {
-            0
+            let canon = get_canonical(&sub_perm, &bit_shuf);
+            (
+                canon.perm.repr_blob(),
+                canon.shuffle.repr_blob(),
+            )
         };
-        let min = min(max, sub_m);
+
+        let sub_m = subcircuit.gates.len();
+        let min = sub_m.min(max);
+
+        // Try replacing with smaller circuits
         for smaller_m in 1..=min {
             let table = format!("n{}m{}", n, smaller_m);
             let query = format!(
@@ -283,37 +320,39 @@ pub fn compress(
                 Ok(s) => s,
                 Err(_) => continue,
             };
-            let rows = stmt.query([&perm_blob]);
 
+            let rows = stmt.query([&perm_blob]);
             if let Ok(mut r) = rows {
-                if let Some(row) = r.next().unwrap() {
-                    let blob: Vec<u8> = row.get(0).expect("Failed to get blob");
+                if let Ok(Some(row)) = r.next() {
+                    let blob: Vec<u8> = row.get(0).unwrap();
                     let mut repl = CircuitSeq::from_blob(&blob);
 
                     if repl.gates.len() <= subcircuit.gates.len() {
+                        // !!!
                         let repl_perm = repl.permutation(n);
                         let rc = get_canonical(&repl_perm, &bit_shuf);
 
                         if !rc.shuffle.data.is_empty() {
                             repl.rewire(&rc.shuffle, n);
                         }
-                        repl.rewire(&canon_perm.shuffle.invert(), n);
 
+                        let inv = Permutation::from_blob(&shuf_blob).invert();
+                        repl.rewire(&inv, n);
+
+                        // !!!
                         if repl.permutation(n) != sub_perm {
                             panic!("Replacement permutation mismatch!");
                         }
 
                         compressed.gates.splice(start..end, repl.gates);
-
                         break;
                     }
                 }
             }
         }
-
     }
 
-    // // Final cleanup
+    // Final cleanup
     let mut i = 0;
     while i < compressed.gates.len().saturating_sub(1) {
         if compressed.gates[i] == compressed.gates[i + 1] {
