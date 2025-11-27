@@ -41,7 +41,7 @@ impl Persist {
         n: usize,
         m: usize,
     ) -> HashMap<Vec<u8>, Vec<Vec<u8>>> {
-        let path = format!("./db/n{n}m{m}.bin");
+        let path = format!("./db/n{n}m{}.bin", m-1);
         let mut reader = std::io::BufReader::new(
             std::fs::File::open(&path).unwrap()
         );
