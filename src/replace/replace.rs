@@ -4,7 +4,8 @@ use crate::{
         contiguous_convex, find_convex_subcircuit, get_canonical, 
         random_circuit,
     },
-    rainbow::Persist
+    rainbow::Persist,
+    rainbow::canonical::Canonicalization
 };
 use rand::prelude::IteratorRandom;
 use itertools::Itertools;
@@ -261,21 +262,23 @@ pub fn compress(
         let (mut subcircuit, start, end) = random_subcircuit(&compressed);
         subcircuit.canonicalize();
 
-        let t1 = Instant::now();
-        let sub_perm = subcircuit.permutation(n);
-        PERMUTATION_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        let max = if n == 7 {
+            4
+        } else if n == 5 || n == 6 {
+            5
+        } else if n == 4 {
+            6
+        } else {
+            12
+        };
 
-        let t2 = Instant::now();
-        let canon_perm = get_canonical(&sub_perm, bit_shuf);
-        CANON_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-        let perm_blob = canon_perm.perm.repr_blob();
         let sub_m = subcircuit.gates.len();
-
-        for smaller_m in 1..=sub_m {
-            let table = format!("n{}m{}", n, smaller_m);
+        let min = min(sub_m, max);
+        
+        let (canon_perm_blob, canon_shuf_blob) = if subcircuit.gates.len() <= max && n == 7{
+            let table = format!("n{}m{}", n, min);
             let query = format!(
-                "SELECT circuit FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1",
+                "SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1",
                 table
             );
 
@@ -284,7 +287,52 @@ pub fn compress(
                 Ok(s) => s,
                 Err(_) => continue,
             };
-            let rows = stmt.query([&perm_blob]);
+            let rows = stmt.query([&subcircuit.repr_blob()]);
+            SQL_TIME.fetch_add(sql_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+            let mut r = match rows {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+
+            if let Some(row_result) = r.next().unwrap() {
+                
+                (row_result
+                    .get(0)
+                    .expect("Failed to get blob"),
+                row_result
+                    .get(1)
+                    .expect("Failed to get blob"))
+                
+            } else {
+                continue
+            }
+
+        } else {
+            let t1 = Instant::now();
+            let sub_perm = subcircuit.permutation(n);
+            PERMUTATION_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+            let t2 = Instant::now();
+            let canon_perm = get_canonical(&sub_perm, bit_shuf);
+            CANON_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+            (canon_perm.perm.repr_blob(), canon_perm.shuffle.repr_blob())
+        };
+
+        for smaller_m in 1..=sub_m {
+            let table = format!("n{}m{}", n, smaller_m);
+            let query = format!(
+                "SELECT * FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1",
+                table
+            );
+
+            let sql_t0 = Instant::now();
+            let mut stmt = match conn.prepare(&query) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let rows = stmt.query([&canon_perm_blob]);
             SQL_TIME.fetch_add(sql_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
             let mut r = match rows {
@@ -298,24 +346,29 @@ pub fn compress(
                     .expect("Failed to get blob");
                 let mut repl = CircuitSeq::from_blob(&blob);
 
-                if repl.gates.len() <= subcircuit.gates.len() {
-                    let t3 = Instant::now();
-                    let repl_perm = repl.permutation(n);
-                    PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                let repl_perm: Vec<u8> = row_result
+                    .get(1)
+                    .expect("Failed to get blob");
 
-                    let t4 = Instant::now();
-                    let rc = get_canonical(&repl_perm, bit_shuf);
-                    CANON_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                let repl_shuf: Vec<u8> = row_result
+                    .get(2)
+                    .expect("Failed to get blob");
+
+                if repl.gates.len() <= subcircuit.gates.len() {
+                    let rc = Canonicalization { perm: Permutation::from_blob(&repl_perm), shuffle: Permutation::from_blob(&repl_shuf) };
 
                     if !rc.shuffle.data.is_empty() {
                         repl.rewire(&rc.shuffle, n);
                     }
-
-                    repl.rewire(&canon_perm.shuffle.invert(), n);
+                    
+                    // TODO: !!! Fix all of this
+                    repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
 
                     let t5 = Instant::now();
                     let final_check = repl.permutation(n);
                     PERMUTATION_TIME.fetch_add(t5.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+                    let sub_perm = Permutation::from_blob(&canon_perm_blob).compose(&Permutation::from_blob(&canon_shuf_blob).invert());
 
                     if final_check != sub_perm {
                         panic!("Replacement permutation mismatch!");
@@ -601,11 +654,14 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
 
         // let convex_find_start = Instant::now();
         for set_size in (3..=20).rev() {
-            let random_max_wires = rng.random_range(3..=6);
+            let random_max_wires = rng.random_range(3..=7);
             let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
             if !gates.is_empty() {
                 subcircuit_gates = gates;
                 break;
+            }
+            if set_size >= 16 {
+                println!("Found {}", set_size);
             }
         }
         // time_convex_find += convex_find_start.elapsed().as_millis();
