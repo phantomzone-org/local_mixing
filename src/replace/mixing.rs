@@ -965,9 +965,9 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     for i in 0..rounds {
         let stop = 1000;
         circuit = if asymmetric {
-            abutterfly_big(&circuit, conn, n, i != rounds-1, stop)
+            abutterfly_big(&circuit, conn, n, i != rounds-1, stop*(i+1))
         } else {
-            butterfly_big(&circuit,conn,n, i != rounds-1, stop)
+            butterfly_big(&circuit,conn,n, i != rounds-1, stop*(i+1))
         };
         if circuit.gates.len() == 0 {
             break;
