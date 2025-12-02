@@ -765,8 +765,9 @@ pub fn sql_to_lmdb(db_path: &str, n: usize, m: usize, lmdb_path: &str) {
     let mut txn = env.begin_rw_txn().unwrap();
     let mut batch_count = 0;
     let batch_size = 100_000; 
-
+    let mut count = 0;
     while let Some(row_result) = rows.next().unwrap() {
+        count += 1;
         let circuit: Vec<u8> = row_result.get(0).unwrap();
         let perm: Vec<u8> = row_result.get(1).unwrap();
         let shuf: Vec<u8> = row_result.get(2).unwrap();
@@ -798,5 +799,5 @@ pub fn sql_to_lmdb(db_path: &str, n: usize, m: usize, lmdb_path: &str) {
     // Commit any remaining rows
     txn.commit().unwrap();
 
-    println!("Finished copying table {} into LMDB", table);
+    println!("{} Rows. Finished copying table {} into LMDB", count, table);
 }
