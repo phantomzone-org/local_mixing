@@ -258,6 +258,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
         // Initialize wire set
         let mut curr_wires = HashSet::new();
         curr_wires.extend(circuit.gates[selected_gate_idx[0]].iter().copied());
+        let mut failed = false;
 
         while selected_gate_ctr < set_size {
             let mut candidates: Vec<usize> = vec![];
@@ -412,7 +413,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
                 None => break,
             };
 
-            // check if adding this gate would exceed max_wires ---
+            // check if adding this gate would exceed max_wires
             let mut new_wires = curr_wires.clone();
             new_wires.extend(circuit.gates[next_candidate].iter().copied());
             if new_wires.len() > max_wires {
@@ -432,8 +433,9 @@ pub fn find_convex_subcircuit<R: RngCore>(
             curr_wires = new_wires;
         }
 
-        if selected_gate_ctr != set_size {
-            continue;
+        if selected_gate_ctr >= 3 {
+            println!("selected_gate_ctr");
+            return (selected_gate_idx[..selected_gate_ctr].to_vec(), search_attempts);
         }
 
         if !is_convex(num_wires, circuit, &selected_gate_idx[..selected_gate_ctr]) {
