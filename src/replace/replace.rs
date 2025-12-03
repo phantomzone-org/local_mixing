@@ -833,7 +833,7 @@ pub fn compress_lmdb(
         } else if n == 5 || n == 6 {
             4
         } else if n == 4 {
-            6
+            5
         } else {
             10
         };
@@ -889,12 +889,9 @@ pub fn compress_lmdb(
         for smaller_m in 1..=sub_m {
             let db_name = format!("n{}m{}", n, smaller_m);
             let db = env.open_db(Some(&db_name)).unwrap();
-            println!("db fine");
             let txn = env.begin_ro_txn().expect("txn");
-            println!("txm fine");
             let t0 = Instant::now();
             let res = random_perm_lmdb(&txn, db, prefix);
-            println!("random fine");
             SQL_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
             if let Some((_key, val_blob)) = res {
