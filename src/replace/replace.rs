@@ -890,7 +890,13 @@ pub fn compress_lmdb(
         let prefix = canon_perm_blob.as_slice();
         for smaller_m in 1..=sub_m {
             let db_name = format!("n{}m{}", n, smaller_m);
-            let db = env.open_db(Some(&db_name)).unwrap();
+            let db = match env.open_db(Some(&db_name)) {
+                Ok(db) => db,
+                Err(lmdb::Error::NotFound) => {
+                    continue;
+                }
+                Err(e) => panic!("Failed to open LMDB database {}: {:?}", db_name, e),
+            };
             let txn = env.begin_ro_txn().expect("txn");
             let t0 = Instant::now();
             let res = random_perm_lmdb(&txn, db, prefix);
