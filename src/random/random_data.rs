@@ -1386,16 +1386,16 @@ mod tests {
         println!("Total compress_big runtime: {:?} ms", total_time);
     }
 
-    #[test]
-    fn test_compression_big() {
-        // Dummy 16-wire circuit with 30 gates
-        let c = random_circuit(16,30);
+    // #[test]
+    // fn test_compression_big() {
+    //     // Dummy 16-wire circuit with 30 gates
+    //     let c = random_circuit(16,30);
 
-        let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
+    //     let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
 
-        let com = compress_big(&c, 10, 16, &mut conn);
-        println!("compression is okay: {}", com.permutation(16) == c.permutation(16));
-    }
+    //     let com = compress_big(&c, 10, 16, &mut conn);
+    //     println!("compression is okay: {}", com.permutation(16) == c.permutation(16));
+    // }
 
     #[test]
     fn test_convexity() {

@@ -440,14 +440,23 @@ fn main() {
                 "
             ).unwrap();
 
+            let lmdb = "./db";
+            std::fs::create_dir_all(lmdb);
+
+            let env = Environment::new()
+                .set_max_dbs(33)      
+                .set_map_size(700 * 1024 * 1024 * 1024) 
+                .open(Path::new(lmdb))
+                .expect("Failed to open lmdb");
+
             if data.trim().is_empty() {
                 println!("Generating random");
                 let c1 = random_circuit(n as u8, 30);
                 println!("Starting Len: {}", c1.gates.len());
-                main_butterfly_big(&c1, rounds, &mut conn, n, false, path);
+                main_butterfly_big(&c1, rounds, &mut conn, n, false, path, &env);
             } else {
                 let c = CircuitSeq::from_string(&data);
-                main_butterfly_big(&c, rounds, &mut conn, n, false, path);
+                main_butterfly_big(&c, rounds, &mut conn, n, false, path, &env);
             }
         }
 
@@ -465,22 +474,30 @@ fn main() {
                 PRAGMA cache_size = -200000;
                 "
             ).unwrap();
+            let lmdb = "./db";
+            std::fs::create_dir_all(lmdb);
+
+            let env = Environment::new()
+                .set_max_dbs(33)      
+                .set_map_size(700 * 1024 * 1024 * 1024) 
+                .open(Path::new(lmdb))
+                .expect("Failed to open lmdb");
 
             if data.trim().is_empty() {
                 println!("Generating random");
                 let c1 = random_circuit(n as u8, 30);
                 println!("Starting Len: {}", c1.gates.len());
                 if bookendless {
-                    main_butterfly_big_bookendsless(&c1, rounds, &mut conn, n, true, path);
+                    main_butterfly_big_bookendsless(&c1, rounds, &mut conn, n, true, path, &env);
                 } else {
-                    main_butterfly_big(&c1, rounds, &mut conn, n, true, path);
+                    main_butterfly_big(&c1, rounds, &mut conn, n, true, path, &env);
                 }
             } else {
                 let c = CircuitSeq::from_string(&data);
                 if bookendless {
-                    main_butterfly_big_bookendsless(&c, rounds, &mut conn, n, true, path);
+                    main_butterfly_big_bookendsless(&c, rounds, &mut conn, n, true, path, &env);
                 } else {
-                    main_butterfly_big(&c, rounds, &mut conn, n, true, path);
+                    main_butterfly_big(&c, rounds, &mut conn, n, true, path, &env);
                 }
             }
         }
@@ -522,9 +539,16 @@ fn main() {
 
             let mut conn = Connection::open_with_flags("./circuits.db",rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,)
             .expect("Failed to open ./circuits.db in read-only mode");
+            let lmdb = "./db";
+            std::fs::create_dir_all(lmdb);
 
+            let env = Environment::new()
+                .set_max_dbs(33)      
+                .set_map_size(700 * 1024 * 1024 * 1024) 
+                .open(Path::new(lmdb))
+                .expect("Failed to open lmdb");
             // Call compression logic
-            let compressed = compress_big(&expand_big(&circuit, r/100, n, &mut conn), r, n, &mut conn);
+            let compressed = compress_big(&expand_big(&circuit, r/100, n, &mut conn), r, n, &mut conn, &env);
 
             let mut file = fs::File::create("compressed.txt")
                 .expect("Failed to create compressed.txt");
@@ -739,10 +763,6 @@ use lmdb::{Environment, Database, WriteFlags, Transaction};
 use serde::{Serialize, Deserialize};
 use local_mixing::circuit::Permutation;
 use std::collections::HashMap;
-#[derive(Serialize, Deserialize)]
-struct CircuitList {
-    ckts: Vec<Vec<u8>>,   // each entry = circuit blob
-}
 
 pub fn sql_to_lmdb(
     n: usize,

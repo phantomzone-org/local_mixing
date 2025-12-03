@@ -22,7 +22,7 @@ use std::{
 use std::sync::atomic::Ordering;
 use std::ptr;
 use std::sync::atomic::AtomicU64;
-
+use lmdb::{Cursor, Database, Transaction, RoTransaction};
 // Returns a nontrivial identity circuit built from two "friend" circuits
 pub fn random_canonical_id(
     conn: &Connection,
@@ -621,7 +621,7 @@ pub fn compress_exhaust(
     compressed
 }
 
-pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection) -> CircuitSeq {
+pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
@@ -694,7 +694,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         // time_permutations += perm_start.elapsed().as_millis();
 
         // let compress_start = Instant::now();
-        let subcircuit_temp = compress(&subcircuit, 50, conn, &bit_shuf, sub_num_wires);
+        let subcircuit_temp = compress_lmdb(&subcircuit, 50, conn, &bit_shuf, sub_num_wires, env);
         // time_compress += compress_start.elapsed().as_millis();
 
         // if subcircuit.permutation(sub_num_wires) != subcircuit_temp.permutation(sub_num_wires) {
@@ -761,15 +761,56 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
     circuit
 }
 
-pub fn compress_bin(
+fn random_perm_lmdb<'a>(
+    txn: &'a RoTransaction,
+    db: Database,
+    prefix: &[u8],
+) -> Option<(Vec<u8>, Vec<u8>)> {
+
+    let mut cursor = txn.open_ro_cursor(db).ok()?;
+
+    let mut matches = Vec::new();
+
+    for (key, val) in cursor.iter_from(prefix) {
+        if !key.starts_with(prefix) {
+            break;
+        }
+        matches.push((key.to_vec(), val.to_vec()));
+    }
+
+    if matches.is_empty() {
+        return None;
+    }
+
+    let idx = rand::rng().random_range(0..matches.len());
+
+    Some(matches.swap_remove(idx))
+}
+
+fn decode_entry(blob: &[u8], n: usize) -> (Vec<u8>, Vec<u8>) {
+    assert!(blob.len() >= n, "LMDB entry too small to contain shuf");
+
+    let (circuit_blob, shuf_blob) = blob.split_at(blob.len() - n);
+
+    (circuit_blob.to_vec(), shuf_blob.to_vec())
+}
+
+pub fn compress_lmdb(
     c: &CircuitSeq,
     trials: usize,
+    conn: &mut Connection,
     bit_shuf: &Vec<Vec<usize>>,
     n: usize,
+    env: &lmdb::Environment,
 ) -> CircuitSeq {
 
     let id = Permutation::id_perm(n);
-    if c.permutation(n) == id {
+    let txn = env.begin_ro_txn().expect("txn");
+    let t0 = Instant::now();
+    let c_perm = c.permutation(n);
+    PERMUTATION_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+    if c_perm == id {
         return CircuitSeq { gates: Vec::new() };
     }
 
@@ -792,56 +833,99 @@ pub fn compress_bin(
         return CircuitSeq { gates: Vec::new() };
     }
 
-    // Main loop
     for _ in 0..trials {
         let (mut subcircuit, start, end) = random_subcircuit(&compressed);
-
         subcircuit.canonicalize();
 
-        let sub_perm = subcircuit.permutation(n);
-        let canon_perm = get_canonical(&sub_perm, &bit_shuf);
+        let max = if n == 7 {
+            4
+        } else if n == 5 || n == 6 {
+            5
+        } else if n == 4 {
+            6
+        } else {
+            12
+        };
 
-        let perm_blob = canon_perm.perm.repr_blob();
         let sub_m = subcircuit.gates.len();
+        let min = min(sub_m, max);
+        
+        let (canon_perm_blob, canon_shuf_blob) = if n == 7 && sub_m <= max {
+            let table = format!("n{}m{}", n, min);
+            let query = format!(
+                "SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1",
+                table
+            );
 
+            let sql_t0 = Instant::now();
+            let mut stmt = match conn.prepare(&query) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let rows = stmt.query([&subcircuit.repr_blob()]);
+            SQL_TIME.fetch_add(sql_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+            let mut r = match rows {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+
+            if let Some(row_result) = r.next().unwrap() {
+                
+                (row_result
+                    .get(0)
+                    .expect("Failed to get blob"),
+                row_result
+                    .get(1)
+                    .expect("Failed to get blob"))
+                
+            } else {
+                continue
+            }
+
+        } else {
+            let t1 = Instant::now();
+            let sub_perm = subcircuit.permutation(n);
+            PERMUTATION_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+            let t2 = Instant::now();
+            let canon_perm = get_canonical(&sub_perm, bit_shuf);
+            CANON_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+            (canon_perm.perm.repr_blob(), canon_perm.shuffle.repr_blob())
+        };
+        let prefix = canon_perm_blob.as_slice();
         for smaller_m in 1..=sub_m {
-            let list = Persist::load(n, smaller_m);
+            let db_name = format!("n{}m{}", n, smaller_m);
+            let db = env.open_db(Some(&db_name)).unwrap();
 
-            if let Some(rows) = list.get(&perm_blob) {
-                if let Some(blob) = rows.iter().choose(&mut rand::rng()) {
+            let t0 = Instant::now();
+            let res = random_perm_lmdb(&txn, db, prefix);
+            SQL_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-                    let mut repl = CircuitSeq::from_blob(blob);
+            if let Some((_key, val_blob)) = res {
 
-                    if repl.gates.len() <= subcircuit.gates.len() {
-                        let repl_perm = repl.permutation(n);
-                        let rc = get_canonical(&repl_perm, &bit_shuf);
+                let (repl_blob, repl_shuf) =
+                    decode_entry(&val_blob, n); 
 
-                        if !rc.shuffle.data.is_empty() {
-                            repl.rewire(&rc.shuffle, n);
-                        }
-                        repl.rewire(&canon_perm.shuffle.invert(), n);
+                let mut repl = CircuitSeq::from_blob(&repl_blob);
 
-                        if repl.permutation(n) != sub_perm {
-                            panic!("Replacement permutation mismatch!");
-                        }
+                repl.rewire(&Permutation::from_blob(&repl_shuf), n);
+                repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
 
-                        compressed.gates.splice(start..end, repl.gates);
-                        break;
-                    }
-                }
+                compressed.gates.splice(start..end, repl.gates);
+                break;
             }
         }
-
     }
 
-    // // Final cleanup
-    let mut i = 0;
-    while i < compressed.gates.len().saturating_sub(1) {
-        if compressed.gates[i] == compressed.gates[i + 1] {
-            compressed.gates.drain(i..=i + 1);
-            i = i.saturating_sub(2);
+    let mut j = 0;
+    while j < compressed.gates.len().saturating_sub(1) {
+        if compressed.gates[j] == compressed.gates[j + 1] {
+            compressed.gates.drain(j..=j + 1);
+            j = j.saturating_sub(2);
         } else {
-            i += 1;
+            j += 1;
         }
     }
 
@@ -1027,63 +1111,63 @@ mod tests {
     }
     use std::fs;
     use std::fs::File;
-    #[test]
-    fn test_compression_big_time() {
-        let total_start = Instant::now();
+    // #[test]
+    // fn test_compression_big_time() {
+    //     let total_start = Instant::now();
 
-        // // ---------- FIRST TEST ----------
-        // let t1_start = Instant::now();
-        // let n = 64;
-        // let str1 = "circuitQQF_64.txt";
-        // let data1 = fs::read_to_string(str1).expect("Failed to read circuitQQF_64.txt");
-        // let mut stable_count = 0;
-        // let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
-        // let mut acc = CircuitSeq::from_string(&data1);
-        // while stable_count < 3 {
-        //     let before = acc.gates.len();
-        //     acc = compress_big(&acc, 1_000, n, &mut conn);
-        //     let after = acc.gates.len();
+    //     // // ---------- FIRST TEST ----------
+    //     // let t1_start = Instant::now();
+    //     // let n = 64;
+    //     // let str1 = "circuitQQF_64.txt";
+    //     // let data1 = fs::read_to_string(str1).expect("Failed to read circuitQQF_64.txt");
+    //     // let mut stable_count = 0;
+    //     // let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+    //     // let mut acc = CircuitSeq::from_string(&data1);
+    //     // while stable_count < 3 {
+    //     //     let before = acc.gates.len();
+    //     //     acc = compress_big(&acc, 1_000, n, &mut conn);
+    //     //     let after = acc.gates.len();
 
-        //     if after == before {
-        //         stable_count += 1;
-        //         println!("  Final compression stable {}/3 at {} gates", stable_count, after);
-        //     } else {
-        //         println!("  Final compression reduced: {} → {} gates", before, after);
-        //         stable_count = 0;
-        //     }
-        // }
-        // let t1_duration = t1_start.elapsed();
-        // println!(" First compression finished in {:.2?}", t1_duration);
+    //     //     if after == before {
+    //     //         stable_count += 1;
+    //     //         println!("  Final compression stable {}/3 at {} gates", stable_count, after);
+    //     //     } else {
+    //     //         println!("  Final compression reduced: {} → {} gates", before, after);
+    //     //         stable_count = 0;
+    //     //     }
+    //     // }
+    //     // let t1_duration = t1_start.elapsed();
+    //     // println!(" First compression finished in {:.2?}", t1_duration);
 
-        // ---------- SECOND TEST ----------
-        let t2_start = Instant::now();
-        let str2 = "./old/circuitQQF_64.txt";
-        let data2 = fs::read_to_string(str2).expect("Failed to read circuitF.txt");
-        let mut stable_count = 0;
-        let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
-        let mut acc = CircuitSeq::from_string(&data2);
-        while stable_count < 3 {
-            let before = acc.gates.len();
-            acc = compress_big(&acc, 1_000, 64, &mut conn);
-            let after = acc.gates.len();
+    //     // ---------- SECOND TEST ----------
+    //     let t2_start = Instant::now();
+    //     let str2 = "./old/circuitQQF_64.txt";
+    //     let data2 = fs::read_to_string(str2).expect("Failed to read circuitF.txt");
+    //     let mut stable_count = 0;
+    //     let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+    //     let mut acc = CircuitSeq::from_string(&data2);
+    //     while stable_count < 3 {
+    //         let before = acc.gates.len();
+    //         acc = compress_big(&acc, 1_000, 64, &mut conn);
+    //         let after = acc.gates.len();
 
-            if after == before {
-                stable_count += 1;
-                println!("  Final compression stable {}/3 at {} gates", stable_count, after);
-            } else {
-                println!("  Final compression reduced: {} → {} gates", before, after);
-                stable_count = 0;
-            }
-        }
+    //         if after == before {
+    //             stable_count += 1;
+    //             println!("  Final compression stable {}/3 at {} gates", stable_count, after);
+    //         } else {
+    //             println!("  Final compression reduced: {} → {} gates", before, after);
+    //             stable_count = 0;
+    //         }
+    //     }
 
-        File::create("compressed.txt")
-        .and_then(|mut f| f.write_all(acc.repr().as_bytes()))
-        .expect("Failed to write butterfly_recent.txt");
-        let t2_duration = t2_start.elapsed();
-        println!(" Second compression finished in {:.2?}", t2_duration);
+    //     File::create("compressed.txt")
+    //     .and_then(|mut f| f.write_all(acc.repr().as_bytes()))
+    //     .expect("Failed to write butterfly_recent.txt");
+    //     let t2_duration = t2_start.elapsed();
+    //     println!(" Second compression finished in {:.2?}", t2_duration);
 
-        // ---------- TOTAL ----------
-        let total_duration = total_start.elapsed();
-        println!(" Total test duration: {:.2?}", total_duration);
-    }
+    //     // ---------- TOTAL ----------
+    //     let total_duration = total_start.elapsed();
+    //     println!(" Total test duration: {:.2?}", total_duration);
+    // }
 }
