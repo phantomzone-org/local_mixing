@@ -863,18 +863,21 @@ pub fn compress_lmdb(
             let db_name = format!("n{}m{}", n, smaller_m);
             let db = match env.open_db(Some(&db_name)) {
                 Ok(db) => db,
-                Err(lmdb::Error::NotFound) => {
-                    continue;
-                }
+                Err(lmdb::Error::NotFound) => continue,
                 Err(e) => panic!("Failed to open LMDB database {}: {:?}", db_name, e),
             };
-            let txn = env.begin_ro_txn().expect("txn");
-            let t0 = Instant::now();
-            let res = random_perm_lmdb(&txn, db, prefix);
-            SQL_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-            if let Some((_key, val_blob)) = res {
+            let hit = {
+                let txn = env.begin_ro_txn().expect("txn");
 
+                let t0 = Instant::now();
+                let res = random_perm_lmdb(&txn, db, prefix);
+                SQL_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+                res.map(|(_key, val_blob)| val_blob)
+            };
+
+            if let Some(val_blob) = hit {
                 let (repl_blob, repl_shuf): (Vec<u8>, Vec<u8>) =
                     bincode::deserialize(&val_blob).expect("Failed to deserialize");
 
@@ -884,11 +887,11 @@ pub fn compress_lmdb(
                 repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
 
                 compressed.gates.splice(start..end, repl.gates);
+
                 break;
-            } else {
-                continue;
             }
         }
+
     }
 
     let mut j = 0;
