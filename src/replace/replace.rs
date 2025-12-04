@@ -861,34 +861,84 @@ pub fn compress_lmdb(
         let prefix = canon_perm_blob.as_slice();
         for smaller_m in 1..=sub_m {
             let db_name = format!("n{}m{}", n, smaller_m);
-            let db = match env.open_db(Some(&db_name)) {
-                Ok(db) => db,
-                Err(lmdb::Error::NotFound) => continue,
-                Err(e) => panic!("Failed to open LMDB database {}: {:?}", db_name, e),
-            };
 
-            let hit = {
-                let txn = env.begin_ro_txn().expect("txn");
+            if (n == 7 && smaller_m == 4) || (n == 6 && smaller_m == 5) {
+                let table = format!("n{}m{}", n, smaller_m);
+                let query = format!(
+                    "SELECT * FROM {} WHERE perm = ?1 ORDER BY RANDOM() LIMIT 1",
+                    table
+                );
 
-                let t0 = Instant::now();
-                let res = random_perm_lmdb(&txn, db, prefix);
-                SQL_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                let sql_t0 = Instant::now();
+                let mut stmt = match conn.prepare(&query) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                let rows = stmt.query([&canon_perm_blob]);
+                SQL_TIME.fetch_add(sql_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-                res.map(|(_key, val_blob)| val_blob)
-            };
+                let mut r = match rows {
+                    Ok(r) => r,
+                    Err(_) => continue,
+                };
 
-            if let Some(val_blob) = hit {
-                let (repl_blob, repl_shuf): (Vec<u8>, Vec<u8>) =
-                    bincode::deserialize(&val_blob).expect("Failed to deserialize");
+                if let Some(row_result) = r.next().unwrap() {
+                    let blob: Vec<u8> = row_result
+                        .get(0)
+                        .expect("Failed to get blob");
+                    let mut repl = CircuitSeq::from_blob(&blob);
 
-                let mut repl = CircuitSeq::from_blob(&repl_blob);
+                    let repl_perm: Vec<u8> = row_result
+                        .get(1)
+                        .expect("Failed to get blob");
 
-                repl.rewire(&Permutation::from_blob(&repl_shuf), n);
-                repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
+                    let repl_shuf: Vec<u8> = row_result
+                        .get(2)
+                        .expect("Failed to get blob");
 
-                compressed.gates.splice(start..end, repl.gates);
+                    if repl.gates.len() <= subcircuit.gates.len() {
+                        let rc = Canonicalization { perm: Permutation::from_blob(&repl_perm), shuffle: Permutation::from_blob(&repl_shuf) };
 
-                break;
+                        if !rc.shuffle.data.is_empty() {
+                            repl.rewire(&rc.shuffle, n);
+                        }
+                        
+                        repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
+                        compressed.gates.splice(start..end, repl.gates);
+                        break;
+                    }
+                }
+            } else {
+
+                let db = match env.open_db(Some(&db_name)) {
+                    Ok(db) => db,
+                    Err(lmdb::Error::NotFound) => continue,
+                    Err(e) => panic!("Failed to open LMDB database {}: {:?}", db_name, e),
+                };
+
+                let hit = {
+                    let txn = env.begin_ro_txn().expect("txn");
+
+                    let t0 = Instant::now();
+                    let res = random_perm_lmdb(&txn, db, prefix);
+                    SQL_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+                    res.map(|(_key, val_blob)| val_blob)
+                };
+
+                if let Some(val_blob) = hit {
+                    let (repl_blob, repl_shuf): (Vec<u8>, Vec<u8>) =
+                        bincode::deserialize(&val_blob).expect("Failed to deserialize");
+
+                    let mut repl = CircuitSeq::from_blob(&repl_blob);
+
+                    repl.rewire(&Permutation::from_blob(&repl_shuf), n);
+                    repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
+
+                    compressed.gates.splice(start..end, repl.gates);
+
+                    break;
+                }
             }
         }
 
