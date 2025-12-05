@@ -498,7 +498,7 @@ pub fn expand_lmdb(
             (canon_perm.perm.repr_blob(), canon_perm.shuffle.repr_blob())
         };
         let prefix = canon_perm_blob.as_slice();
-        for smaller_m in (sub_m..=max).rev() {
+        for smaller_m in (sub_m..=std::cmp::min(sub_m+2, max)).rev() {
             let db_name = format!("n{}m{}", n, smaller_m);
             if (n == 7 && smaller_m == 4) || (n == 6 && smaller_m == 5) {
                 let table = format!("n{}m{}", n, smaller_m);
@@ -1145,7 +1145,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
 
         let max = 7;
         let new_wires = rng.random_range(num_wires..=max);
-        let subcircuit_temp = expand_lmdb(&subcircuit, 20, conn, &bit_shuf, new_wires, &env, num_wires);
+        let subcircuit_temp = expand_lmdb(&subcircuit, 5, conn, &bit_shuf, new_wires, &env, num_wires);
 
         if subcircuit.permutation(num_wires) != subcircuit_temp.permutation(num_wires) {
             panic!("Compress changed something");
