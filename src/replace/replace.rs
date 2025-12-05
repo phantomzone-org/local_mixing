@@ -652,6 +652,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
                 subcircuit_gates = gates;
                 break;
             }
+            println!("{}", gates.len());
         }
         CONVEX_FIND_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
