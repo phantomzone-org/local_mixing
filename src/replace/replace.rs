@@ -1108,7 +1108,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         // }
         let mut subcircuit_gates = vec![];
 
-        for set_size in (3..=16).rev() {
+        for set_size in (3..=7).rev() {
             let random_max_wires = rng.random_range(3..=7);
             let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
             if !gates.is_empty() {
@@ -1140,11 +1140,11 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
 
         let new_wires = used_wires.len();
-        let perms: Vec<Vec<usize>> = (0..num_wires).permutations(num_wires).collect();
-        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
 
         let max = 7;
         let new_wires = rng.random_range(num_wires..=max);
+        let perms: Vec<Vec<usize>> = (0..new_wires).permutations(new_wires).collect();
+        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
         println!("Made it to expand");
         let subcircuit_temp = expand_lmdb(&subcircuit, 3, conn, &bit_shuf, new_wires, &env, num_wires);
         println!("Done");
