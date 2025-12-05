@@ -595,12 +595,14 @@ pub fn abutterfly_big(
 
         let before = acc.gates.len();
 
-        let k = if before > 10_000 {
-            16
+        let k = if before > 50_000 {
+            60
+        } else if before > 10_000 {
+            50
         } else if before > 5_000 {
-            8
+            30
         } else if before > 1_000 {
-            4
+            8
         } else if before > 500 {
             2
         } else {
