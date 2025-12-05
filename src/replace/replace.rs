@@ -447,7 +447,7 @@ pub fn expand_lmdb(
         } else if n == 4 {
             6
         } else {
-            10
+            0
         };
 
         let sub_m = subcircuit.gates.len();
