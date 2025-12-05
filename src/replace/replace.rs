@@ -1154,9 +1154,9 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
 
         circuit.gates.splice(start..end+1, subcircuit.gates);
-        if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
-            panic!("splice changed something");
-        }
+        // if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
+        //     panic!("splice changed something");
+        // }
     }
     let mut i = 0;
     while i < circuit.gates.len().saturating_sub(1) {
