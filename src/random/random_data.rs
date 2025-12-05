@@ -587,43 +587,108 @@ pub fn shoot_random_gate(circuit: &mut CircuitSeq, rounds: usize) {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Node {
+    key: usize,
+    val: [u8;3],
+    parents: Vec<Node>,
+    children: Vec<Node>,
+    level: usize,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Skeleton {
+    nodes: Vec<Vec<Node>>,
+    depth: usize,
+}
+
+pub fn create_skeleton(circuit: &CircuitSeq) -> Skeleton {
+    // clone + canonicalize
+    let mut c = circuit.clone();
+    c.canonicalize();
+
+    let gates = &c.gates;
+    let mut skel = Skeleton { nodes: Vec::new(), depth: 0 };
+
+    let mut start = 0;
+    let mut level = 0;
+
+    while start < gates.len() {
+        let mut segment = Vec::new();
+
+        let mut i = start;
+        while i < gates.len() {
+            // stop before i if i is a collision boundary
+            if i > start && !segment.iter().any(|&(_, g)| Gate::collides_index(&c.gates[i], &g)) {
+                break;
+            }
+
+            segment.push((i, gates[i].clone()));
+            i += 1;
+        }
+
+        let mut level_nodes: Vec<Node> = segment
+            .iter()
+            .map(|(idx, gate)| Node {
+                key: *idx,
+                val: *gate,
+                parents: Vec::new(),
+                children: Vec::new(),
+                level,
+            })
+            .collect();
+
+        if level > 0 {
+            for node in level_nodes.iter_mut() {
+                for prev_nodes in skel.nodes[level-1].iter_mut() {
+                    if Gate::collides_index(&prev_nodes.val, &node.val) {
+                        node.parents.push(prev_nodes.clone());
+                        prev_nodes.children.push(node.clone());
+                    }
+                }
+            }
+        }
+
+        skel.nodes.push(level_nodes);
+        level += 1;
+        skel.depth = level;
+
+        // move start forward
+        start = i;
+    }
+
+    skel
+}
+
 // randomizes circuit by walking through, finding candidates before collision, and then selecting a random candidate
 pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitSeq {
     let orig_circuit = circuit.clone();
     let mut circuit = circuit.clone();
+    circuit.canonicalize();
     let mut new_gates = CircuitSeq { gates: Vec::new() };
-    let mut candidates: Vec<usize> = Vec::new();
+    let skeleton: Skeleton = create_skeleton(&circuit);
+    let mut candidates: Vec<Node> = skeleton.nodes[0].clone();
 
-    while !circuit.gates.is_empty() || !candidates.is_empty() {
-        // try to add new non-colliding gates to candidates
-        for i in 0..circuit.gates.len() {
-            if !candidates.contains(&i)
-                && !candidates.iter().any(|&g| Gate::collides_index(&circuit.gates[i], &circuit.gates[g]))
-            {
-                candidates.push(i);
+    while !candidates.is_empty() {
+        let next = candidates.choose(rng).unwrap();
+        let next = next.clone();
+        new_gates.gates.push(circuit.gates[next.key]);
+        let index = candidates.iter().position(|n| n.key == next.key).unwrap(); 
+        for child in &next.children {
+            let has_parent_in_candidates = child.parents.iter().any(|p| candidates.contains(p));
+
+            if !has_parent_in_candidates {
+                candidates.push(child.clone());
             }
         }
 
-        // pick random candidate
-        let next_gate = *candidates.choose(rng).unwrap();
-        new_gates.gates.push(circuit.gates[next_gate].clone());
-
-        // remove from circuit
-        circuit.gates.remove(next_gate);
-
-        // remove from candidates and fix indices
-        candidates.retain(|&x| x != next_gate);
-        for g in candidates.iter_mut() {
-            if *g > next_gate {
-                *g -= 1;
-            }
-        }
+        candidates.remove(index);
     }
 
     if new_gates.gates.len() != orig_circuit.gates.len() {
         panic!("Didn't add enough");
     }
-    
+
     if new_gates.probably_equal(&orig_circuit, 64, 100000).is_err() {
         panic!("Changed functionality");
     }
