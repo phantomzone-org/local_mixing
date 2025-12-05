@@ -620,6 +620,10 @@ pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitS
         }
     }
 
+    if new_gates.gates.len() != orig_circuit.gates.len() {
+        panic!("Didn't add enough");
+    }
+    
     if new_gates.probably_equal(&orig_circuit, 64, 100000).is_err() {
         panic!("Changed functionality");
     }
