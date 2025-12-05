@@ -576,7 +576,7 @@ pub fn expand_lmdb(
                 };
 
                 if let Some(val_blob) = hit {
-                    if old_n > n {
+                    if n > old_n {
                         println!("Expand with ancilla :D");
                     }
                     let (repl_blob, repl_shuf): (Vec<u8>, Vec<u8>) =
