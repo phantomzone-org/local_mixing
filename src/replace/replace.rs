@@ -1140,7 +1140,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
 
         let max = 7;
-        let num_wires = rand::random_range(num_wires..max);
+        let num_wires = rng.random_range(num_wires..=max);
         let subcircuit_temp = expand_lmdb(&subcircuit, 3, conn, &bit_shuf, num_wires, &env);
 
         if subcircuit.permutation(num_wires) != subcircuit_temp.permutation(num_wires) {
