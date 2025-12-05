@@ -655,7 +655,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         }
         CONVEX_FIND_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-        println!("{}", subcircuits_gates.len());
+        println!("{}", subcircuit_gates.len());
         if subcircuit_gates.is_empty() {
             continue;
         }
