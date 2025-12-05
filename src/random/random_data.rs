@@ -594,7 +594,7 @@ pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitS
     let mut new_gates = CircuitSeq { gates: Vec::new() };
     let mut candidates: Vec<usize> = Vec::new();
 
-    while !circuit.gates.is_empty() {
+    while !circuit.gates.is_empty() && candidates.is_empty() {
         // try to add new non-colliding gates to candidates
         for i in 0..circuit.gates.len() {
             if !candidates.contains(&i)
