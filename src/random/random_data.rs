@@ -668,11 +668,12 @@ pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitS
 
     let mut new_gates = CircuitSeq { gates: Vec::new() };
     let skeleton: Skeleton = create_skeleton(&circuit);
-
+    
+    let total_len: usize = skeleton.nodes.iter().map(|v| v.len()).sum();
+    println!("total: {}", total_len);
     // candidates by node
     let mut candidates: Vec<Node> = skeleton.nodes[0].clone();
 
-    // ALSO track candidate KEYS to avoid O(n²)
     let mut candidate_keys: HashSet<usize> = candidates.iter().map(|n| n.key).collect();
 
     while !candidates.is_empty() {
