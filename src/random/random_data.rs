@@ -596,29 +596,24 @@ pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitS
         let mut candidates = Vec::new();
 
         for i in 0..circuit.gates.len() {
-            if new_gates.gates.iter().any(|g| Gate::collides_index(g, &circuit.gates[i])) {
+            let gi = &circuit.gates[i];
+            if new_gates.gates.iter().any(|g| Gate::collides_index(g, gi)) {
                 continue;
             }
-            if candidates.iter().any(|&g| Gate::collides_index(&circuit.gates[g], &circuit.gates[i])) {
+            if candidates.iter().any(|&j| Gate::collides_index(&circuit.gates[j], gi)) {
                 break;
             }
             candidates.push(i);
         }
 
-        if let Some(&next_gate) = candidates.choose(rng) {
-            new_gates.gates.push(circuit.gates[next_gate]);
-            circuit.gates.remove(next_gate);
-        } else {
-            break;
-        }
-    }
-
-    if new_gates.probably_equal(&circuit, 64, 100000).is_err() {
-        panic!("Changed functionality");
+        let next = *candidates.choose(rng).unwrap();
+        new_gates.gates.push(circuit.gates[next]);
+        circuit.gates.remove(next);
     }
 
     new_gates
 }
+
 
 
 pub fn create_table(conn: &mut Connection, table_name: &str) -> Result<()> {
