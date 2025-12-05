@@ -1193,7 +1193,7 @@ mod tests {
 
         // ---------- SECOND TEST ----------
         let t2_start = Instant::now();
-        let str2 = "./old/compressed.txt";
+        let str2 = "compressed.txt";
         let lmdb = "./db";
             let _ = std::fs::create_dir_all(lmdb);
 
