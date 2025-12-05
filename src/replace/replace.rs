@@ -1143,13 +1143,13 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         let used_wires = subcircuit.used_wires();
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
 
-        let new_wires = used_wires.len();
+        let n_wires = used_wires.len();
 
         let max = 7;
-        let new_wires = rng.random_range(new_wires..=max);
+        let new_wires = rng.random_range(n_wires..=max);
         let perms: Vec<Vec<usize>> = (0..new_wires).permutations(new_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
-        let subcircuit_temp = expand_lmdb(&subcircuit, 10, conn, &bit_shuf, new_wires, &env, num_wires);
+        let subcircuit_temp = expand_lmdb(&subcircuit, 10, conn, &bit_shuf, new_wires, &env, n_wires);
         if subcircuit.permutation(new_wires) != subcircuit_temp.permutation(new_wires) {
             panic!("Compress changed something");
         }
