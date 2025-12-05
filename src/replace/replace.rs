@@ -1142,7 +1142,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         let new_wires = used_wires.len();
 
         let max = 7;
-        let new_wires = rng.random_range(num_wires..=max);
+        let new_wires = rng.random_range(new_wires..=max);
         let perms: Vec<Vec<usize>> = (0..new_wires).permutations(new_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
         println!("Made it to expand");
