@@ -587,6 +587,36 @@ pub fn shoot_random_gate(circuit: &mut CircuitSeq, rounds: usize) {
     }
 }
 
+pub fn is_level_zero(circuit: &CircuitSeq, index: usize) -> bool {
+    let mut target = index;
+    while target > 0 {
+        if Gate::collides_index(&circuit.gates[target - 1], &circuit.gates[index]) {
+            break;
+        }
+        target -= 1;
+    }
+
+    target == 0
+}
+
+pub fn left_ordering(circuit: &CircuitSeq) -> CircuitSeq{
+    let mut new_gates: Vec<[u8;3]> = Vec::new();
+    let mut c = circuit.clone();
+    while !c.gates.is_empty() {
+        let mut to_remove: Vec<usize> = Vec::new();
+        for i in (0..c.gates.len()).rev() {
+            if is_level_zero(&c, i) {
+                to_remove.push(i);
+                new_gates.push(c.gates[i]);
+            }
+        }
+        for i in &to_remove {
+            c.gates.remove(*i);
+        }
+    }
+    CircuitSeq { gates: new_gates }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Node {
     key: usize,
@@ -603,8 +633,7 @@ pub struct Skeleton {
 }
 
 pub fn create_skeleton(circuit: &CircuitSeq) -> Skeleton {
-    let mut c = circuit.clone();
-    c.canonicalize();
+    let c = left_ordering(&circuit);
     let gates = &c.gates;
     let mut skel = Skeleton { nodes: Vec::new(), depth: 0 };
     let mut start = 0;
