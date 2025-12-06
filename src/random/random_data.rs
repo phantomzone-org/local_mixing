@@ -697,6 +697,7 @@ pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitS
 
     let mut new_gates = CircuitSeq { gates: Vec::new() };
 
+    // Build a map from key -> Node for easy lookup
     let mut node_map: HashMap<usize, Node> = HashMap::new();
     for level in &skeleton.nodes {
         for node in level {
@@ -704,26 +705,31 @@ pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitS
         }
     }
 
+    // Keep track of nodes not yet added
+    let mut remaining_keys: HashSet<usize> = node_map.keys().cloned().collect();
+
+    // Start with level 0 nodes
     let mut candidates: Vec<Node> = skeleton.nodes[0].clone();
-    let mut candidate_keys: HashSet<usize> = candidates.iter().map(|n| n.key).collect();
 
     while !candidates.is_empty() {
         // Pick a random candidate
         let idx = rng.random_range(0..candidates.len());
         let next = candidates.swap_remove(idx);
-        candidate_keys.remove(&next.key);
+        remaining_keys.remove(&next.key);
 
         // Add the gate to the new circuit
         new_gates.gates.push(circuit.gates[next.key]);
 
         // Process children
         for &child_key in &next.children {
+            if !remaining_keys.contains(&child_key) {
+                continue; // already added
+            }
             let child = &node_map[&child_key];
 
-            // If all parents are gone, add to candidates
-            if child.parents.iter().all(|p| !candidate_keys.contains(p)) && !candidate_keys.contains(&child.key) {
+            // Add to candidates if all parents have been added
+            if child.parents.iter().all(|p| !remaining_keys.contains(p)) {
                 candidates.push(child.clone());
-                candidate_keys.insert(child.key);
             }
         }
     }
