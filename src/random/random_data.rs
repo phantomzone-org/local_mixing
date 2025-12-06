@@ -1838,14 +1838,42 @@ mod tests {
             .expect("Failed to read");
         let circuit_a = CircuitSeq::from_string(&contents);
 
-        let (c, skeleton) = create_skeleton(&circuit_a);
-        for i in 1..skeleton.depth {
-            for node in skeleton.nodes[i].clone().into_iter() {
-                if node.parents.is_empty() {
-                    panic!("Failed");
+        let (c, skel) = create_skeleton(&circuit_a);
+        let mut visited: HashSet<usize> = HashSet::new();
+        let mut queue: Vec<usize> = skel.nodes[0].iter().map(|n| n.key).collect();
+
+        while let Some(key) = queue.pop() {
+            if visited.contains(&key) {
+                continue;
+            }
+            visited.insert(key);
+
+            // Get the node
+            let node = skel
+                .nodes
+                .iter()
+                .flat_map(|lvl| lvl)
+                .find(|n| n.key == key)
+                .expect("Node key not found");
+
+            for &child_key in &node.children {
+                if !visited.contains(&child_key) {
+                    queue.push(child_key);
                 }
             }
         }
+
+        // Check all nodes were visited
+        let total_nodes: usize = skel.nodes.iter().map(|lvl| lvl.len()).sum();
+        if visited.len() != total_nodes {
+            panic!(
+                "Skeleton broken: visited {} nodes, but total nodes = {}",
+                visited.len(),
+                total_nodes
+            );
+        }
+
+        println!("Skeleton test passed: all {} nodes reachable from level 0", total_nodes);
     }
 
     #[test]
