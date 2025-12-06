@@ -502,9 +502,6 @@ pub fn expand_lmdb(
                 };
 
                 if let Some(row_result) = r.next().unwrap() {
-                    if n > old_n {
-                        println!("Expand with ancilla :D");
-                    }
                     let blob: Vec<u8> = row_result
                         .get(0)
                         .expect("Failed to get blob");
@@ -556,9 +553,6 @@ pub fn expand_lmdb(
                 };
 
                 if let Some(val_blob) = hit {
-                    if n > old_n {
-                        println!("Expand with ancilla :D");
-                    }
                     let (repl_blob, repl_shuf): (Vec<u8>, Vec<u8>) =
                         bincode::deserialize(&val_blob).expect("Failed to deserialize");
 
