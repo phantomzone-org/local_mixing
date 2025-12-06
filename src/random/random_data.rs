@@ -684,7 +684,7 @@ pub fn create_skeleton(circuit: &CircuitSeq) -> Skeleton {
 pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitSeq {
     let orig_circuit = circuit.clone();
     let mut circuit = circuit.clone();
-    circuit.canonicalize();
+    circuit = left_ordering(&circuit);
     let mut new_gates = CircuitSeq { gates: Vec::new() };
     let skeleton = create_skeleton(&circuit);
     let mut candidates: Vec<Node> = skeleton.nodes[0].clone();
