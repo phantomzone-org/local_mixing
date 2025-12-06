@@ -407,31 +407,7 @@ pub fn expand_lmdb(
     env: &lmdb::Environment,
     old_n: usize
 ) -> CircuitSeq {
-
-    let id = Permutation::id_perm(n);
-    let t0 = Instant::now();
-    let c_perm = c.permutation(n);
-    PERMUTATION_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-    if c_perm == id {
-        return CircuitSeq { gates: Vec::new() };
-    }
-
     let mut compressed = c.clone();
-    if compressed.gates.is_empty() {
-        return CircuitSeq { gates: Vec::new() };
-    }
-
-    let mut i = 0;
-    while i < compressed.gates.len().saturating_sub(1) {
-        if compressed.gates[i] == compressed.gates[i + 1] {
-            compressed.gates.drain(i..=i + 1);
-            i = i.saturating_sub(2);
-        } else {
-            i += 1;
-        }
-    }
-
     if compressed.gates.is_empty() {
         return CircuitSeq { gates: Vec::new() };
     }
@@ -525,6 +501,9 @@ pub fn expand_lmdb(
                 };
 
                 if let Some(row_result) = r.next().unwrap() {
+                    if n > old_n {
+                        println!("Expand with ancilla :D");
+                    }
                     let blob: Vec<u8> = row_result
                         .get(0)
                         .expect("Failed to get blob");
@@ -599,16 +578,6 @@ pub fn expand_lmdb(
             }
         }
 
-    }
-
-    let mut j = 0;
-    while j < compressed.gates.len().saturating_sub(1) {
-        if compressed.gates[j] == compressed.gates[j + 1] {
-            compressed.gates.drain(j..=j + 1);
-            j = j.saturating_sub(2);
-        } else {
-            j += 1;
-        }
     }
 
     compressed
