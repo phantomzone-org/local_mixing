@@ -473,15 +473,13 @@ pub fn expand_lmdb(
 
         //     (canon_perm.perm.repr_blob(), canon_perm.shuffle.repr_blob())
         // };
-        if n > old_n {
-            println!("{}, {:?}", n, c.gates);
-        }
+
         let sub_perm = subcircuit.permutation(n);
         let canon= get_canonical(&sub_perm, &bit_shuf);
         
         let (canon_perm_blob, canon_shuf_blob) = (canon.perm.repr_blob(), canon.shuffle.repr_blob());
         let prefix = canon_perm_blob.as_slice();
-        for smaller_m in (1..=std::cmp::min(sub_m+2, max)).rev() {
+        for smaller_m in (1..=max).rev() {
             let db_name = format!("n{}m{}", n, smaller_m);
             if (n == 7 && smaller_m == 4) || (n == 6 && smaller_m == 5) {
                 let table = format!("n{}m{}", n, smaller_m);
