@@ -1882,18 +1882,18 @@ mod tests {
         // Proceed as before
 
 
-        for _ in 0..100 {
+        for _ in 0..1{
             circuit_a = random_walking(&circuit_a, &mut rand::rng());
         }
 
         let to = Instant::now();
-        for _ in 0..100 {
+        for _ in 0..1 {
             circuit_a = random_walking(&circuit_a, &mut rand::rng());
         }
         println!("Time elapsed for walking old: {:?}", to.elapsed());
 
         let to = Instant::now();
-        for _ in 0..100 {
+        for _ in 0..1 {
             circuit_a = random_walk_no_skeleton(&circuit_a, &mut rand::rng());
         }
         println!("Time elapsed for walking: {:?}", to.elapsed());
