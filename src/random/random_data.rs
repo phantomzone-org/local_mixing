@@ -1818,15 +1818,8 @@ mod tests {
         // Proceed as before
         
 
-        for _ in 0..100 {
-            shoot_random_gate(&mut circuit_a, 100000);
-        }
+        shoot_random_gate(&mut circuit_a, 10_000_000);
 
-        let to = Instant::now();
-        for _ in 0..100 {
-            shoot_random_gate(&mut circuit_a, 100000);
-        }
-        println!("Time elapsed for shooting: {:?}", to.elapsed());
         let c_str = circuit_a.repr();
         File::create("circuit_shot.txt")
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
