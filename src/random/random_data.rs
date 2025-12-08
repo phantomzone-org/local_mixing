@@ -750,36 +750,41 @@ pub fn random_walk_no_skeleton<R: RngCore>(
     circuit: &mut CircuitSeq,
     rng: &mut R,
 ) {
-
     let n = circuit.gates.len();
-    let mut remaining: Vec<bool> = vec![true; n];
-    let mut out = Vec::with_capacity(n);
+    let c = circuit.clone();
+    let gates = &mut circuit.gates;
 
-    let mut candidates: Vec<usize> = Vec::new();
+    // remaining[i] = whether gate i has not been emitted yet
+    let mut remaining = vec![true; n];
+    let mut candidates = Vec::new();
 
+    // Initialize candidates (gates with level == 0)
     for i in 0..n {
-        if is_level_zero_raw(circuit, i, &remaining) {
+        if is_level_zero_raw(&c, i, &remaining) {
             candidates.push(i);
         }
     }
 
+    // pos = next position we fill in the final permutation (in-place!)
+    let mut pos = 0;
+
     while !candidates.is_empty() {
-        // pick random candidate
         let idx = rng.random_range(0..candidates.len());
         let g = candidates.swap_remove(idx);
 
-        out.push(circuit.gates[g]);
+        gates.swap(pos, g);
 
         remaining[g] = false;
 
-        for j in (g+1)..n {
-            if remaining[j] && is_level_zero_raw(circuit, j, &remaining) {
+        pos += 1;
+
+        for j in (g + 1)..n {
+            if remaining[j] && is_level_zero_raw(&c, j, &remaining) {
                 candidates.push(j);
             }
         }
     }
 
-    *circuit = CircuitSeq { gates: out }
 }
 
 fn is_level_zero_raw(c: &CircuitSeq, idx: usize, remaining: &[bool]) -> bool {
