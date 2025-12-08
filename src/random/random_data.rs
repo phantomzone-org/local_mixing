@@ -746,6 +746,52 @@ pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitS
     new_gates
 }
 
+pub fn random_walk_no_skeleton<R: RngCore>(
+    circuit: &CircuitSeq,
+    rng: &mut R,
+) -> CircuitSeq {
+
+    let n = circuit.gates.len();
+    let mut remaining: Vec<bool> = vec![true; n];
+    let mut out = Vec::with_capacity(n);
+
+    let mut candidates: Vec<usize> = Vec::new();
+
+    for i in 0..n {
+        if is_level_zero_raw(circuit, i, &remaining) {
+            candidates.push(i);
+        }
+    }
+
+    while !candidates.is_empty() {
+        // pick random candidate
+        let idx = rng.random_range(0..candidates.len());
+        let g = candidates.swap_remove(idx);
+
+        out.push(circuit.gates[g]);
+
+        remaining[g] = false;
+
+        for j in (g+1)..n {
+            if remaining[j] && is_level_zero_raw(circuit, j, &remaining) {
+                candidates.push(j);
+            }
+        }
+    }
+
+    CircuitSeq { gates: out }
+}
+
+fn is_level_zero_raw(c: &CircuitSeq, idx: usize, remaining: &[bool]) -> bool {
+    let gate = &c.gates[idx];
+    for i in 0..idx {
+        if remaining[i] && Gate::collides_index(&c.gates[i], gate) {
+            return false;
+        }
+    }
+    true
+}
+
 pub fn create_table(conn: &mut Connection, table_name: &str) -> Result<()> {
     // Table name includes n and m
     let sql = format!(
@@ -1843,6 +1889,12 @@ mod tests {
         let to = Instant::now();
         for _ in 0..100 {
             circuit_a = random_walking(&circuit_a, &mut rand::rng());
+        }
+        println!("Time elapsed for walking old: {:?}", to.elapsed());
+
+        let to = Instant::now();
+        for _ in 0..100 {
+            circuit_a = random_walk_no_skeleton(&circuit_a, &mut rand::rng());
         }
         println!("Time elapsed for walking: {:?}", to.elapsed());
 
