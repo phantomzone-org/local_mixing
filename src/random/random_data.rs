@@ -1816,8 +1816,17 @@ mod tests {
         let mut circuit_a = CircuitSeq::from_string(&contents);
 
         // Proceed as before
-        shoot_random_gate(&mut circuit_a, 100000);
+        
 
+        for _ in 0..100 {
+            shoot_random_gate(&mut circuit_a, 100000);
+        }
+
+        let to = Instant::now();
+        for _ in 0..100 {
+            shoot_random_gate(&mut circuit_a, 100000);
+        }
+        println!("Time elapsed for shooting: {:?}", to.elapsed());
         let c_str = circuit_a.repr();
         File::create("circuit_shot.txt")
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
@@ -1832,7 +1841,17 @@ mod tests {
             .expect("Failed to read");
         let mut circuit_a = CircuitSeq::from_string(&contents);
         // Proceed as before
-        circuit_a = random_walking(&circuit_a, &mut rand::rng());
+
+
+        for _ in 0..100 {
+            circuit_a = random_walking(&circuit_a, &mut rand::rng());
+        }
+
+        let to = Instant::now();
+        for _ in 0..100 {
+            circuit_a = random_walking(&circuit_a, &mut rand::rng());
+        }
+        println!("Time elapsed for walking: {:?}", to.elapsed());
 
         let c_str = circuit_a.repr();
         File::create("circuit_walked.txt")
