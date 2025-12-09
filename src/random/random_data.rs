@@ -750,9 +750,9 @@ pub fn random_walk_no_skeleton<R: RngCore>(
     circuit: &CircuitSeq,
     rng: &mut R,
 ) -> CircuitSeq {
-
     let n = circuit.gates.len();
     let mut remaining: Vec<bool> = vec![true; n];
+    let mut in_candidates: Vec<bool> = vec![false; n];
     let mut out = Vec::with_capacity(n);
 
     let mut candidates: Vec<usize> = Vec::new();
@@ -760,21 +760,22 @@ pub fn random_walk_no_skeleton<R: RngCore>(
     for i in 0..n {
         if is_level_zero_raw(circuit, i, &remaining) {
             candidates.push(i);
+            in_candidates[i] = true;
         }
     }
 
     while !candidates.is_empty() {
-        // pick random candidate
         let idx = rng.random_range(0..candidates.len());
         let g = candidates.swap_remove(idx);
+        in_candidates[g] = false;
 
         out.push(circuit.gates[g]);
-
         remaining[g] = false;
 
-        for j in (g+1)..n {
-            if remaining[j] && is_level_zero_raw(circuit, j, &remaining) {
+        for j in (g + 1)..n {
+            if remaining[j] && !in_candidates[j] && is_level_zero_raw(circuit, j, &remaining) {
                 candidates.push(j);
+                in_candidates[j] = true;
             }
         }
     }
