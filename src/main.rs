@@ -237,14 +237,6 @@ fn main() {
             Command::new("compress")
                 .about("Run compression trials on a circuit file")
                 .arg(
-                    Arg::new("r")
-                        .short('r')
-                        .long("trials")
-                        .required(true)
-                        .value_parser(clap::value_parser!(usize))
-                        .help("Number of compression trials"),
-                )
-                .arg(
                     Arg::new("p")
                         .short('p')
                         .long("path")
