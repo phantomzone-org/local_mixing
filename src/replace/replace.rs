@@ -1203,44 +1203,53 @@ pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, co
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
-    for _i in 0..trials {
-        // if i % 20 == 0 {
-        //     println!("{} trials so far, {} more to go", i, trials - i);
-        // }
+    let mut i = 0;
+    while i < circuit.gates.len().saturating_sub(1) {
+        if circuit.gates[i] == circuit.gates[i + 1] {
+            circuit.gates.drain(i..=i + 1);
+            i = i.saturating_sub(2);
+        } else {
+            i += 1;
+        }
+    }
+
+    for _ in 0..trials {
+        let t0 = Instant::now();
         let mut subcircuit_gates = vec![];
         let random_max_wires = rng.random_range(3..=7);
-        for set_size in (3..=7).rev() {
+        for set_size in (3..=6).rev() {
             let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
             if !gates.is_empty() {
                 subcircuit_gates = gates;
                 break;
             }
         }
+        CONVEX_FIND_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         if subcircuit_gates.is_empty() {
-            return circuit
-        }
-        
-        let mut gates: Vec<[u8;3]> = vec![[0,0,0]; subcircuit_gates.len()];
-        for (i, g) in subcircuit_gates.iter().enumerate() {
-            gates[i] = circuit.gates[*g];
+            continue;
         }
 
+        let gates: Vec<[u8; 3]> = subcircuit_gates.iter().map(|&g| circuit.gates[g]).collect();
         subcircuit_gates.sort();
+
+        let t1 = Instant::now();
         let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates, num_wires).unwrap();
+        CONTIGUOUS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
         let mut subcircuit = CircuitSeq { gates };
+
         let expected_slice: Vec<_> = subcircuit_gates.iter().map(|&i| circuit.gates[i]).collect();
         let actual_slice = &circuit.gates[start..=end];
-
         if actual_slice != &expected_slice[..] {
-            break;
+            continue;
         }
 
+        let t2 = Instant::now();
         let mut used_wires = subcircuit.used_wires();
         let n_wires = used_wires.len();
         let max = 7;
         let new_wires = rng.random_range(n_wires..=max);
-
         if new_wires > n_wires {
             let mut count = n_wires;
             while count < new_wires {
@@ -1254,23 +1263,47 @@ pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, co
         }
         used_wires.sort();
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
+        REWIRE_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-        
-        let perms: Vec<Vec<usize>> = (0..new_wires).permutations(new_wires).collect();
+        let t3 = Instant::now();
+        let sub_num_wires = used_wires.len();
+        let perms: Vec<Vec<usize>> = (0..sub_num_wires).permutations(sub_num_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
-        let subcircuit_temp = compress_lmdb(&subcircuit, 20, conn, &bit_shuf, new_wires, &env);
-        if subcircuit.permutation(new_wires) != subcircuit_temp.permutation(new_wires) {
-            panic!("Compress changed something");
-        }
+        PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+        let t4 = Instant::now();
+        let subcircuit_temp = compress_lmdb(&subcircuit, 20, conn, &bit_shuf, sub_num_wires, env);
+        COMPRESS_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
         subcircuit = subcircuit_temp;
 
+        let t5 = Instant::now();
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
+        UNREWIRE_TIME.fetch_add(t5.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-        circuit.gates.splice(start..end+1, subcircuit.gates);
-        // if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
-        //     panic!("splice changed something");
-        // }
+        let t6 = Instant::now();
+        let repl_len = subcircuit.gates.len();
+        let old_len = end - start + 1;
+
+        if repl_len == old_len {
+            for i in 0..repl_len {
+                circuit.gates[start + i] = subcircuit.gates[i];
+            }
+        } else if repl_len < old_len {
+            for i in 0..repl_len {
+                circuit.gates[start + i] = subcircuit.gates[i];
+            }
+            for i in (end + 1)..circuit.gates.len() {
+                circuit.gates[i - (old_len - repl_len)] = circuit.gates[i];
+            }
+            circuit.gates.truncate(circuit.gates.len() - (old_len - repl_len));
+        } else {
+            panic!("Replacement grew, which is not allowed");
+        }
+        REPLACE_TIME.fetch_add(t6.elapsed().as_nanos() as u64, Ordering::Relaxed);
     }
+
+    let t7 = Instant::now();
     let mut i = 0;
     while i < circuit.gates.len().saturating_sub(1) {
         if circuit.gates[i] == circuit.gates[i + 1] {
@@ -1280,6 +1313,8 @@ pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, co
             i += 1;
         }
     }
+    DEDUP_TIME.fetch_add(t7.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
     circuit
 }
 
