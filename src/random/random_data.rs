@@ -1886,21 +1886,21 @@ mod tests {
         let contents = fs::read_to_string("circuit_before_random.txt")
             .expect("Failed to read");
         let mut circuit_a = CircuitSeq::from_string(&contents);
+        let mut circuit_b = circuit_a.clone();
         // Proceed as before
 
 
-        for _ in 0..100{
-            circuit_a = random_walk_no_skeleton(&circuit_a, &mut rand::rng());
-        }
-
-        let to = Instant::now();
-        for _ in 0..100 {
-            circuit_a = random_walk_no_skeleton(&circuit_a, &mut rand::rng());
-        }
-        println!("Time elapsed for walking: {:?}", to.elapsed());
+        circuit_a = random_walk_no_skeleton(&circuit_a, &mut rand::rng());
 
         let c_str = circuit_a.repr();
-        File::create("circuit_walked.txt")
+        File::create("circuit_walked_no_skele.txt")
+            .and_then(|mut f| f.write_all(c_str.as_bytes()))
+            .expect("Failed to write test_walked.txt");
+
+        circuit_b = random_walking(&circuit_b, &mut rand::rng());
+
+        let c_str = circuit_b.repr();
+        File::create("circuit_walked_no_skele.txt")
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
             .expect("Failed to write test_walked.txt");
     }
