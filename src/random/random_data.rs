@@ -1864,7 +1864,7 @@ mod tests {
         let c1 = circuit_a.clone();
         let mut avg: f64 = 0.0;
         for _ in 0..100{
-            shoot_random_gate(&mut circuit_a, 100_000);
+            shoot_random_gate(&mut circuit_a, 1_000_000);
             avg += heatmap(&c1, &circuit_a, 64, 500, false);
         }
         println!("Shooting avg: {}", avg/100.0);
