@@ -1861,17 +1861,13 @@ mod tests {
         let contents = fs::read_to_string("circuit_before_random.txt")
             .expect("Failed to read");
         let mut circuit_a = CircuitSeq::from_string(&contents);
-
-        // Proceed as before
+        let c1 = circuit_a.clone();
+        let mut avg: f64 = 0.0;
         for _ in 0..100{
             shoot_random_gate(&mut circuit_a, 100_000);
+            avg += heatmap(&c1, &circuit_a, 64, 500, false);
         }
-
-        let to = Instant::now();
-        for _ in 0..100{
-            shoot_random_gate(&mut circuit_a, 100_000);
-        }
-        println!("Time elapsed for shooting: {:?}", to.elapsed());
+        println!("Shooting avg: {}", avg/100.0);
 
         let c_str = circuit_a.repr();
         File::create("circuit_shot.txt")
@@ -1886,33 +1882,77 @@ mod tests {
         let contents = fs::read_to_string("circuit_before_random.txt")
             .expect("Failed to read");
         let mut circuit_a = CircuitSeq::from_string(&contents);
-        let mut circuit_b = circuit_a.clone();
+        let circuit_b = circuit_a.clone();
         // Proceed as before
 
-        for _ in 0..100{
-            random_walk_no_skeleton(&mut circuit_a, &mut rand::rng());
-        }
-        let to = Instant::now();
+        // for _ in 0..100{
+        //     random_walk_no_skeleton(&mut circuit_a, &mut rand::rng());
+        // }
+        let mut avg: f64 = 0.0;
         for _ in 0..100{
             circuit_a = random_walk_no_skeleton(&mut circuit_a, &mut rand::rng());
+            avg += heatmap(&circuit_b, &circuit_a, 64, 500, false);
         }
-        println!("Time elapsed for walking: {:?}", to.elapsed());
+        println!("Walking avg: {}", avg/100.0);
 
         let c_str = circuit_a.repr();
         File::create("circuit_walked_no_skele.txt")
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
             .expect("Failed to write test_walked.txt");
 
-        circuit_b = random_walking(&circuit_b, &mut rand::rng());
+        // circuit_b = random_walking(&circuit_b, &mut rand::rng());
 
-        let c_str = circuit_b.repr();
-        File::create("circuit_walked.txt")
-            .and_then(|mut f| f.write_all(c_str.as_bytes()))
-            .expect("Failed to write test_walked.txt");
+        // let c_str = circuit_b.repr();
+        // File::create("circuit_walked.txt")
+        //     .and_then(|mut f| f.write_all(c_str.as_bytes()))
+        //     .expect("Failed to write test_walked.txt");
     }
 
     use rand::prelude::SliceRandom;
 
+    pub fn heatmap(circuit_one: &CircuitSeq, circuit_two: &CircuitSeq, num_wires: usize, num_inputs: usize, flag: bool) -> f64 {
+        let mut circuit_one = circuit_one.clone();
+        let mut circuit_two = circuit_two.clone();
+        if flag {
+            circuit_one.canonicalize();
+            circuit_two.canonicalize();
+        }
+        let circuit_one_len = circuit_one.gates.len();
+        let circuit_two_len = circuit_two.gates.len();
+
+        let mut average = vec![[0f64, 0f64, 0f64]; (circuit_one_len + 1) * (circuit_two_len + 1)];
+        let mut rng = rand::rng();
+        let start_time = Instant::now();
+
+        for _ in 0..num_inputs {
+            let input_bits: usize = if num_wires < usize::BITS as usize {
+                rng.random_range(0..(1usize << num_wires))
+            } else {
+                rng.random_range(0..=usize::MAX)
+            };
+
+            let evolution_one = circuit_one.evaluate_evolution(input_bits);
+            let evolution_two = circuit_two.evaluate_evolution(input_bits);
+            for i1 in 0..=circuit_one_len {
+                for i2 in 0..=circuit_two_len {
+                    let diff = evolution_one[i1] ^ evolution_two[i2];
+                    let hamming_dist = diff.count_ones() as f64;
+                    let overlap = (2.0 * hamming_dist / num_wires as f64) - 1.0;
+                    let abs_overlap = overlap.abs();
+
+                    let index = i1 * (circuit_two_len + 1) + i2;
+                    average[index][2] += abs_overlap / num_inputs as f64;
+                }
+            }
+        }
+
+        println!("Time elapsed: {:?}", Instant::now() - start_time);
+
+        let total_points = average.len();
+        let mean_all: f64 = average.iter().map(|p| p[2]).sum::<f64>() / total_points as f64;
+
+        mean_all
+    }
     #[test]
     fn test_random_order() {
         // Start with an initial random identity
@@ -1920,10 +1960,14 @@ mod tests {
         let contents = fs::read_to_string("circuit_before_random.txt")
             .expect("Failed to read");
         let mut circuit_a = CircuitSeq::from_string(&contents);
-
+        let c1 = circuit_a.clone();
+        let mut avg: f64 = 0.0;
         // Proceed as before
-        circuit_a.gates.shuffle(&mut rand::rng());
-
+        for _ in 0..100 {
+            circuit_a.gates.shuffle(&mut rand::rng());
+            avg += heatmap(&c1, &circuit_a, 64, 500, false);
+        }
+        println!("randomized avg: {}", avg/100.0);
         let c_str = circuit_a.repr();
         File::create("circuit_randomized.txt")
             .and_then(|mut f| f.write_all(c_str.as_bytes()))

@@ -521,7 +521,7 @@ fn main() {
                 "Running distinguisher with {} inputs...",
                 num_inputs
             );
-            heatmap(n, num_inputs, xlabel, ylabel, flag);
+            // heatmap(n, num_inputs, flag);
         }
         Some(("reverse", sub)) => {
             let from_path = sub.get_one::<String>("source").unwrap();
@@ -587,20 +587,13 @@ fn main() {
     }
 }
 
-
-pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str, flag: bool) {
-    // Load circuits
-    let contents = fs::read_to_string("butterfly_recent.txt")
-        .expect("Failed to read butterfly_recent.txt");
-
-    let (circuit_one_str, circuit_two_str) = contents
-        .split_once(':')
-        .expect("Invalid format in butterfly_recent.txt");
-
-    let mut circuit_one = CircuitSeq::from_string(circuit_one_str);
-    let mut circuit_two = CircuitSeq::from_string(circuit_two_str);
-    circuit_one.canonicalize();
-    circuit_two.canonicalize();
+pub fn heatmap(circuit_one: &CircuitSeq, circuit_two: &CircuitSeq, num_wires: usize, num_inputs: usize, flag: bool) -> f64 {
+    let mut circuit_one = circuit_one.clone();
+    let mut circuit_two = circuit_two.clone();
+    if flag {
+        circuit_one.canonicalize();
+        circuit_two.canonicalize();
+    }
     let circuit_one_len = circuit_one.gates.len();
     let circuit_two_len = circuit_two.gates.len();
 
@@ -608,11 +601,7 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str, 
     let mut rng = rand::rng();
     let start_time = Instant::now();
 
-    for i in 0..num_inputs {
-        if i % 10 == 0 {
-            println!("{}/{}", i, num_inputs);
-        }
-
+    for _ in 0..num_inputs {
         let input_bits: usize = if num_wires < usize::BITS as usize {
             rng.random_range(0..(1usize << num_wires))
         } else {
@@ -621,69 +610,25 @@ pub fn heatmap(num_wires: usize, num_inputs: usize, xlabel: &str, ylabel: &str, 
 
         let evolution_one = circuit_one.evaluate_evolution(input_bits);
         let evolution_two = circuit_two.evaluate_evolution(input_bits);
-        if !flag {
-            for i1 in 0..=circuit_one_len {
-                for i2 in 0..=circuit_two_len {
-                    let diff = evolution_one[i1] ^ evolution_two[i2];
-                    let hamming_dist = diff.count_ones() as f64;
-                    let overlap = hamming_dist / num_wires as f64;
+        for i1 in 0..=circuit_one_len {
+            for i2 in 0..=circuit_two_len {
+                let diff = evolution_one[i1] ^ evolution_two[i2];
+                let hamming_dist = diff.count_ones() as f64;
+                let overlap = (2.0 * hamming_dist / num_wires as f64) - 1.0;
+                let abs_overlap = overlap.abs();
 
-                    let index = i1 * (circuit_two_len + 1) + i2;
-                    average[index][0] = i1 as f64;
-                    average[index][1] = i2 as f64;
-                    average[index][2] += overlap / num_inputs as f64;
-                }
-            }
-        } else {
-            for i1 in 0..=circuit_one_len {
-                for i2 in 0..=circuit_two_len {
-                    let diff = evolution_one[i1] ^ evolution_two[i2];
-                    let hamming_dist = diff.count_ones() as f64;
-                    let overlap = (2.0 * hamming_dist / num_wires as f64) - 1.0;
-                    let abs_overlap = overlap.abs();
-
-                    let index = i1 * (circuit_two_len + 1) + i2;
-                    average[index][0] = i1 as f64;
-                    average[index][1] = i2 as f64;
-                    average[index][2] += abs_overlap / num_inputs as f64;
-                }
+                let index = i1 * (circuit_two_len + 1) + i2;
+                average[index][2] += abs_overlap / num_inputs as f64;
             }
         }
     }
 
     println!("Time elapsed: {:?}", Instant::now() - start_time);
 
-    // Prepare JSON for Python
-    let data = json!({
-        "results": average,
-        "xlabel": xlabel,
-        "ylabel": ylabel
-    });
+    let total_points = average.len();
+    let mean_all: f64 = average.iter().map(|p| p[2]).sum::<f64>() / total_points as f64;
 
-    // Choose Python script based on flag
-    let script_path = if flag {
-        "./heatmap/heatmap.py"       // std dev version
-    } else {
-        "./heatmap/heatmap_raw.py"   // raw values version
-    };
-
-    let mut child = std::process::Command::new("python3")
-        .arg(script_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Failed to spawn Python script");
-
-    child.stdin.as_mut()
-        .expect("Failed to open stdin")
-        .write_all(data.to_string().as_bytes())
-        .expect("Failed to write JSON to Python stdin");
-
-    let status = child.wait().expect("Failed to wait on Python process");
-    if !status.success() {
-        eprintln!("Python script failed with status {:?}", status.code());
-    }
+    mean_all
 }
 
 pub fn reverse(from_path: &str, dest_path: &str) {
