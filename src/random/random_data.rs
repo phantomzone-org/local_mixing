@@ -1894,7 +1894,7 @@ mod tests {
         }
         let to = Instant::now();
         for _ in 0..100{
-            random_walk_no_skeleton(&mut circuit_a, &mut rand::rng());
+            circuit_a = random_walk_no_skeleton(&mut circuit_a, &mut rand::rng());
         }
         println!("Time elapsed for walking: {:?}", to.elapsed());
 
