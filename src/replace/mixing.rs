@@ -3,6 +3,7 @@ use crate::{
     replace::replace::{compress, compress_big, expand_big, obfuscate, outward_compress, random_id},
 };
 use crate::random::random_data::shoot_random_gate;
+use crate::random::random_data::random_walk_no_skeleton;
 use itertools::Itertools;
 use rand::Rng;
 use rayon::prelude::*;
@@ -520,14 +521,16 @@ pub fn abutterfly_big(
     let mut rng = rand::rng();
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
     let mut c = c.clone();
-    shoot_random_gate(&mut c, 500_000);
+    // shoot_random_gate(&mut c, 500_000);
+    c = random_walk_no_skeleton(&c, &mut rng);
     let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(50..=100));
     let mut prev_r_inv = first_r_inv.clone();
     
     for &g in &c.gates {
         let (r, r_inv) = random_id(n as u8, rng.random_range(50..=100));
         let mut block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
-        shoot_random_gate(&mut block, 1_000);
+        // shoot_random_gate(&mut block, 1_000);
+        block = random_walk_no_skeleton(&block, &mut rng);
         pre_blocks.push(block);
         prev_r_inv = r_inv;
     }
