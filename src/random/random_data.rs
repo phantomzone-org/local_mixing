@@ -1906,7 +1906,7 @@ mod tests {
         circuit_b = random_walking(&circuit_b, &mut rand::rng());
 
         let c_str = circuit_b.repr();
-        File::create("circuit_walked_no_skele.txt")
+        File::create("circuit_walked.txt")
             .and_then(|mut f| f.write_all(c_str.as_bytes()))
             .expect("Failed to write test_walked.txt");
     }
