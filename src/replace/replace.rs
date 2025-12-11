@@ -44,6 +44,7 @@ pub fn random_canonical_id(
         .collect();
 
     loop {
+        println!("loop");
         let idx_a = rng.random_range(0..db_names.len());
         let idx_b = rng.random_range(0..db_names.len());
         if idx_a == idx_b {
