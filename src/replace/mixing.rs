@@ -527,17 +527,33 @@ pub fn abutterfly_big(
     let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(50..=100));
     let mut prev_r_inv = first_r_inv.clone();
     
-    // for g in c.gates.iter() {
-    //     let num = rng.random_range(3..=7);
-    //     if let Ok(mut id) = random_canonical_id(&_conn, num) {
-    //         id.rewire_first_gate(*g, num);
-    //         pre_gates.extend_from_slice(&id.gates);
-    //     } else {
-    //         pre_gates.push(*g);
-    //     }
-    // }
+    for (i,g) in c.gates.iter().enumerate() {
+        let num = rng.random_range(3..=7);
+        if let Ok(mut id) = random_canonical_id(&_conn, num) {
+            let mut used_wires = vec![g[0], g[1], g[2]];
+            used_wires.sort();
+            let rewired_g = CircuitSeq::rewire_subcircuit(&c, &vec![i], &used_wires);
+            id.rewire_first_gate(rewired_g.gates[0], num);
+            let mut count = 3;
+            while count < num {
+                let random = rng.random_range(0..num);
+                if used_wires.contains(&(random as u8)) {
+                    continue
+                }
+                used_wires.push(random as u8);
+                count += 1;
+            }
+            id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
+            pre_gates.extend_from_slice(&id.gates);
+            if rewired_g.probably_equal(&id, num, 100000).is_err() {
+                panic!("The id != gate");
+            }
+        } else {
+            pre_gates.push(*g);
+        }
+    }
 
-    // c.gates = pre_gates;
+    c.gates = pre_gates;
 
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
 

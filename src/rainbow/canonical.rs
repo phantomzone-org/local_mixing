@@ -667,6 +667,7 @@ impl PermStore {
     }
 }
 
+//TODO createa a reverse canon idea
 impl CircuitSeq {
     pub fn canonicalize(&mut self) {
         for i in 1..self.gates.len() {
