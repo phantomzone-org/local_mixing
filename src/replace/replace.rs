@@ -1124,13 +1124,12 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         let perms: Vec<Vec<usize>> = (0..new_wires).permutations(new_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
         let subcircuit_temp = expand_lmdb(&subcircuit, 10, conn, &bit_shuf, new_wires, &env, n_wires);
-        if sub_ref.probably_equal(&subcircuit_temp, num_wires, 100000).is_err() {
-            panic!("sub_ref doesn't match new");
-        }
         subcircuit = subcircuit_temp;
 
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
-
+        if sub_ref.permutation(new_wires) != subcircuit.permutation(new_wires) {
+            panic!("sub_ref doesn't match new");
+        }
         circuit.gates.splice(start..end+1, subcircuit.gates);
         // if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
         //     panic!("splice changed something");
