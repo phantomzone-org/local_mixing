@@ -530,19 +530,10 @@ pub fn abutterfly_big(
     for (i, g) in c.gates.iter().enumerate() {
         let num = rng.random_range(3..=7);
         if let Ok(mut id) = random_canonical_id(&_conn, num) {
-            let ref_id = CircuitSeq { gates: vec![[1,2,3], [1,2,3]]};
-            if ref_id.probably_equal(&id, num, 100000).is_err() {
-                panic!("Not id 1");
-            }
-            println!("id: {:?}", id);
-            println!("g: {:?}", g);
             let mut used_wires = vec![g[0], g[1], g[2]];
             used_wires.sort();
             let rewired_g = CircuitSeq::rewire_subcircuit(&c, &vec![i], &used_wires);
             id.rewire_first_gate(rewired_g.gates[0], num);
-            if ref_id.probably_equal(&id, num, 100000).is_err() {
-                panic!("Not id 2");
-            }
             let mut count = 3;
             while count < num {
                 let random = rng.random_range(0..n);
@@ -552,21 +543,9 @@ pub fn abutterfly_big(
                 used_wires.push(random as u8);
                 count += 1;
             }
-            println!("used wires {:?}", used_wires);
-            println!("rewired id = {:?}", &id);
             id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
-            println!("unrewired id = {:?}", &id);
-            if ref_id.probably_equal(&id, num, 100000).is_err() {
-                panic!("Not id 3");
-            }
             id.gates.remove(0);
             pre_gates.extend_from_slice(&id.gates);
-            let ref_g = CircuitSeq { gates: vec![*g]};
-            if ref_g.probably_equal(&id, num, 100000).is_err() {
-                println!("rewired_g = {:?}", &rewired_g);
-                println!("rewired id = {:?}", &id);
-                panic!("The id != gate");
-            }
         } else {
             pre_gates.push(*g);
         }

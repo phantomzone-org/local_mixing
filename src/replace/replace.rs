@@ -1093,6 +1093,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         subcircuit_gates.sort();
         let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates, num_wires).unwrap();
         let mut subcircuit = CircuitSeq { gates };
+        let sub_ref = subcircuit.clone();
         let expected_slice: Vec<_> = subcircuit_gates.iter().map(|&i| circuit.gates[i]).collect();
         let actual_slice = &circuit.gates[start..=end];
 
@@ -1123,9 +1124,9 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         let perms: Vec<Vec<usize>> = (0..new_wires).permutations(new_wires).collect();
         let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
         let subcircuit_temp = expand_lmdb(&subcircuit, 10, conn, &bit_shuf, new_wires, &env, n_wires);
-        // if subcircuit.permutation(new_wires) != subcircuit_temp.permutation(new_wires) {
-        //     panic!("Compress changed something");
-        // }
+        if sub_ref.probably_equal(&subcircuit_temp, num_wires, 100000).is_err() {
+            panic!("sub_ref doesn't match new");
+        }
         subcircuit = subcircuit_temp;
 
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
