@@ -531,9 +531,6 @@ pub fn abutterfly_big(
         let num = rng.random_range(3..=7);
         if let Ok(mut id) = random_canonical_id(&_conn, num) {
             let mut used_wires = vec![g[0], g[1], g[2]];
-            used_wires.sort();
-            let rewired_g = CircuitSeq::rewire_subcircuit(&c, &vec![i], &used_wires);
-            id.rewire_first_gate(rewired_g.gates[0], num);
             let mut count = 3;
             while count < num {
                 let random = rng.random_range(0..n);
@@ -543,8 +540,15 @@ pub fn abutterfly_big(
                 used_wires.push(random as u8);
                 count += 1;
             }
+            used_wires.sort();
+            let rewired_g = CircuitSeq::rewire_subcircuit(&c, &vec![i], &used_wires);
+            id.rewire_first_gate(rewired_g.gates[0], num);
             id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
             id.gates.remove(0);
+            let g_ref = CircuitSeq { gates: vec![*g] };
+            if g_ref.probably_equal(&id, n, 100000).is_err() {
+                panic!("test failed");
+            }
             pre_gates.extend_from_slice(&id.gates);
         } else {
             pre_gates.push(*g);
