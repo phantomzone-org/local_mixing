@@ -544,6 +544,7 @@ pub fn abutterfly_big(
                 count += 1;
             }
             id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
+            id.gates.remove(0);
             pre_gates.extend_from_slice(&id.gates);
             if rewired_g.probably_equal(&id, num, 100000).is_err() {
                 panic!("The id != gate");
