@@ -44,7 +44,6 @@ pub fn random_canonical_id(
         .collect();
 
     loop {
-        println!("loop");
         let idx_a = rng.random_range(0..db_names.len());
         let idx_b = rng.random_range(0..db_names.len());
         if idx_a == idx_b {
@@ -70,6 +69,7 @@ pub fn random_canonical_id(
         let mut ca = CircuitSeq::from_blob(&circuit_blob);
         
         if (wires == 7 && max == 4) || (wires == 6 && max == 5) { //SQL
+            println!("try sql");
             let (circuit2_blob, shuf2_blob): (Vec<u8>, Vec<u8>) = conn.query_row(
                 &format!("SELECT circuit, shuf FROM {} WHERE perm = ?", db_b_name),
                 [perm_blob],
@@ -84,6 +84,7 @@ pub fn random_canonical_id(
             ca.gates.extend(cb.gates);
             return Ok(ca)
         } else { 
+            println!("try lmdb");
             let db_b = env.open_db(Some(db_b_name))?;
             let txn = env.begin_ro_txn()?;
             if let Some((circuit2_blob, shuf2_blob)) = random_perm_lmdb(&txn, db_b, &perm_blob) {
