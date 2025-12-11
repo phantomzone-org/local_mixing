@@ -555,6 +555,7 @@ pub fn abutterfly_big(
             println!("used wires {:?}", used_wires);
             println!("rewired id = {:?}", &id);
             id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
+            println!("unrewired id = {:?}", &id);
             if ref_id.probably_equal(&id, num, 100000).is_err() {
                 panic!("Not id 3");
             }
