@@ -531,6 +531,7 @@ pub fn abutterfly_big(
         let num = rng.random_range(3..=7);
         if let Ok(mut id) = random_canonical_id(&_conn, num) {
             println!("id: {:?}", id);
+            println!("g: {:?}", g);
             let mut used_wires = vec![g[0], g[1], g[2]];
             used_wires.sort();
             let rewired_g = CircuitSeq::rewire_subcircuit(&c, &vec![i], &used_wires);
@@ -544,6 +545,7 @@ pub fn abutterfly_big(
                 used_wires.push(random as u8);
                 count += 1;
             }
+            println!("used wires {:?}", used_wires);
             println!("rewired id = {:?}", &id);
             id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
             id.gates.remove(0);
