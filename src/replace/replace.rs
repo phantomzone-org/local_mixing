@@ -46,6 +46,9 @@ pub fn random_canonical_id(
     loop {
         let idx_a = rng.random_range(0..db_names.len());
         let idx_b = rng.random_range(0..db_names.len());
+        if idx_a == idx_b {
+            continue
+        }
         let max = max(idx_a, idx_b);
         let min = min(idx_a, idx_b);
         let db_a_name = &db_names[min];
@@ -76,9 +79,6 @@ pub fn random_canonical_id(
             let (shuf1, shuf2) = (Permutation::from_blob(&shuf_blob), Permutation::from_blob(&shuf2_blob));
             cb.rewire(&shuf2, wires);
             cb.rewire(&shuf1.invert(), wires);
-            if ca.gates == cb.gates {
-                continue
-            }
             cb.gates.reverse();
             ca.gates.extend(cb.gates);
             return Ok(ca)
@@ -90,9 +90,6 @@ pub fn random_canonical_id(
                 let (shuf1, shuf2) = (Permutation::from_blob(&shuf_blob), Permutation::from_blob(&shuf2_blob));
                 cb.rewire(&shuf2, wires);
                 cb.rewire(&shuf1.invert(), wires);
-                if ca.gates == cb.gates {
-                    continue
-                }
                 cb.gates.reverse();
                 ca.gates.extend(cb.gates);
                 return Ok(ca);
