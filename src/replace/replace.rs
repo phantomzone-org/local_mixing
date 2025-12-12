@@ -1453,23 +1453,12 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         }
 
         // Assign new wires if OnNew
+        let mut i = 0;
         for collision in &[tax.a, tax.c1, tax.c2] {
             if *collision == CollisionType::OnNew {
-                let mut new = false;
-                while !new {
-                    let wire = rng.random_range(0..num_wires) as u8;
-                    if used_wires.contains(&wire) {
-                        continue;
-                    }
-                    for val in used_wires.iter_mut() {
-                        if *val == (num_wires + 1) as u8 {
-                            *val = wire;
-                            new = true;
-                            break;
-                        }
-                    }
-                }
+                used_wires[replacement.gates[1][i] as usize] = g2[i]
             }
+            i += 1;
         }
 
         // Fill any remaining placeholders
