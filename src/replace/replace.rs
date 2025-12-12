@@ -1462,15 +1462,15 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         }
 
         // Fill any remaining placeholders
-        for val in used_wires.clone().iter_mut() {
-            if *val == (num_wires + 1) as u8 {
+        for i in 0..used_wires.len() {
+            if used_wires[i] == (num_wires + 1) as u8 {
                 loop {
                     let wire = rng.random_range(0..num_wires) as u8;
                     if used_wires.contains(&wire) {
-                        continue;
+                        continue
                     }
-                    *val = wire;
-                    break;
+                    used_wires[i] = wire;
+                    break
                 }
             }
         }
