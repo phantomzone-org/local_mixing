@@ -69,7 +69,7 @@ pub fn random_canonical_id(
         let mut ca = CircuitSeq::from_blob(&circuit_blob);
         
         if wires > 0 || (wires == 7 && max == 4) || (wires == 6 && max == 5) { //SQL
-            println!("try sql");
+            // println!("try sql");
             let (circuit2_blob, shuf2_blob): (Vec<u8>, Vec<u8>) = conn.query_row(
                 &format!("SELECT circuit, shuf FROM {} WHERE perm = ?", db_b_name),
                 [perm_blob],
@@ -84,7 +84,7 @@ pub fn random_canonical_id(
             ca.gates.extend(cb.gates);
             return Ok(ca)
         } else { 
-            println!("try lmdb");
+            // println!("try lmdb");
             let db_b = env.open_db(Some(db_b_name))?;
             let txn = env.begin_ro_txn()?;
             if let Some((circuit2_blob, shuf2_blob)) = random_perm_lmdb(&txn, db_b, &perm_blob) {
@@ -1389,11 +1389,11 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         let mut id = match random_canonical_id(&env, conn, n) {
             Ok(c) => c,
             Err(_) => {
-                println!("random_canonical_id failed, continuing");
+                // println!("random_canonical_id failed, continuing");
                 continue;
             },
         };
-        println!("Generated random canonical id of length {}", id.gates.len());
+        // println!("Generated random canonical id of length {}", id.gates.len());
 
         let tax = gate_pair_taxonomy(&id.gates[0], &id.gates[1]);
         if let Some(v) = pairs.get_mut(&tax) {
@@ -1426,7 +1426,7 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         }
 
         fail += 1;
-        println!("Failed to match pair, fail count: {}", fail);
+        // println!("Failed to match pair, fail count: {}", fail);
     }
 
     println!("Applying replacements...");
@@ -1445,11 +1445,11 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         used_wires[replacement.gates[0][1] as usize] = g1[1];
         used_wires[replacement.gates[0][2] as usize] = g1[2];
 
-        println!("Original wires: {:?}, used_wires initialized", used_wires);
+        // println!("Original wires: {:?}, used_wires initialized", used_wires);
 
         let tax = gate_pair_taxonomy(&g1, &g2);
         if tax.a == CollisionType::OnNew || tax.c1 == CollisionType::OnNew || tax.c2 == CollisionType::OnNew {
-            println!("Found OnNew collision, assigning new wires...");
+            // println!("Found OnNew collision, assigning new wires...");
         }
 
         // Assign new wires if OnNew
@@ -1475,7 +1475,7 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
             }
         }
 
-        println!("Final used_wires for this replacement: {:?}", used_wires);
+        // println!("Final used_wires for this replacement: {:?}", used_wires);
 
         circuit.gates.splice(
             index..=index + 1,
