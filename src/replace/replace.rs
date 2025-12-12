@@ -1439,7 +1439,7 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         let index = 2 * i;
         let (g1, g2) = (circuit.gates[index], circuit.gates[index + 1]);
         let replacement = CircuitSeq { gates: replacement };
-        let mut used_wires: Vec<u8> = vec![(num_wires + 1) as u8; replacement.used_wires().len()];
+        let mut used_wires: Vec<u8> = vec![(num_wires + 1) as u8; replacement.max_wire()];
 
         used_wires[replacement.gates[0][0] as usize] = g1[0];
         used_wires[replacement.gates[0][1] as usize] = g1[1];
