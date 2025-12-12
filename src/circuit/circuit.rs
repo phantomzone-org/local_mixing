@@ -589,13 +589,7 @@ impl CircuitSeq {
     }
 
     pub fn max_wire(&self) -> usize {
-        let mut max = 0;
-        for gates in &self.gates {
-            for g in gates {
-                max = std_max(*g, max);
-            }
-        }
-        max as usize
+        self.gates.iter().flatten().copied().max().unwrap_or(0) as usize
     }
 
     // Take subcircuit on X wires and rewire to x wires
