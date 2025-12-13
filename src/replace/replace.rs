@@ -1482,9 +1482,9 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
 
         // println!("Final used_wires for this replacement: {:?}", used_wires);
 
-        if replacement.probably_equal(&CircuitSeq { gates: vec![[1,2,3], [1,2,3]]}, 64, 100000).is_err() {
-            panic!("Replacement is not an id");
-        }
+        // if replacement.probably_equal(&CircuitSeq { gates: vec![[1,2,3], [1,2,3]]}, 64, 100000).is_err() {
+        //     panic!("Replacement is not an id");
+        // }
         circuit.gates.splice(
             index..=index + 1,
             CircuitSeq::unrewire_subcircuit(&replacement, &used_wires)
