@@ -1381,7 +1381,7 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         }
         i += 2;
     }
-    let num_pairs = pairs.len();
+    let num_pairs: usize = pairs.values().map(|v| v.len()).sum();
     println!("Pairs collected: {}", num_pairs);
     
     let mut rng = rand::rng();
