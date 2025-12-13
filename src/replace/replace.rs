@@ -1450,7 +1450,7 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
 
         // println!("Original wires: {:?}, used_wires initialized", used_wires);
 
-        println!("Gates g1: {:?} g2: {:?}", g1, g2);
+        // println!("Gates g1: {:?} g2: {:?}", g1, g2);
 
         let tax = gate_pair_taxonomy(&g1, &g2);
         if tax.a == CollisionType::OnNew || tax.c1 == CollisionType::OnNew || tax.c2 == CollisionType::OnNew {
@@ -1482,15 +1482,19 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
 
         // println!("Final used_wires for this replacement: {:?}", used_wires);
 
+        if replacement.probably_equal(&CircuitSeq { gates: vec![[1,2,3], [1,2,3]]}, 64, 100000).is_err() {
+            panic!("Replacement is not an id");
+        }
         circuit.gates.splice(
             index..=index + 1,
             CircuitSeq::unrewire_subcircuit(&replacement, &used_wires)
                 .gates
                 .into_iter()
-                .skip(2),
+                .skip(2)
+                .rev(),
         );
 
-        println!("Replacement: {:?}", CircuitSeq::unrewire_subcircuit(&replacement, &used_wires));
+        // println!("Replacement: {:?}", CircuitSeq::unrewire_subcircuit(&replacement, &used_wires));
         // println!("Replacement applied at indices {}..{}", index, index + 1);
         println!("Replacements so far: {}/{}", replaced, num_pairs);
     }
