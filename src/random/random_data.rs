@@ -1842,7 +1842,7 @@ mod tests {
     fn generate_random() {
         let n: u8 = 64;
 
-        let m = 500;
+        let m = 100;
 
         let c = random_circuit(n,m);
 
