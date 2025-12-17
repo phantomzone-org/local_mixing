@@ -47,20 +47,21 @@ pub fn random_canonical_id(
     min_wires: usize,
 ) -> Result<CircuitSeq, Box<dyn std::error::Error>> {
     let mut rng = rand::rng();
+
     loop {
         let n = rng.random_range(min_wires..=7);
 
         let perm_db_name = format!("perm_tables_n{}", n);
         let perm_db = env.open_db(Some(&perm_db_name))
-            .unwrap_or_else(|_| panic!("LMDB DB Count '{}' not found", perm_db_name));
-        let txn = env.begin_ro_txn()
-            .unwrap_or_else(|_| panic!("Failed to begin read txn on '{}'", perm_db_name));
-
-        let (perm_blob, ms_blob) =
+            .unwrap_or_else(|e| panic!("LMDB DB '{}' not found or failed to open: {:?}", perm_db_name, e));
+        let (perm_blob, ms_blob) = {
+            let txn = env.begin_ro_txn()
+                .unwrap_or_else(|e| panic!("Failed to begin RO txn on '{}': {:?}", perm_db_name, e));
             match random_perm_from_perm_table(&txn, perm_db) {
                 Some(x) => x,
                 None => panic!("perm_tables_n{} is empty or malformed", n),
-            };
+            }
+        };
 
         let ms: Vec<u8> = bincode::deserialize(&ms_blob)
             .unwrap_or_else(|_| panic!("Failed to deserialize ms_blob for n={}", n));
@@ -71,60 +72,40 @@ pub fn random_canonical_id(
 
         let i = rng.random_range(0..ms.len());
         let mut j = rng.random_range(0..ms.len());
-        while j == i {
-            j = rng.random_range(0..ms.len());
-        }
-
+        while j == i { j = rng.random_range(0..ms.len()); }
         let m1 = ms[i];
         let m2 = ms[j];
 
         let db1_name = format!("n{}m{}", n, m1);
         let db2_name = format!("n{}m{}", n, m2);
 
-        let db1 = match env.open_db(Some(&db1_name)) {
-            Ok(db) => db,
-            Err(lmdb::Error::NotFound) => {
-                println!("Warning: LMDB DB1 '{}' not found, skipping", db1_name);
-                continue; 
-            }
-            Err(e) => {
-                println!("LMDB DB1 '{}' failed to open: {:?}", db2_name, e);
-                return Err(Box::new(e)); 
-            }
-        };
-
-        let db2 = match env.open_db(Some(&db2_name)) {
-            Ok(db) => db,
-            Err(lmdb::Error::NotFound) => {
-                println!("Warning: LMDB DB2 '{}' not found, skipping", db2_name);
-                continue; 
-            }
-            Err(e) => {
-                println!("LMDB DB2 '{}' failed to open: {:?}", db2_name, e);
-                return Err(Box::new(e));
-            }
-        };
-
-        let circuit1_blob =
+        let circuit1_blob = {
+            let db1 = env.open_db(Some(&db1_name))
+                .unwrap_or_else(|e| panic!("LMDB DB1 '{}' failed to open: {:?}", db1_name, e));
+            let txn = env.begin_ro_txn()
+                .unwrap_or_else(|e| panic!("Failed to begin RO txn on '{}': {:?}", db1_name, e));
             random_perm_lmdb(&txn, db1, &perm_blob)
-                .unwrap_or_else(|| panic!("perm not found in {}", db1_name));
+                .unwrap_or_else(|| panic!("perm not found in {}", db1_name))
+        };
         let mut ca = CircuitSeq::from_blob(&circuit1_blob);
-        let circuit2_blob =
+
+        let circuit2_blob = {
+            let db2 = env.open_db(Some(&db2_name))
+                .unwrap_or_else(|e| panic!("LMDB DB2 '{}' failed to open: {:?}", db2_name, e));
+            let txn = env.begin_ro_txn()
+                .unwrap_or_else(|e| panic!("Failed to begin RO txn on '{}': {:?}", db2_name, e));
             random_perm_lmdb(&txn, db2, &perm_blob)
-                .unwrap_or_else(|| panic!("perm not found in {}", db2_name));
+                .unwrap_or_else(|| panic!("perm not found in {}", db2_name))
+        };
         let mut cb = CircuitSeq::from_blob(&circuit2_blob);
 
         cb.gates.reverse();
         ca.gates.extend(cb.gates);
 
-        let perms: Vec<Vec<usize>> = (0..n)
-            .permutations(n)
-            .collect();
-
+        let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
         if perms.len() <= 1 {
             panic!("Failed to generate non-identity permutations for n={}", n);
         }
-
         let shuf = perms
             .iter()
             .skip(1)
