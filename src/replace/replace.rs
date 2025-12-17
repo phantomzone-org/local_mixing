@@ -1643,4 +1643,19 @@ mod tests {
         let total_duration = total_start.elapsed();
         println!(" Total test duration: {:.2?}", total_duration);
     }
+
+    #[test]
+    fn test_random_canon_id() {
+        let env = Environment::new()
+                .set_max_readers(10000) 
+                .set_max_dbs(50)      
+                .set_map_size(700 * 1024 * 1024 * 1024) 
+                .open(Path::new("./db"))
+                .expect("Failed to open lmdb");
+        let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
+        let circuit = random_canonical_id(&env, &conn, 3).unwrap_or_else(|_| panic!("Failed to run random_canon_id"));
+        if circuit.probably_equal(&CircuitSeq { gates: vec![[1,2,3], [1,2,3]]}, 10, 10000).is_err() {
+            panic!("Not id");
+        }
+    }
 }
