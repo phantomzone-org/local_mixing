@@ -830,58 +830,30 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
     circuit
 }
 
-// fn random_perm_lmdb(
-//     txn: &RoTransaction,
-//     db: Database,
-//     prefix: &[u8],
-// ) -> Option<Vec<u8>> {
-//     let mut cursor = txn.open_ro_cursor(db).ok()?;
-//     let mut circuits = Vec::new();
-
-//     for (key, _) in cursor.iter_from(prefix) {
-//         if !key.starts_with(prefix) {
-//             break;
-//         }
-
-//         // key = perm || circuit
-//         let circuit = key[prefix.len()..].to_vec();
-//         circuits.push(circuit);
-//     }
-
-//     if circuits.is_empty() {
-//         return None;
-//     }
-
-//     let idx = rand::rng().random_range(0..circuits.len());
-//     Some(circuits.swap_remove(idx))
-// }
-
-fn random_perm_lmdb<'a>(
-    txn: &'a RoTransaction,
+fn random_perm_lmdb(
+    txn: &RoTransaction,
     db: Database,
     prefix: &[u8],
 ) -> Option<Vec<u8>> {
-    if txn.get(db, &prefix).is_err() {
-        return None;
-    }
     let mut cursor = txn.open_ro_cursor(db).ok()?;
-
-    let mut matches = Vec::new();
+    let mut circuits = Vec::new();
 
     for (key, _) in cursor.iter_from(prefix) {
         if !key.starts_with(prefix) {
             break;
         }
-        matches.push((key[prefix.len()..].to_vec()));
+
+        // key = perm || circuit
+        let circuit = key[prefix.len()..].to_vec();
+        circuits.push(circuit);
     }
 
-    if matches.is_empty() {
+    if circuits.is_empty() {
         return None;
     }
 
-    let idx = rand::rng().random_range(0..matches.len());
-
-    Some(matches.swap_remove(idx))
+    let idx = rand::rng().random_range(0..circuits.len());
+    Some(circuits.swap_remove(idx))
 }
 
 pub fn compress_lmdb(
@@ -1414,7 +1386,7 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         let mut id = match random_canonical_id(&env, conn, n) {
             Ok(c) => c,
             Err(_) => {
-                println!("random_canonical_id failed {}, continuing", fail);
+                // println!("random_canonical_id failed {}, continuing", fail);
                 continue;
             },
         };
