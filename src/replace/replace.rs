@@ -84,7 +84,7 @@ pub fn random_canonical_id(
         let db1 = match env.open_db(Some(&db1_name)) {
             Ok(db) => db,
             Err(lmdb::Error::NotFound) => {
-                eprintln!("Warning: LMDB DB1 '{}' not found, skipping", db1_name);
+                println!("Warning: LMDB DB1 '{}' not found, skipping", db1_name);
                 continue; 
             }
             Err(e) => {
@@ -95,7 +95,7 @@ pub fn random_canonical_id(
         let db2 = match env.open_db(Some(&db2_name)) {
             Ok(db) => db,
             Err(lmdb::Error::NotFound) => {
-                eprintln!("Warning: LMDB DB2 '{}' not found, skipping", db2_name);
+                println!("Warning: LMDB DB2 '{}' not found, skipping", db2_name);
                 continue; 
             }
             Err(e) => {
