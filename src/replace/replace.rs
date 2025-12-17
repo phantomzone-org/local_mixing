@@ -1673,9 +1673,11 @@ mod tests {
 
         let txn = env.begin_ro_txn()?;
         let mut cursor = txn.open_ro_cursor(db)?;
-
+        let perm_len = 1 << 6;
         for (key, _value) in cursor.iter() {
-            println!("{:x?}", key); // prints raw bytes in hex
+            let circuit_blob = &key[perm_len..];
+            let circuit = CircuitSeq::from_blob(&circuit_blob);
+            println!("{:?}", circuit.gates); 
         }
 
         Ok(())
