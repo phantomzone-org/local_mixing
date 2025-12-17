@@ -557,24 +557,6 @@ pub fn abutterfly_big(
     // }
 
     // c.gates = pre_gates;
-    let db_ranges = [
-        (3, 1, 10),
-        (4, 1, 6),
-        (5, 1, 5),
-        (6, 1, 6),
-        (7, 1, 4),
-    ];
-
-    for &(n, start, end) in &db_ranges {
-        for m in start..=end {
-            let name = format!("n{}m{}", n, m);
-            match env.open_db(Some(&name)) {
-                Ok(_) => println!("DB exists: {}", name),
-                Err(lmdb::Error::NotFound) => println!("DB not found: {}", name),
-                Err(e) => println!("Error opening {}: {:?}", name, e),
-            }
-        }
-    }
     replace_pairs(&mut c, n, _conn, &env);
 
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());

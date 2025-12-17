@@ -50,13 +50,10 @@ pub fn random_canonical_id(
 
     loop {
         let n = rng.random_range(min_wires..=7);
-        if n < 2 {
-            panic!("n must be >= 2, got {}", n);
-        }
 
         let perm_db_name = format!("perm_tables_n{}", n);
         let perm_db = env.open_db(Some(&perm_db_name))
-            .unwrap_or_else(|_| panic!("LMDB DB '{}' not found", perm_db_name));
+            .unwrap_or_else(|_| panic!("LMDB DB Count '{}' not found", perm_db_name));
         let txn = env.begin_ro_txn()
             .unwrap_or_else(|_| panic!("Failed to begin read txn on '{}'", perm_db_name));
 
@@ -86,9 +83,9 @@ pub fn random_canonical_id(
         let db2_name = format!("n{}m{}", n, m2);
 
         let db1 = env.open_db(Some(&db1_name))
-            .unwrap_or_else(|_| panic!("LMDB DB '{}' not found", db1_name));
+            .unwrap_or_else(|_| panic!("LMDB DB1 '{}' not found", db1_name));
         let db2 = env.open_db(Some(&db2_name))
-            .unwrap_or_else(|_| panic!("LMDB DB '{}' not found", db2_name));
+            .unwrap_or_else(|_| panic!("LMDB DB2 '{}' not found", db2_name));
 
         let circuit1_blob =
             random_perm_lmdb(&txn, db1, &perm_blob)
