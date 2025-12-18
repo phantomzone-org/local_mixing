@@ -806,6 +806,9 @@ pub fn sql_to_lmdb(n: usize, m: usize) -> Result<(), ()> {
         let mut circuit_seq = CircuitSeq::from_blob(&circuit);
         circuit_seq.rewire(&Permutation::from_blob(&shuf), n);
         circuit_seq.canonicalize();
+        if circuit_seq.gates.windows(2).any(|w| w[0] == w[1]) {
+            continue
+        }
         // compute key = perm || circuit 
         key.extend_from_slice(&circuit_seq.repr_blob());
 
