@@ -594,10 +594,16 @@ fn main() {
             let m: usize = *sub.get_one("m").unwrap();
             let _ = sql_to_lmdb(n, m);
         }
-        Some(("lmdbcounts", sub)) => {
+        Some(("lmdbcounts", _)) => {
             let env_path = "./db";
 
-            let ns_and_ms = vec![
+            let env = Environment::new()
+                .set_max_dbs(50)
+                .set_map_size(64 * 1024 * 1024 * 1024)
+                .open(Path::new(env_path))
+                .expect("Failed to open lmdb");
+
+            let ns_and_ms = [
                 (3, 10),
                 (4, 6),
                 (5, 5),
@@ -610,16 +616,15 @@ fn main() {
                     .map(|m| format!("n{}m{}", n, m))
                     .collect();
 
-                let env = Environment::new()
-                    .set_max_dbs(50)
-                    .set_map_size(64 * 1024 * 1024 * 1024)
-                    .open(Path::new(env_path)).expect("Failed to open lmdb");
+                let perms_to_m =
+                    perm_tables_with_duplicates(&env, &tables)
+                        .expect("Failed to compute perms");
 
-                let perms_to_m = perm_tables_with_duplicates(&env, &tables).expect("Failed to generate hashmap of perm counts");
                 let db_name = format!("perm_tables_n{}", n);
-                save_perm_tables_to_lmdb(env_path, &db_name, &perms_to_m).expect("Failed to save to lmdb");
+                save_perm_tables_to_lmdb(&env_path, &db_name, &perms_to_m)
+                    .expect("Failed to save perms");
 
-                println!("Finished saving perm tables for n = {}", n);
+                println!("Saved perm_tables_n{}", n);
             }
         }
         _ => unreachable!(),
@@ -811,7 +816,7 @@ pub fn sql_to_lmdb(n: usize, m: usize) -> Result<(), ()> {
         }
         // compute key = perm || circuit 
         key.extend_from_slice(&circuit_seq.repr_blob());
-        
+
         batch.push(key);
 
         if batch.len() >= batch_max_entries {

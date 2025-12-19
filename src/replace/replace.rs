@@ -72,8 +72,8 @@ pub fn random_canonical_id(
             panic!("ms.len() < 2 for perm in perm_tables_n{}", n);
         }
 
-        println!("perm: {:?}", Permutation::from_blob(&perm_blob));
-        println!("ms: {:?}", ms);
+        // println!("perm: {:?}", Permutation::from_blob(&perm_blob));
+        // println!("ms: {:?}", ms);
 
         let i = rng.random_range(0..ms.len());
         let mut j = rng.random_range(0..ms.len());
@@ -832,26 +832,43 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
     circuit
 }
 
-fn random_perm_lmdb(
-    txn: &RoTransaction,
-    db: Database,
-    prefix: &[u8],
-) -> Option<Vec<u8>> {
+// fn random_perm_lmdb(
+//     txn: &RoTransaction,
+//     db: Database,
+//     prefix: &[u8],
+// ) -> Option<Vec<u8>> {
+//     let mut cursor = txn.open_ro_cursor(db).ok()?;
+//     let mut circuits = Vec::new();
+
+//     for (key, _) in cursor.iter_from(prefix) {
+//         if !key.starts_with(prefix) {
+//             break;
+//         }
+
+//         // key = perm || circuit
+//         let circuit = key[prefix.len()..].to_vec();
+//         circuits.push(circuit);
+//     }
+
+//     if circuits.is_empty() {
+//         return None;
+//     }
+
+//     let idx = rand::rng().random_range(0..circuits.len());
+//     Some(circuits.swap_remove(idx))
+// }
+
+fn random_perm_lmdb(txn: &RoTransaction, db: Database, prefix: &[u8]) -> Option<Vec<u8>> {
     let mut cursor = txn.open_ro_cursor(db).ok()?;
     let mut circuits = Vec::new();
 
-    for (key, _) in cursor.iter_from(prefix) {
-        if !key.starts_with(prefix) {
-            break;
+    for (key, _) in cursor.iter() {
+        if key.starts_with(prefix) {
+            circuits.push(key[prefix.len()..].to_vec());
         }
-
-        // key = perm || circuit
-        let circuit = key[prefix.len()..].to_vec();
-        circuits.push(circuit);
     }
 
     if circuits.is_empty() {
-        println!("empty");
         return None;
     }
 
