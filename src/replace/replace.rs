@@ -134,13 +134,11 @@ fn random_perm_from_perm_table(
 pub fn random_canonical_id(
     env: &lmdb::Environment,
     _conn: &Connection,
-    min_wires: usize,
+    n: usize,
 ) -> Result<CircuitSeq, Box<dyn std::error::Error>> {
     let mut rng = rand::rng();
 
     loop {
-        let n = rng.random_range(min_wires..=7);
-
         let perm_db_name = format!("perm_tables_n{}", n);
         let perm_db = env.open_db(Some(&perm_db_name))
             .unwrap_or_else(|e| panic!("LMDB DB '{}' not found or failed to open: {:?}", perm_db_name, e));
