@@ -1607,7 +1607,40 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         println!("Replacements so far: {}/{}", replaced, num_pairs);
     }
 
+    println!("Starting single gate replacements");
+    random_gate_replacements(circuit, (num_pairs - replaced)/5 + (m - 2 * num_pairs)/10, num_wires, conn, env);
     println!("Finished replace_pairs");
+}
+
+fn random_gate_replacements(c: &mut CircuitSeq, x: usize, n: usize, _conn: &Connection, env: &lmdb::Environment) {
+    let mut rng = rand::rng();
+    for _ in 0..x {
+        if c.gates.is_empty() {
+            break;
+        }
+
+        let i = rng.random_range(0..c.gates.len());
+        let g = &c.gates[i];
+
+        let num = rng.random_range(3..=7);
+
+        if let Ok(mut id) = random_canonical_id(env, _conn, num) {
+            let mut used_wires: Vec<u8> = g.iter().cloned().take(3).collect();
+            while used_wires.len() < num {
+                let r = rng.random_range(0..n) as u8;
+                if !used_wires.contains(&r) {
+                    used_wires.push(r);
+                }
+            }
+            used_wires.sort();
+            let rewired_g = CircuitSeq::rewire_subcircuit(c, &vec![i], &used_wires);
+            id.rewire_first_gate(rewired_g.gates[0], num);
+            id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
+
+            id.gates.remove(0);
+            c.gates.splice(i..i+1, id.gates.iter().cloned());
+        }
+    }
 }
 
 pub fn print_compress_timers() {
