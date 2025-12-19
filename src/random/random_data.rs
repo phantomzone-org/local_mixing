@@ -2073,7 +2073,39 @@ mod tests {
             }
         }
 
-        for _ in 0..1000 {
+        //warmpup
+        for _ in 0..10000 {
+            for &(n, max_m) in &ns_and_ms {
+                for m in 1..=max_m {
+                    // Generate a random circuit
+                    let mut circuit = random_circuit(n as u8, m);
+
+                    circuit.canonicalize();
+                    let circuit_blob = circuit.repr_blob();
+                    let bit_shuf = match n {
+                        3 => &bit_shuf3,
+                        4 => &bit_shuf4,
+                        5 => &bit_shuf5,
+                        6 => &bit_shuf6,
+                        7 => &bit_shuf7,
+                        _ => panic!("Unsupported n"),
+                    };
+                    // get_canonical timing
+                    let start = Instant::now();
+                    let perm = circuit.permutation(n);
+                    let _p = get_canonical(&perm, &bit_shuf);
+
+                    // SQL timing
+                    let table = format!("n{}m{}", n, m);
+                    let start = Instant::now();
+                    let query = format!("SELECT * FROM {} WHERE circuit = ?", table);
+                    let _res: Option<Vec<u8>> =
+                        conn.query_row(&query, [&circuit_blob], |row| row.get(0)).ok();
+                }
+            }
+        }
+
+        for _ in 0..10000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
                     // Generate a random circuit
