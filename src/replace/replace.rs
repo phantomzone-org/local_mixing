@@ -832,40 +832,23 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
     circuit
 }
 
-// fn random_perm_lmdb(
-//     txn: &RoTransaction,
-//     db: Database,
-//     prefix: &[u8],
-// ) -> Option<Vec<u8>> {
-//     let mut cursor = txn.open_ro_cursor(db).ok()?;
-//     let mut circuits = Vec::new();
-
-//     for (key, _) in cursor.iter_from(prefix) {
-//         if !key.starts_with(prefix) {
-//             break;
-//         }
-
-//         // key = perm || circuit
-//         let circuit = key[prefix.len()..].to_vec();
-//         circuits.push(circuit);
-//     }
-
-//     if circuits.is_empty() {
-//         return None;
-//     }
-
-//     let idx = rand::rng().random_range(0..circuits.len());
-//     Some(circuits.swap_remove(idx))
-// }
-
-fn random_perm_lmdb(txn: &RoTransaction, db: Database, prefix: &[u8]) -> Option<Vec<u8>> {
+fn random_perm_lmdb(
+    txn: &RoTransaction,
+    db: Database,
+    prefix: &[u8],
+) -> Option<Vec<u8>> {
+    println!("Searching for {:?}", Permutation::from_blob(prefix));
     let mut cursor = txn.open_ro_cursor(db).ok()?;
     let mut circuits = Vec::new();
 
-    for (key, _) in cursor.iter() {
-        if key.starts_with(prefix) {
-            circuits.push(key[prefix.len()..].to_vec());
+    for (key, _) in cursor.iter_from(prefix) {
+        if !key.starts_with(prefix) {
+            break;
         }
+
+        // key = perm || circuit
+        let circuit = key[prefix.len()..].to_vec();
+        circuits.push(circuit);
     }
 
     if circuits.is_empty() {
@@ -875,6 +858,24 @@ fn random_perm_lmdb(txn: &RoTransaction, db: Database, prefix: &[u8]) -> Option<
     let idx = rand::rng().random_range(0..circuits.len());
     Some(circuits.swap_remove(idx))
 }
+
+// fn random_perm_lmdb(txn: &RoTransaction, db: Database, prefix: &[u8]) -> Option<Vec<u8>> {
+//     let mut cursor = txn.open_ro_cursor(db).ok()?;
+//     let mut circuits = Vec::new();
+
+//     for (key, _) in cursor.iter() {
+//         if key.starts_with(prefix) {
+//             circuits.push(key[prefix.len()..].to_vec());
+//         }
+//     }
+
+//     if circuits.is_empty() {
+//         return None;
+//     }
+
+//     let idx = rand::rng().random_range(0..circuits.len());
+//     Some(circuits.swap_remove(idx))
+// }
 
 pub fn compress_lmdb(
     c: &CircuitSeq,

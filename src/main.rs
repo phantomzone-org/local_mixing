@@ -616,14 +616,14 @@ fn main() {
                     .map(|m| format!("n{}m{}", n, m))
                     .collect();
 
-                println!("tables: {:?}", tables);
+                // println!("tables: {:?}", tables);
                 let perms_to_m =
                     perm_tables_with_duplicates(&env, &tables)
                         .expect("Failed to compute perms");
 
                 let db_name = format!("perm_tables_n{}", n);
-                // save_perm_tables_to_lmdb(&env_path, &db_name, &perms_to_m)
-                    // .expect("Failed to save perms");
+                save_perm_tables_to_lmdb(&env_path, &db_name, &perms_to_m)
+                    .expect("Failed to save perms");
 
                 println!("Saved perm_tables_n{}", n);
             }
