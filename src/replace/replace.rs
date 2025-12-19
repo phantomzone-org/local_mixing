@@ -63,16 +63,18 @@ pub fn random_canonical_id(
             }
         };
 
-        let ms: Vec<u8> = bincode::deserialize(&ms_blob)
+        let mut ms: Vec<u8> = bincode::deserialize(&ms_blob)
             .unwrap_or_else(|_| panic!("Failed to deserialize ms_blob for n={}", n));
 
+        ms.retain(|&x| x != 0);
+        
         if ms.len() < 2 {
             panic!("ms.len() < 2 for perm in perm_tables_n{}", n);
         }
 
         println!("perm: {:?}", Permutation::from_blob(&perm_blob));
         println!("ms: {:?}", ms_blob);
-        
+
         let i = rng.random_range(0..ms.len());
         let mut j = rng.random_range(0..ms.len());
         while j == i { j = rng.random_range(0..ms.len()); }
