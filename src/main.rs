@@ -811,7 +811,7 @@ pub fn sql_to_lmdb(n: usize, m: usize) -> Result<(), ()> {
         }
         // compute key = perm || circuit 
         key.extend_from_slice(&circuit_seq.repr_blob());
-
+        
         batch.push(key);
 
         if batch.len() >= batch_max_entries {
