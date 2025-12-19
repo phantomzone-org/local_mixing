@@ -837,7 +837,7 @@ fn random_perm_lmdb(
     db: Database,
     prefix: &[u8],
 ) -> Option<Vec<u8>> {
-    println!("Searching for {:?}", Permutation::from_blob(prefix));
+    println!("Permutation: {:?} in db: {:?}", prefix, db);
     let mut cursor = txn.open_ro_cursor(db).ok()?;
     let mut circuits = Vec::new();
 
@@ -1702,5 +1702,30 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_find_perm_lmdb() {
+        let perm = Permutation { data: vec![3, 2, 5, 4, 7, 6, 1, 0, 11, 10, 13, 12, 15, 14, 9, 8, 19, 18, 21, 20, 23, 22, 17, 16, 27, 26, 29, 28, 31, 30, 25, 24, 37, 36, 35, 34, 33, 32, 39, 38, 43, 42, 45, 44, 47, 46, 41, 40, 53, 52, 51, 50, 49, 48, 55, 54, 59, 58, 61, 60, 63, 62, 57, 56, 71, 70, 68, 69, 67, 66, 64, 65, 79, 78, 76, 77, 75, 74, 72, 73, 87, 86, 84, 85, 83, 82, 80, 81, 95, 94, 92, 93, 91, 90, 88, 89, 100, 101, 103, 102, 96, 97, 99, 98, 111, 110, 108, 109, 107, 106, 104, 105, 116, 117, 119, 118, 112, 113, 115, 114, 127, 126, 124, 125, 123, 122, 120, 121]};
+        let prefix = perm.repr_blob();
+        let env_path = "./db";
+        let db_name = "n7m4";
+        let env = Environment::new()
+            .set_max_dbs(50)
+            .open(Path::new(env_path)).expect("Failed to open db");
+        let db = env.open_db(Some(&db_name))
+                .unwrap_or_else(|e| panic!("LMDB DB '{}' failed to open: {:?}", db_name, e));
+        let txn = env.begin_ro_txn()
+                .unwrap_or_else(|e| panic!("Failed to begin RO txn on '{}': {:?}", "perm_db_name", e));
+        let mut cursor = txn.open_ro_cursor(db).ok().expect("Failed to open cursor");
+        let mut circuits = Vec::new();
+        let mut count = 0;
+        for (key, _) in cursor.iter() {
+            if key.starts_with(&prefix) {
+                circuits.push(key[prefix.len()..].to_vec());
+                count += 1;
+                println!("count: {}", count);
+            }
+        }
     }
 }
