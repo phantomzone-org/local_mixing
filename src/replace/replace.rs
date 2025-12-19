@@ -20,6 +20,96 @@ use std::{
 use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicU64;
 use lmdb::{Cursor, Database, Transaction, RoTransaction};
+use lmdb::RoCursor;
+use libc::{c_uint};
+use std::{ptr, slice, marker::PhantomData};
+extern crate lmdb_sys;
+use lmdb_sys as ffi;
+
+pub struct Iter<'txn> {
+    cursor: *mut ffi::MDB_cursor,
+    op: c_uint,
+    next_op: c_uint,
+    finished: bool,
+    _marker: PhantomData<&'txn ()>,
+}
+
+impl<'txn> Iter<'txn> {
+    pub fn new(cursor: *mut ffi::MDB_cursor, op: c_uint, next_op: c_uint) -> Self {
+        Self {
+            cursor,
+            op,
+            next_op,
+            finished: false,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'txn> Iterator for Iter<'txn> {
+    type Item = (&'txn [u8], &'txn [u8]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.finished {
+            return None;
+        }
+
+        unsafe {
+            let mut key = ffi::MDB_val { mv_size: 0, mv_data: ptr::null_mut() };
+            let mut data = ffi::MDB_val { mv_size: 0, mv_data: ptr::null_mut() };
+
+            let rc = ffi::mdb_cursor_get(self.cursor, &mut key, &mut data, self.op);
+            self.op = self.next_op;
+
+            if rc == ffi::MDB_NOTFOUND {
+                self.finished = true;
+                return None;
+            } else if rc != ffi::MDB_SUCCESS {
+                panic!("LMDB error: {}", rc);
+            }
+
+            let key_slice = slice::from_raw_parts(key.mv_data as *const u8, key.mv_size);
+            let data_slice = slice::from_raw_parts(data.mv_data as *const u8, data.mv_size);
+            Some((key_slice, data_slice))
+        }
+    }
+}
+
+
+pub trait RoCursorExt<'txn> {
+    fn iter_from_safe<K>(&mut self, key: K) -> Iter<'txn>
+    where
+        K: AsRef<[u8]>;
+}
+
+impl<'txn> RoCursorExt<'txn> for RoCursor<'txn> {
+    fn iter_from_safe<K>(&mut self, key: K) -> Iter<'txn>
+    where
+        K: AsRef<[u8]>,
+    {
+        let rc = unsafe {
+            let mut key_val = lmdb_sys::MDB_val {
+                mv_size: key.as_ref().len(),
+                mv_data: key.as_ref().as_ptr() as *mut _,
+            };
+            lmdb_sys::mdb_cursor_get(self.cursor(), &mut key_val, std::ptr::null_mut(), lmdb_sys::MDB_SET_RANGE)
+        };
+
+        if rc == lmdb_sys::MDB_NOTFOUND {
+            Iter {
+                cursor: self.cursor(),
+                op: lmdb_sys::MDB_GET_CURRENT,
+                next_op: lmdb_sys::MDB_NEXT,
+                finished: true,
+                _marker: std::marker::PhantomData,
+            }
+        } else if rc != lmdb_sys::MDB_SUCCESS {
+            panic!("LMDB error: {}", rc);
+        } else {
+            Iter::new(self.cursor(), lmdb_sys::MDB_GET_CURRENT, lmdb_sys::MDB_NEXT)
+        }
+    }
+}
 
 fn random_perm_from_perm_table(
     txn: &RoTransaction,
@@ -84,7 +174,7 @@ pub fn random_canonical_id(
         let db1_name = format!("n{}m{}", n, m1);
         let db2_name = format!("n{}m{}", n, m2);
         
-        println!("Searching for perm_len {} in {}", perm_blob.len().trailing_zeros(), db1_name);
+        // println!("Searching for perm_len {} in {}", perm_blob.len().trailing_zeros(), db1_name);
 
         let circuit1_blob = {
             let db1 = env.open_db(Some(&db1_name))
@@ -412,7 +502,7 @@ pub fn compress(
 pub fn expand_lmdb(
     c: &CircuitSeq,
     trials: usize,
-    conn: &mut Connection,
+    _conn: &mut Connection,
     bit_shuf: &Vec<Vec<usize>>,
     n: usize,
     env: &lmdb::Environment,
@@ -843,7 +933,7 @@ fn random_perm_lmdb(
     let mut cursor = txn.open_ro_cursor(db).ok()?;
     let mut circuits = Vec::new();
 
-    for (key, _) in cursor.iter_from(prefix) {
+    for (key, _) in cursor.iter_from_safe(prefix) {
         if !key.starts_with(prefix) {
             break;
         }
