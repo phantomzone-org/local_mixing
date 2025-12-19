@@ -839,7 +839,7 @@ fn random_perm_lmdb(
     db: Database,
     prefix: &[u8],
 ) -> Option<Vec<u8>> {
-    println!("Permutation: {:?} in db: {:?}", prefix, db);
+    // println!("Permutation: {:?} in db: {:?}", prefix, db);
     let mut cursor = txn.open_ro_cursor(db).ok()?;
     let mut circuits = Vec::new();
 
