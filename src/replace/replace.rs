@@ -851,6 +851,7 @@ fn random_perm_lmdb(
     }
 
     if circuits.is_empty() {
+        println!("empty");
         return None;
     }
 
