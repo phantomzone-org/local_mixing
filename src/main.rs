@@ -285,6 +285,26 @@ fn main() {
             Command::new("lmdbcounts")
             .about("Generate table for generating canon ids")
         )
+        .subcommand(
+            Command::new("string")
+                .about("Reverse the order of gates in a circuit file")
+                .arg(
+                    Arg::new("source")
+                        .short('s')
+                        .long("source")
+                        .required(true)
+                        .value_parser(clap::value_parser!(String))
+                        .help("Path to the source circuit file"),
+                )
+                .arg(
+                    Arg::new("dest")
+                        .short('d')
+                        .long("dest")
+                        .required(true)
+                        .value_parser(clap::value_parser!(String))
+                        .help("Path to write the reversed circuit file"),
+                ),
+        )
         .get_matches();
 
     match matches.subcommand() {
@@ -628,6 +648,16 @@ fn main() {
                 println!("Saved perm_tables_n{}", n);
             }
         }
+        Some(("string", sub)) => {
+            let from_path = sub.get_one::<String>("source").unwrap();
+            let dest_path = sub.get_one::<String>("dest").unwrap();
+            let input_str = fs::read_to_string(from_path)
+                .unwrap_or_else(|e| panic!("Failed to read {}: {}", from_path, e));
+            let circuit = CircuitSeq::from_string(input_str.trim());
+            let string = circuit.to_string(circuit.used_wires().len());
+            fs::write(dest_path, string)
+             .unwrap_or_else(|e| panic!("Failed to write {}: {}", dest_path, e));
+            }
         _ => unreachable!(),
     }
 }

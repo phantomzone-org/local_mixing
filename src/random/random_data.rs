@@ -2074,7 +2074,7 @@ mod tests {
         }
 
         //warmpup
-        for _ in 0..10000 {
+        for _ in 0..1000000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
                     // Generate a random circuit
@@ -2105,7 +2105,7 @@ mod tests {
             }
         }
 
-        for _ in 0..100000 {
+        for _ in 0..1000000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
                     // Generate a random circuit
