@@ -952,10 +952,23 @@ pub fn compress_lmdb(
         return CircuitSeq { gates: Vec::new() };
     }
 
-    for _ in 0..trials {
-        let (mut subcircuit, start, end) = random_subcircuit(&compressed);
-        subcircuit.canonicalize();
+    // Decide number of trials and whether to do subcircuits
+    let (do_subcircuit, trial_count) = if compressed.gates.len() < 5 {
+        (false, 2)
+    } else {
+        (true, trials)
+    };
 
+    for _ in 0..trial_count {
+        let (subcircuit, start, end) = if do_subcircuit {
+            random_subcircuit(&compressed)
+        } else {
+            (compressed.clone(), 0, compressed.gates.len())
+        };
+
+        let mut subcircuit = subcircuit;
+        subcircuit.canonicalize();
+        
         let max = if n == 7 {
             3
         } else if n == 5 || n == 6 {

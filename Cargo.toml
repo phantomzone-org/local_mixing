@@ -4,48 +4,34 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "local_mixing"            # <— change back to this
+name = "local_mixing"            
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "local_mixing_bin"        # <— rename binary so it doesn’t conflict
+name = "local_mixing_bin"        
 path = "src/main.rs"
 
 [profile.release]
 overflow-checks = true
 
 [dependencies]
-log = "0.4.22"
-log4rs = "1.3.0"
 rand = "0.9.0"
-rand_chacha = "0.9.0"
 rayon = "1.10.0"
 serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.138"
 bincode = "1.3.3"
 rusqlite = { version = "0.33.0", features = ["bundled"] }
-sha2 = "0.10.8"
 lru = "0.12"
 itertools = "0.13"
 once_cell = "1.19"
 dashmap = "6.1.0"
 crossbeam = "0.8.4"
-num_cpus = "1.17.0"
 clap = "4.5.46"
-gob = "0.1.0"
 smallvec = "1.15.1"
 ctrlc = "3.2"
 fastrand = "2.3.0"
-colorgrad = "0.6"
 plotters = "0.3"
 pyo3 = { version = "0.27.1", features = ["extension-module"] }
 numpy = "0.27.0"
-ahash = { version = "0.8.12", features = ["serde"] }
-hex = "0.4.3"
 lmdb = "0.8.0"
-rmp-serde = "1.3.0"
-anyhow = "1.0.100"
-transaction = "0.2.1"
 libc = "0.2.178"
-flags = "0.1.5"
 lmdb-sys = "0.8.0"
