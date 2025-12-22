@@ -1518,7 +1518,7 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
     }
 
     println!("Starting single gate replacements");
-    random_gate_replacements(circuit, (num_pairs - replaced)/5 + (m - 2 * num_pairs)/10, num_wires, conn, env);
+    random_gate_replacements(circuit, (num_pairs - replaced)/500 + (m - 2 * num_pairs)/1000, num_wires, conn, env);
     println!("Finished replace_pairs");
 }
 
