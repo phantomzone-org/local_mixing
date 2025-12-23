@@ -25,6 +25,8 @@ use libc::{c_uint};
 use std::{ptr, slice, marker::PhantomData};
 extern crate lmdb_sys;
 use lmdb_sys as ffi;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
 
 pub struct Iter<'txn> {
     cursor: *mut ffi::MDB_cursor,
@@ -109,6 +111,16 @@ impl<'txn> RoCursorExt<'txn> for RoCursor<'txn> {
             Iter::new(self.cursor(), lmdb_sys::MDB_GET_CURRENT, lmdb_sys::MDB_NEXT)
         }
     }
+}
+
+static BIT_SHUF_CACHE: Lazy<Mutex<HashMap<usize, Vec<Vec<usize>>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+fn get_bit_shuf(n: usize) -> Vec<Vec<usize>> {
+    let mut cache = BIT_SHUF_CACHE.lock().unwrap();
+    cache.entry(n).or_insert_with(|| {
+        (0..n).permutations(n).skip(1).collect()
+    }).clone()
 }
 
 fn random_perm_from_perm_table(
@@ -608,8 +620,11 @@ pub fn expand_lmdb(
 
                 repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
 
-                compressed.gates.splice(start..end, repl.gates);
-
+                if repl.gates.len() == end - start {
+                    compressed.gates[start..end].copy_from_slice(&repl.gates);
+                } else {
+                    compressed.gates.splice(start..end, repl.gates);
+                }
                 break;
             }
         }
@@ -783,8 +798,15 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
     for _ in 0..trials {
         // let t0 = Instant::now();
         let mut subcircuit_gates = vec![];
-        let random_max_wires = rng.random_range(3..=7);
-        for set_size in (3..=6).rev() {
+        let random_max_wires = rng.random_range(5..=7);
+        let size = if random_max_wires == 7 {
+            6
+        } else if random_max_wires == 6 {
+            4
+        } else {
+            3
+        };
+        for set_size in (3..=size).rev() {
             let (gates, _) = find_convex_subcircuit(set_size, random_max_wires, num_wires, &circuit, &mut rng);
             if !gates.is_empty() {
                 subcircuit_gates = gates;
@@ -819,8 +841,8 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
 
         // let t3 = Instant::now();
         let sub_num_wires = used_wires.len();
-        let perms: Vec<Vec<usize>> = (0..sub_num_wires).permutations(sub_num_wires).collect();
-        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+        let bit_shuf = get_bit_shuf(sub_num_wires);
+
         // PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         // let t4 = Instant::now();
@@ -875,45 +897,20 @@ fn random_perm_lmdb(
     db: Database,
     prefix: &[u8],
 ) -> Option<Vec<u8>> {
-    // println!("Permutation: {:?} in db: {:?}", prefix, db);
     let mut cursor = txn.open_ro_cursor(db).ok()?;
-    let mut circuits = Vec::new();
+    let mut rng = rand::rng();
+    let mut chosen: Option<Vec<u8>> = None;
+    let mut count = 0;
 
     for (key, _) in cursor.iter_from_safe(prefix) {
-        if !key.starts_with(prefix) {
-            break;
+        if !key.starts_with(prefix) { break; }
+        count += 1;
+        if rng.random_range(0..count) == 0 {
+            chosen = Some(key[prefix.len()..].to_vec());
         }
-
-        // key = perm || circuit
-        let circuit = key[prefix.len()..].to_vec();
-        circuits.push(circuit);
     }
-
-    if circuits.is_empty() {
-        return None;
-    }
-
-    let idx = rand::rng().random_range(0..circuits.len());
-    Some(circuits.swap_remove(idx))
+    chosen
 }
-
-// fn random_perm_lmdb(txn: &RoTransaction, db: Database, prefix: &[u8]) -> Option<Vec<u8>> {
-//     let mut cursor = txn.open_ro_cursor(db).ok()?;
-//     let mut circuits = Vec::new();
-
-//     for (key, _) in cursor.iter() {
-//         if key.starts_with(prefix) {
-//             circuits.push(key[prefix.len()..].to_vec());
-//         }
-//     }
-
-//     if circuits.is_empty() {
-//         return None;
-//     }
-
-//     let idx = rand::rng().random_range(0..circuits.len());
-//     Some(circuits.swap_remove(idx))
-// }
 
 pub fn compress_lmdb(
     c: &CircuitSeq,
@@ -1063,9 +1060,12 @@ pub fn compress_lmdb(
                 }
 
                 repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
-
-                compressed.gates.splice(start..end, repl.gates);
-
+                
+                if repl.gates.len() == end - start { 
+                    compressed.gates[start..end].copy_from_slice(&repl.gates);
+                } else {
+                    compressed.gates.splice(start..end, repl.gates);
+                }
                 break;
             }
         }
@@ -1143,13 +1143,17 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
 
         
-        let perms: Vec<Vec<usize>> = (0..new_wires).permutations(new_wires).collect();
-        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+        let bit_shuf = get_bit_shuf(new_wires);
+
         let subcircuit_temp = expand_lmdb(&subcircuit, 10, conn, &bit_shuf, new_wires, &env, n_wires);
         subcircuit = subcircuit_temp;
 
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
-        circuit.gates.splice(start..end+1, subcircuit.gates);
+        if subcircuit.gates.len() == end+1 - start {
+            circuit.gates[start..end+1].copy_from_slice(&subcircuit.gates);
+        } else {    
+            circuit.gates.splice(start..end+1, subcircuit.gates);
+        }
         // if c.permutation(num_wires).data != circuit.permutation(num_wires).data {
         //     panic!("splice changed something");
         // }
@@ -1283,8 +1287,8 @@ pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, co
 
         // let t3 = Instant::now();
         let sub_num_wires = used_wires.len();
-        let perms: Vec<Vec<usize>> = (0..sub_num_wires).permutations(sub_num_wires).collect();
-        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
+        let bit_shuf = get_bit_shuf(sub_num_wires);
+
         // PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         // let t4 = Instant::now();

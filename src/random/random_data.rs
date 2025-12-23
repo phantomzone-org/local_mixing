@@ -237,7 +237,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
 ) -> (Vec<usize>, usize) {
     let num_gates = circuit.gates.len();
     let mut search_attempts = 0;
-    let max_attempts = 10;
+    let max_attempts = 3;
 
     loop {
         search_attempts += 1;
@@ -431,7 +431,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
             curr_wires = new_wires;
         }
 
-        if selected_gate_ctr != set_size {
+        if selected_gate_ctr < 3 {
             continue;
         }
 
@@ -1508,27 +1508,33 @@ mod tests {
     #[test]
     fn test_find_convex_subcircuit_min3_16wires() {
         // Dummy 16-wire circuit with 30 gates
-        let c = random_circuit(16,30);
-
+        let c = random_circuit(64, 1000);
         let mut rng = rand::rng();
-        let max_wires = 7;
+        let max_wires = 4;
 
         let mut subcircuit_gates = vec![];
         let mut attempts = 0;
 
-        for set_size in (3..=16).rev() {
-            let (gates, tries) = find_convex_subcircuit(set_size, max_wires, 16, &c, &mut rng);
-            attempts += tries;
+        // Keep trying until a convex subcircuit with >= 3 gates is found
+        while subcircuit_gates.len() < 3 {
+            for set_size in (3..=16).rev() {
+                let (gates, tries) = find_convex_subcircuit(set_size, max_wires, 64, &c, &mut rng);
+                attempts += tries;
 
-            if !gates.is_empty() {
-                subcircuit_gates = gates;
-                println!("Found convex subcircuit with {set_size} gates after {attempts} total attempts");
-                break;
+                if !gates.is_empty() && gates.len() >= 3 {
+                    subcircuit_gates = gates;
+                    println!(
+                        "Found convex subcircuit with {} gates after {} total attempts",
+                        subcircuit_gates.len(),
+                        attempts
+                    );
+                    break;
+                }
             }
-        }
 
-        if subcircuit_gates.is_empty() {
-            eprintln!("No convex subcircuit found for any size in 3..=16");
+            if subcircuit_gates.len() < 3 {
+                println!("No subcircuit ≥ 3 gates found in this round, retrying.................................................");
+            }
         }
 
         println!("Selected gate indices: {:?}", subcircuit_gates);
@@ -1548,30 +1554,27 @@ mod tests {
         assert!(wire_set.len() <= max_wires, "Subcircuit uses too many wires");
         println!("Wires used: {:?}", wire_set);
 
-        // Check that the selected subcircuit is actually convex
-        let convex_ok = is_convex(16, &c, &subcircuit_gates);
-        let mut gates: Vec<[u8;3]> = vec![[0,0,0];subcircuit_gates.len()];
-        for (i, g) in subcircuit_gates.iter().enumerate() {
-            gates[i] = c.gates[*g];
-        }
-        let subcircuit = CircuitSeq { gates };
-        subcircuit_gates.sort();
-        println!("{}", subcircuit.to_string(16));
-        println!("{:?}", subcircuit.used_wires());
-        let sub = CircuitSeq::rewire_subcircuit(&c, &subcircuit_gates, &subcircuit.used_wires());
-        let undo =  CircuitSeq::unrewire_subcircuit(&sub, &subcircuit.used_wires());
-        println!("Rewire and unrewire is ok: {}", subcircuit.permutation(wire_set.len()) == undo.permutation(wire_set.len()));
+        // Check convexity
+        let convex_ok = is_convex(64, &c, &subcircuit_gates);
         assert!(convex_ok, "Selected subcircuit is not convex");
         println!("Convexity check passed");
+
+        // Optional: rewire/unrewire check and display
+        let gates_arr: Vec<[u8; 3]> = subcircuit_gates.iter().map(|&i| c.gates[i]).collect();
+        let subcircuit = CircuitSeq { gates: gates_arr };
+        let sub = CircuitSeq::rewire_subcircuit(&c, &subcircuit_gates, &subcircuit.used_wires());
+        let undo = CircuitSeq::unrewire_subcircuit(&sub, &subcircuit.used_wires());
+        println!(
+            "Rewire and unrewire is ok: {}",
+            subcircuit.permutation(wire_set.len()) == undo.permutation(wire_set.len())
+        );
+
         let mut circ = c.clone();
-        println!("Before gates {:?}", subcircuit_gates);
-        let (start, end) = contiguous_convex(&mut circ,  &mut subcircuit_gates, 16).unwrap();
+        let (start, end) = contiguous_convex(&mut circ, &mut subcircuit_gates, 64).unwrap();
         println!("After gates {:?}", subcircuit_gates);
-        println!("The rearranged are equal: {}", c.permutation(16).data == circ.permutation(16).data);
-        println!("New circuit {:?}", circ.gates);
-        println!("start and end designated: {:?}", &circ.gates[start..end+1]);
-        println!("Desired sub: {:?}", subcircuit.gates);
+        println!("start and end designated: {:?}", &circ.gates[start..=end]);
     }
+
     use crate::replace::replace::compress;
     #[test]
     fn test_compression_speed() {
