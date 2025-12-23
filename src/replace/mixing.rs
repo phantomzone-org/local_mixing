@@ -20,6 +20,8 @@ use std::{
 use once_cell::sync::Lazy;
 use std::time::Instant;
 use std::sync::{Mutex, atomic::{AtomicBool}};
+use std::thread_local;
+use std::cell::RefCell;
 fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
     let (mut final_circuit, inverse_starts) = obfuscate(c, n);
@@ -552,6 +554,13 @@ fn dump_and_exit() -> ! {
     exit(1);
 }
 
+thread_local! {
+    static THREAD_CONN: RefCell<Connection> = RefCell::new(
+        Connection::open_with_flags("circuits.db", OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("Failed to open DB")
+    );
+}
+
 pub fn abutterfly_big(
     c: &CircuitSeq,
     _conn: &mut Connection,
@@ -627,33 +636,34 @@ pub fn abutterfly_big(
         .into_par_iter()
         .enumerate()
         .map(|(_, block)| {
-            let mut thread_conn = Connection::open_with_flags(
-                "circuits.db",
-                OpenFlags::SQLITE_OPEN_READ_ONLY,
-            )
-            .expect("Failed to open read-only connection");
-
             let before_len = block.gates.len();
             let t3 = Instant::now();
-            let expanded = expand_big(&block, 100, n, &mut thread_conn, &env, &bit_shuf_list);
+
+            // Use thread-local connection
+            let expanded = THREAD_CONN.with(|conn_cell| {
+                let mut conn = conn_cell.borrow_mut();
+                expand_big(&block, 100, n, &mut conn, &env, &bit_shuf_list)
+            });
             EXPAND_BIG_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
             let t4 = Instant::now();
-            let compressed_block = compress_big(&expanded, 100, n, &mut thread_conn, env, &bit_shuf_list);
+            let compressed_block = THREAD_CONN.with(|conn_cell| {
+                let mut conn = conn_cell.borrow_mut();
+                compress_big(&expanded, 100, n, &mut conn, env, &bit_shuf_list)
+            });
             COMPRESS_BIG_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
             let after_len = compressed_block.gates.len();
-            
+
             if after_len < before_len {
-                reduced.fetch_add(1, Ordering::Relaxed); 
+                reduced.fetch_add(1, Ordering::Relaxed);
             } else if after_len > before_len {
                 grew.fetch_add(1, Ordering::Relaxed);
             } else if block.gates != compressed_block.gates {
                 swapped.fetch_add(1, Ordering::Relaxed);
             } else {
                 no_change.fetch_add(1, Ordering::Relaxed);
-            };
-
-            
-            //println!("  {}", compressed_block.repr());
+            }
 
             compressed_block
         })
@@ -678,8 +688,10 @@ pub fn abutterfly_big(
 
     acc = CircuitSeq { gates: acc.gates.clone() };
     println!("After adding bookends: {} gates", acc.gates.len());
+
     // let mut milestone = initial_milestone(acc.gates.len());
     // Final global compression until stable 3×
+    let mut rng = rand::rng();
     let mut stable_count = 0;
     while stable_count < 3 {
         // if acc.gates.len() <= milestone {
@@ -709,8 +721,6 @@ pub fn abutterfly_big(
             1
         };
 
-        let mut rng = rand::rng();
-
         let chunks = split_into_random_chunks(&acc.gates, k, &mut rng);
 
         let compressed_chunks: Vec<Vec<[u8;3]>> =
@@ -718,23 +728,18 @@ pub fn abutterfly_big(
             .into_par_iter()
             .map(|chunk| {
                 let sub = CircuitSeq { gates: chunk };
-                let mut thread_conn = Connection::open_with_flags(
-                    "circuits.db",
-                    OpenFlags::SQLITE_OPEN_READ_ONLY,
-                )
-                .expect("Failed to open read-only connection");
-                compress_big(&sub, 1_000, n, &mut thread_conn, env, &bit_shuf_list).gates
+                THREAD_CONN.with(|conn_cell| {
+                    let mut conn = conn_cell.borrow_mut();
+                    compress_big(&sub, 1_000, n, &mut conn, env, bit_shuf_list).gates
+                })
             })
             .collect();
 
         let new_gates: Vec<[u8;3]> = compressed_chunks.into_iter().flatten().collect();
         acc.gates = new_gates;
-        {
+        if SHOULD_DUMP.load(Ordering::SeqCst) {
             let mut guard = CURRENT_ACC.lock().unwrap();
             *guard = Some(acc.clone());
-        }
-
-        if SHOULD_DUMP.load(Ordering::SeqCst) {
             dump_and_exit();
         }
         let after = acc.gates.len();
@@ -1130,7 +1135,7 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     for i in 0..rounds {
         let stop = 1000;
         circuit = if asymmetric {
-            abutterfly_big(&circuit, conn, n, i != rounds-1, std::cmp::min(stop*(i+1), 10000), env, i+1, rounds, &bit_shuf_list)
+            abutterfly_big(&circuit, conn, n, i != rounds-1, std::cmp::min(stop*(i+1), 5000), env, i+1, rounds, &bit_shuf_list)
         } else {
             butterfly_big(&circuit,conn,n, i != rounds-1, stop*(i+1), env, &bit_shuf_list)
         };
