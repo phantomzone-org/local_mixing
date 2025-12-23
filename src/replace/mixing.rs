@@ -711,6 +711,11 @@ pub fn abutterfly_big(
     while stable_count < 3 {
         let before = acc.gates.len();
         acc = compress_big(&acc, 1_000, n, _conn, &env);
+
+        if last && acc.gates.len() <= stop {
+            break
+        }
+
         let after = acc.gates.len();
 
         if after == before {
