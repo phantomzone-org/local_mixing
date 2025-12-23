@@ -15,10 +15,10 @@ use std::{
     // fs::OpenOptions, // used for testing
     // io::Write,
     // sync::Arc,
-    // time::{Instant},
+    time::{Instant},
 };
-// use std::sync::atomic::Ordering;
-// use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::atomic::AtomicU64;
 use lmdb::{Cursor, Database, Transaction, RoTransaction};
 use lmdb::RoCursor;
 use libc::{c_uint};
@@ -325,16 +325,16 @@ pub fn random_subcircuit_max(circuit: &CircuitSeq, max_len: usize) -> (CircuitSe
     (CircuitSeq { gates: subcircuit }, start, end)
 }
 
-// static PERMUTATION_TIME: AtomicU64 = AtomicU64::new(0);
-// static SQL_TIME: AtomicU64 = AtomicU64::new(0);
-// static CANON_TIME: AtomicU64 = AtomicU64::new(0);
-// static CONVEX_FIND_TIME: AtomicU64 = AtomicU64::new(0);
-// static CONTIGUOUS_TIME: AtomicU64 = AtomicU64::new(0);
-// static REWIRE_TIME: AtomicU64 = AtomicU64::new(0);
-// static COMPRESS_TIME: AtomicU64 = AtomicU64::new(0);
-// static UNREWIRE_TIME: AtomicU64 = AtomicU64::new(0);
-// static REPLACE_TIME: AtomicU64 = AtomicU64::new(0);
-// static DEDUP_TIME: AtomicU64 = AtomicU64::new(0);
+static PERMUTATION_TIME: AtomicU64 = AtomicU64::new(0);
+static SQL_TIME: AtomicU64 = AtomicU64::new(0);
+static CANON_TIME: AtomicU64 = AtomicU64::new(0);
+static CONVEX_FIND_TIME: AtomicU64 = AtomicU64::new(0);
+static CONTIGUOUS_TIME: AtomicU64 = AtomicU64::new(0);
+static REWIRE_TIME: AtomicU64 = AtomicU64::new(0);
+static COMPRESS_TIME: AtomicU64 = AtomicU64::new(0);
+static UNREWIRE_TIME: AtomicU64 = AtomicU64::new(0);
+static REPLACE_TIME: AtomicU64 = AtomicU64::new(0);
+static DEDUP_TIME: AtomicU64 = AtomicU64::new(0);
 
 pub fn compress(
     c: &CircuitSeq,
@@ -796,7 +796,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
     }
 
     for _ in 0..trials {
-        // let t0 = Instant::now();
+        let t0 = Instant::now();
         let mut subcircuit_gates = vec![];
         let random_max_wires = rng.random_range(5..=7);
         let size = if random_max_wires == 7 {
@@ -813,7 +813,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
                 break;
             }
         }
-        // CONVEX_FIND_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        CONVEX_FIND_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         if subcircuit_gates.is_empty() {
             continue;
@@ -822,9 +822,9 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         let gates: Vec<[u8; 3]> = subcircuit_gates.iter().map(|&g| circuit.gates[g]).collect();
         subcircuit_gates.sort();
 
-        // let t1 = Instant::now();
+        let t1 = Instant::now();
         let (start, end) = contiguous_convex(&mut circuit, &mut subcircuit_gates, num_wires).unwrap();
-        // CONTIGUOUS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        CONTIGUOUS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         let mut subcircuit = CircuitSeq { gates };
 
@@ -834,28 +834,27 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
             continue;
         }
 
-        // let t2 = Instant::now();
+        let t2 = Instant::now();
         let used_wires = subcircuit.used_wires();
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
-        // REWIRE_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        REWIRE_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-        // let t3 = Instant::now();
+        let t3 = Instant::now();
         let sub_num_wires = used_wires.len();
         let bit_shuf = get_bit_shuf(sub_num_wires);
+        PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-        // PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-        // let t4 = Instant::now();
+        let t4 = Instant::now();
         let subcircuit_temp = compress_lmdb(&subcircuit, 20, conn, &bit_shuf, sub_num_wires, env);
-        // COMPRESS_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        COMPRESS_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         subcircuit = subcircuit_temp;
 
-        // let t5 = Instant::now();
+        let t5 = Instant::now();
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
-        // UNREWIRE_TIME.fetch_add(t5.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        UNREWIRE_TIME.fetch_add(t5.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-        // let t6 = Instant::now();
+        let t6 = Instant::now();
         let repl_len = subcircuit.gates.len();
         let old_len = end - start + 1;
 
@@ -874,10 +873,10 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         } else {
             panic!("Replacement grew, which is not allowed");
         }
-        // REPLACE_TIME.fetch_add(t6.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        REPLACE_TIME.fetch_add(t6.elapsed().as_nanos() as u64, Ordering::Relaxed);
     }
 
-    // let t7 = Instant::now();
+    let t7 = Instant::now();
     let mut i = 0;
     while i < circuit.gates.len().saturating_sub(1) {
         if circuit.gates[i] == circuit.gates[i + 1] {
@@ -887,7 +886,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
             i += 1;
         }
     }
-    // DEDUP_TIME.fetch_add(t7.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    DEDUP_TIME.fetch_add(t7.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     circuit
 }
@@ -922,9 +921,9 @@ pub fn compress_lmdb(
 ) -> CircuitSeq {
 
     let id = Permutation::id_perm(n);
-    // let t0 = Instant::now();
+    let t0 = Instant::now();
     let c_perm = c.permutation(n);
-    // PERMUTATION_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    PERMUTATION_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     if c_perm == id {
         return CircuitSeq { gates: Vec::new() };
@@ -949,7 +948,6 @@ pub fn compress_lmdb(
         return CircuitSeq { gates: Vec::new() };
     }
 
-    // Decide number of trials and whether to do subcircuits
     let (do_subcircuit, trial_count) = if compressed.gates.len() < 5 {
         (false, 2)
     } else {
@@ -966,33 +964,21 @@ pub fn compress_lmdb(
         let mut subcircuit = subcircuit;
         subcircuit.canonicalize();
         
-        let max = if n == 7 {
-            3
-        } else if n == 5 || n == 6 {
-            5
-        } else if n == 4 {
-            6
-        } else {
-            10
-        };
-
+        let max = if n == 7 { 3 } else if n == 5 || n == 6 { 5 } else if n == 4 { 6 } else { 10 };
         let sub_m = subcircuit.gates.len();
         let min = min(sub_m, max);
         
         let (canon_perm_blob, canon_shuf_blob) = if sub_m <= max && (n > 5 || (n == 4 && sub_m > 3) || (n == 5 && sub_m > 2)) {
             let table = format!("n{}m{}", n, min);
-            let query = format!(
-                "SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1",
-                table
-            );
+            let query = format!("SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1", table);
 
-            // let sql_t0 = Instant::now();
+            let sql_t0 = Instant::now();
             let mut stmt = match conn.prepare(&query) {
                 Ok(s) => s,
                 Err(_) => continue,
             };
             let rows = stmt.query([&subcircuit.repr_blob()]);
-            // SQL_TIME.fetch_add(sql_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            SQL_TIME.fetch_add(sql_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
             let mut r = match rows {
                 Ok(r) => r,
@@ -1000,29 +986,26 @@ pub fn compress_lmdb(
             };
 
             if let Some(row_result) = r.next().unwrap() {
-                
-                (row_result
-                    .get(0)
-                    .expect("Failed to get blob"),
-                row_result
-                    .get(1)
-                    .expect("Failed to get blob"))
-                
+                (
+                    row_result.get(0).expect("Failed to get blob"),
+                    row_result.get(1).expect("Failed to get blob")
+                )
             } else {
                 continue
             }
 
         } else {
-            // let t1 = Instant::now();
+            let t1 = Instant::now();
             let sub_perm = subcircuit.permutation(n);
-            // PERMUTATION_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            PERMUTATION_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-            // let t2 = Instant::now();
+            let t2 = Instant::now();
             let canon_perm = get_canonical(&sub_perm, bit_shuf);
-            // CANON_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            CANON_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
             (canon_perm.perm.repr_blob(), canon_perm.shuffle.repr_blob())
         };
+
         let prefix = canon_perm_blob.as_slice();
         for smaller_m in 1..=min {
             let db_name = format!("n{}m{}", n, smaller_m);
@@ -1036,7 +1019,7 @@ pub fn compress_lmdb(
             let hit = {
                 let txn = env.begin_ro_txn().expect("txn");
 
-                // let t0 = Instant::now();
+                let t0 = Instant::now();
                 
                 let mut res = random_perm_lmdb(&txn, db, prefix);
                 if res.is_none() {
@@ -1045,7 +1028,7 @@ pub fn compress_lmdb(
                     res = random_perm_lmdb(&txn, db, &prefix_inv_blob);
                 }
 
-                // SQL_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                SQL_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
                 res.map(|val_blob| val_blob)
             };
@@ -1559,30 +1542,30 @@ fn random_gate_replacements(c: &mut CircuitSeq, x: usize, n: usize, _conn: &Conn
     }
 }
 
-// pub fn print_compress_timers() {
-//     let perm = PERMUTATION_TIME.load(Ordering::Relaxed);
-//     let sql = SQL_TIME.load(Ordering::Relaxed);
-//     let canon = CANON_TIME.load(Ordering::Relaxed);
-//     let compress = COMPRESS_TIME.load(Ordering::Relaxed);
-//     let rewire = REWIRE_TIME.load(Ordering::Relaxed);
-//     let unrewire = UNREWIRE_TIME.load(Ordering::Relaxed);
-//     let convex_find = CONVEX_FIND_TIME.load(Ordering::Relaxed);
-//     let contiguous = CONTIGUOUS_TIME.load(Ordering::Relaxed);
-//     let replace = REPLACE_TIME.load(Ordering::Relaxed);
-//     let dedup = DEDUP_TIME.load(Ordering::Relaxed);
+pub fn print_compress_timers() {
+    let perm = PERMUTATION_TIME.load(Ordering::Relaxed);
+    let sql = SQL_TIME.load(Ordering::Relaxed);
+    let canon = CANON_TIME.load(Ordering::Relaxed);
+    let compress = COMPRESS_TIME.load(Ordering::Relaxed);
+    let rewire = REWIRE_TIME.load(Ordering::Relaxed);
+    let unrewire = UNREWIRE_TIME.load(Ordering::Relaxed);
+    let convex_find = CONVEX_FIND_TIME.load(Ordering::Relaxed);
+    let contiguous = CONTIGUOUS_TIME.load(Ordering::Relaxed);
+    let replace = REPLACE_TIME.load(Ordering::Relaxed);
+    let dedup = DEDUP_TIME.load(Ordering::Relaxed);
 
-//     println!("--- Compression Timing Totals (minutes) ---");
-//     println!("Permutation computation time: {:.2} min", perm as f64 / 60_000_000_000.0);
-//     println!("SQL lookup time: {:.2} min", sql as f64 / 60_000_000_000.0);
-//     println!("Canonicalization time: {:.2} min", canon as f64 / 60_000_000_000.0);
-//     println!("Compress LMDB time: {:.2} min", compress as f64 / 60_000_000_000.0);
-//     println!("Rewire subcircuit time: {:.2} min", rewire as f64 / 60_000_000_000.0);
-//     println!("Unrewire subcircuit time: {:.2} min", unrewire as f64 / 60_000_000_000.0);
-//     println!("Convex subcircuit find time: {:.2} min", convex_find as f64 / 60_000_000_000.0);
-//     println!("Contiguous convex subcircuit time: {:.2} min", contiguous as f64 / 60_000_000_000.0);
-//     println!("Replacement time: {:.2} min", replace as f64 / 60_000_000_000.0);
-//     println!("Deduplication time: {:.2} min", dedup as f64 / 60_000_000_000.0);
-// }
+    println!("--- Compression Timing Totals (minutes) ---");
+    println!("Permutation computation time: {:.2} min", perm as f64 / 60_000_000_000.0);
+    println!("SQL lookup time: {:.2} min", sql as f64 / 60_000_000_000.0);
+    println!("Canonicalization time: {:.2} min", canon as f64 / 60_000_000_000.0);
+    println!("Compress LMDB time: {:.2} min", compress as f64 / 60_000_000_000.0);
+    println!("Rewire subcircuit time: {:.2} min", rewire as f64 / 60_000_000_000.0);
+    println!("Unrewire subcircuit time: {:.2} min", unrewire as f64 / 60_000_000_000.0);
+    println!("Convex subcircuit find time: {:.2} min", convex_find as f64 / 60_000_000_000.0);
+    println!("Contiguous convex subcircuit time: {:.2} min", contiguous as f64 / 60_000_000_000.0);
+    println!("Replacement time: {:.2} min", replace as f64 / 60_000_000_000.0);
+    println!("Deduplication time: {:.2} min", dedup as f64 / 60_000_000_000.0);
+}
 
 
 #[cfg(test)]

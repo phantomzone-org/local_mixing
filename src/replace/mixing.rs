@@ -682,7 +682,7 @@ pub fn abutterfly_big(
 
     println!("Compressed len: {}", acc.gates.len());
     println!("Butterfly done: {} gates", acc.gates.len());
-    // crate::replace::replace::print_compress_timers();
+    crate::replace::replace::print_compress_timers();
     acc
 }
 
