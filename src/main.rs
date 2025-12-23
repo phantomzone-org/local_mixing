@@ -13,12 +13,12 @@ use local_mixing::{
     circuit::CircuitSeq,
     rainbow::{
         explore::explore_db,
-        rainbow::{main_rainbow_load},
+        rainbow::main_rainbow_load,
     },
     random::random_data::{build_from_sql, main_random, random_circuit},
     replace::{
-        mixing::{main_butterfly, main_butterfly_big, main_mix, main_butterfly_big_bookendsless},
-        replace::{random_canonical_id},
+        mixing::{install_kill_handler, main_butterfly, main_butterfly_big, main_butterfly_big_bookendsless, main_mix},
+        replace::random_canonical_id,
     },
 };
 
@@ -503,7 +503,7 @@ fn main() {
                 .set_map_size(800 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
-
+            install_kill_handler();
             if data.trim().is_empty() {
                 println!("Generating random");
                 let c1 = random_circuit(n as u8, 30);

@@ -19,7 +19,7 @@ use std::{
 };
 use once_cell::sync::Lazy;
 use std::time::Instant;
-
+use std::sync::{Mutex, atomic::{AtomicBool}};
 fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
     let (mut final_circuit, inverse_starts) = obfuscate(c, n);
@@ -247,9 +247,9 @@ pub fn merge_combine_blocks(
             let compressed = compress_big(&combined, 30, n, &mut conn, env);
 
             let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
-            if done % 10 == 0 {
-                println!("Phase 1 progress: {}/{}", done, total_1);
-            }
+            // if done % 10 == 0 {
+            //     println!("Phase 1 progress: {}/{}", done, total_1);
+            // }
 
             compressed
         })
@@ -285,9 +285,9 @@ pub fn merge_combine_blocks(
             let compressed = compress_big(&combined, 30, n, &mut conn, env);
 
             let done = progress2.fetch_add(1, Ordering::Relaxed) + 1;
-            if done % 10 == 0 {
-                println!("Phase 2 progress: {}/{}", done, total_2);
-            }
+            // if done % 10 == 0 {
+            //     println!("Phase 2 progress: {}/{}", done, total_2);
+            // }
 
             compressed
         })
@@ -519,6 +519,37 @@ pub static EXPAND_BIG_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 pub static COMPRESS_BIG_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 pub static MERGE_COMBINE_BLOCKS_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 
+
+static CURRENT_ACC: Lazy<Mutex<Option<CircuitSeq>>> =
+    Lazy::new(|| Mutex::new(None));
+
+static SHOULD_DUMP: AtomicBool = AtomicBool::new(false);
+use signal_hook::consts::{SIGINT, SIGTERM};
+use signal_hook::iterator::Signals;
+use std::thread;
+use std::process::exit;
+
+pub fn install_kill_handler() {
+    let mut signals = Signals::new([SIGINT, SIGTERM]).expect("signals");
+
+    thread::spawn(move || {
+        for _ in signals.forever() {
+            eprintln!("Received termination signal, dumping acc...");
+            SHOULD_DUMP.store(true, Ordering::SeqCst);
+            break;
+        }
+    });
+}
+
+fn dump_and_exit() -> ! {
+    if let Some(acc) = CURRENT_ACC.lock().unwrap().as_ref() {
+        let mut f = File::create("killed.txt").expect("create killed.txt");
+        writeln!(f, "{}", acc.repr()).expect("write");
+        eprintln!("Wrote killed.txt");
+    }
+    exit(1);
+}
+
 pub fn abutterfly_big(
     c: &CircuitSeq,
     _conn: &mut Connection,
@@ -713,6 +744,14 @@ pub fn abutterfly_big(
         let before = acc.gates.len();
         acc = compress_big(&acc, 1_000, n, _conn, &env);
 
+        {
+            let mut guard = CURRENT_ACC.lock().unwrap();
+            *guard = Some(acc.clone());
+        }
+
+        if SHOULD_DUMP.load(Ordering::SeqCst) {
+            dump_and_exit();
+        }
         if last && acc.gates.len() <= stop {
             break
         }
