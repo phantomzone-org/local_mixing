@@ -21,7 +21,7 @@ use local_mixing::{
         replace::random_canonical_id,
     },
 };
-
+use local_mixing::replace::mixing::open_all_dbs;
 use local_mixing::replace::replace::{compress_big_ancillas};
 fn main() {
     let matches = Command::new("rainbow")
@@ -567,7 +567,7 @@ fn main() {
                 .set_map_size(700 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
-
+            let dbs = open_all_dbs(&env);
             let bit_shuf_list = (3..=7)
                 .map(|n| {
                     (0..n)
@@ -580,7 +580,7 @@ fn main() {
             let mut stable_count = 0;
             while stable_count < 3 {
                 let before = acc.gates.len();
-                acc = compress_big_ancillas(&acc, 1_000, n, &mut conn, &env, &bit_shuf_list);
+                acc = compress_big_ancillas(&acc, 1_000, n, &mut conn, &env, &bit_shuf_list, &dbs);
                 let after = acc.gates.len();
 
                 if after == before {

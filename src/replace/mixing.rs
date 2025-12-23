@@ -17,6 +17,7 @@ use std::{
         Arc,
     },
 };
+use std::collections::HashMap;
 use once_cell::sync::Lazy;
 use std::time::Instant;
 use std::sync::{Mutex, atomic::{AtomicBool}};
@@ -226,7 +227,8 @@ pub fn merge_combine_blocks(
     progress: &Arc<AtomicUsize>,
     _total: usize,
     env: &lmdb::Environment,
-    bit_shuf_list: &Vec<Vec<Vec<usize>>>
+    bit_shuf_list: &Vec<Vec<Vec<usize>>>,
+    dbs: &HashMap<String, lmdb::Database>
 ) -> CircuitSeq {
     println!("Phase 1: Pairwise merge");
     // let total_1 = (blocks.len()+1)/2;
@@ -245,7 +247,7 @@ pub fn merge_combine_blocks(
                 chunk[0].clone()
             };
 
-            let compressed = compress_big(&combined, 30, n, &mut conn, env, &bit_shuf_list);
+            let compressed = compress_big(&combined, 30, n, &mut conn, env, &bit_shuf_list, dbs);
 
             // let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
             // if done % 10 == 0 {
@@ -283,7 +285,7 @@ pub fn merge_combine_blocks(
                 chunk[0].clone()
             };
 
-            let compressed = compress_big(&combined, 30, n, &mut conn, env, &bit_shuf_list);
+            let compressed = compress_big(&combined, 30, n, &mut conn, env, &bit_shuf_list, dbs);
 
             // let _done = progress2.fetch_add(1, Ordering::Relaxed) + 1;
             // if done % 10 == 0 {
@@ -314,7 +316,7 @@ pub fn merge_combine_blocks(
                 combined = combined.concat(block);
             }
 
-            let compressed = compress_big(&combined, 200, n, &mut conn, env, &bit_shuf_list);
+            let compressed = compress_big(&combined, 200, n, &mut conn, env, &bit_shuf_list, dbs);
 
             let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
             println!("Phase 2 partial done: {}/4", done);
@@ -333,7 +335,7 @@ pub fn merge_combine_blocks(
         final_combined = final_combined.concat(&part);
     }
 
-    let final_compressed = compress_big(&final_combined, 1000, n, &mut conn, env, &bit_shuf_list);
+    let final_compressed = compress_big(&final_combined, 1000, n, &mut conn, env, &bit_shuf_list, dbs);
 
     println!("All phases complete");
     final_compressed
@@ -371,7 +373,8 @@ pub fn butterfly_big(
     last: bool,
     stop: usize,
     env: &lmdb::Environment,
-    bit_shuf_list: &Vec<Vec<Vec<usize>>>
+    bit_shuf_list: &Vec<Vec<Vec<usize>>>,
+    dbs: &HashMap<String, lmdb::Database>
 ) -> CircuitSeq {
     // Pick one random R
     let mut rng = rand::rng();
@@ -397,7 +400,7 @@ pub fn butterfly_big(
         ).expect("Failed to open read-only connection");
         //shoot_random_gate(&mut gi, 100_000);
         // compress the block
-        let compressed_block = compress_big(&gi, 10, n, &mut conn, env, &bit_shuf_list);
+        let compressed_block = compress_big(&gi, 10, n, &mut conn, env, &bit_shuf_list, dbs);
         let before_len = r_inv.gates.len() * 2 + 1;
         let after_len = compressed_block.gates.len();
             
@@ -427,7 +430,7 @@ pub fn butterfly_big(
 
     println!("Beginning merge");
     
-    let mut acc = merge_combine_blocks(&blocks, n, "./circuits.db", &progress, _total, env, &bit_shuf_list);
+    let mut acc = merge_combine_blocks(&blocks, n, "./circuits.db", &progress, _total, env, &bit_shuf_list, dbs);
 
     // Add bookends: R ... R*
     acc = r.concat(&acc).concat(&r_inv);
@@ -474,7 +477,7 @@ pub fn butterfly_big(
                     OpenFlags::SQLITE_OPEN_READ_ONLY,
                 )
                 .expect("Failed to open read-only connection");
-                compress_big(&sub, 1_000, n, &mut thread_conn, env, &bit_shuf_list).gates
+                compress_big(&sub, 1_000, n, &mut thread_conn, env, &bit_shuf_list, dbs).gates
             })
             .collect();
 
@@ -561,7 +564,8 @@ pub fn abutterfly_big(
     env: &lmdb::Environment,
     curr_round: usize,
     last_round: usize,
-    bit_shuf_list: &Vec<Vec<Vec<usize>>>
+    bit_shuf_list: &Vec<Vec<Vec<usize>>>,
+    dbs: &HashMap<String, lmdb::Database>
 ) -> CircuitSeq {
     println!("Current round: {}/{}", curr_round, last_round);
     println!("Butterfly start: {} gates", c.gates.len());
@@ -635,10 +639,10 @@ pub fn abutterfly_big(
 
             let before_len = block.gates.len();
             let t3 = Instant::now();
-            let expanded = expand_big(&block, 100, n, &mut thread_conn, &env, &bit_shuf_list);
+            let expanded = expand_big(&block, 100, n, &mut thread_conn, &env, &bit_shuf_list, dbs);
             EXPAND_BIG_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
             let t4 = Instant::now();
-            let compressed_block = compress_big(&expanded, 100, n, &mut thread_conn, env, &bit_shuf_list);
+            let compressed_block = compress_big(&expanded, 100, n, &mut thread_conn, env, &bit_shuf_list ,dbs);
             COMPRESS_BIG_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
             let after_len = compressed_block.gates.len();
             
@@ -670,7 +674,7 @@ pub fn abutterfly_big(
 
     println!("Beginning merge");
     let t5 = Instant::now();
-    let mut acc = merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, _total, env, &bit_shuf_list);
+    let mut acc = merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, _total, env, &bit_shuf_list, dbs);
     MERGE_COMBINE_BLOCKS_TIME.fetch_add(t5.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     // Add global bookends: first_r ... last_r_inv
@@ -723,7 +727,7 @@ pub fn abutterfly_big(
                     OpenFlags::SQLITE_OPEN_READ_ONLY,
                 )
                 .expect("Failed to open read-only connection");
-                compress_big(&sub, 1_000, n, &mut thread_conn, env, &bit_shuf_list).gates
+                compress_big(&sub, 1_000, n, &mut thread_conn, env, &bit_shuf_list, dbs).gates
             })
             .collect();
 
@@ -797,6 +801,7 @@ pub fn abutterfly_big_delay_bookends(
     n: usize,
     env: &lmdb::Environment,
 ) -> (CircuitSeq, CircuitSeq, CircuitSeq) {
+    let dbs = open_all_dbs(env);
     let bit_shuf_list = (3..=7)
         .map(|n| {
             (0..n)
@@ -834,7 +839,7 @@ pub fn abutterfly_big_delay_bookends(
             .expect("Failed to open read-only connection");
 
             let before_len = block.gates.len();
-            let compressed_block = compress_big(&block, 10, n, &mut thread_conn, env, &bit_shuf_list);
+            let compressed_block = compress_big(&block, 10, n, &mut thread_conn, env, &bit_shuf_list, &dbs);
             let after_len = compressed_block.gates.len();
             
             let color_line = if after_len < before_len {
@@ -862,7 +867,7 @@ pub fn abutterfly_big_delay_bookends(
 
     println!("Beginning merge");
     let mut acc =
-        merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, _total, env, &bit_shuf_list);
+        merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, _total, env, &bit_shuf_list, &dbs);
 
     println!("After merging: {} gates", acc.gates.len());
 
@@ -897,7 +902,7 @@ pub fn abutterfly_big_delay_bookends(
                     OpenFlags::SQLITE_OPEN_READ_ONLY,
                 )
                 .expect("Failed to open read-only connection");
-                compress_big(&sub, 1_000, n, &mut thread_conn, env, &bit_shuf_list).gates
+                compress_big(&sub, 1_000, n, &mut thread_conn, env, &bit_shuf_list, &dbs).gates
             })
             .collect();
 
@@ -959,6 +964,28 @@ pub fn split_into_random_chunks<T: Clone>(
         .windows(2)
         .map(|w| v[w[0]..w[1]].to_vec())
         .collect()
+}
+
+pub fn open_all_dbs(env: &lmdb::Environment) -> HashMap<String, lmdb::Database> {
+    let mut dbs = HashMap::new();
+    let db_names = [
+        "n3m1","n3m2","n3m3","n3m4","n3m5","n3m6","n3m7","n3m8","n3m9","n3m10",
+        "n4m1","n4m2","n4m3","n4m4","n4m5","n4m6",
+        "n5m1","n5m2","n5m3","n5m4","n5m5",
+        "n6m1","n6m2","n6m3","n6m4","n6m5",
+        "n7m1","n7m2","n7m3","n7m4",
+        "perm_tables_n3","perm_tables_n4","perm_tables_n5","perm_tables_n6","perm_tables_n7"
+    ];
+
+    for name in db_names.iter() {
+        match env.open_db(Some(name)) {
+            Ok(db) => { dbs.insert(name.to_string(), db); }
+            Err(lmdb::Error::NotFound) => continue,
+            Err(e) => panic!("Failed to open LMDB database {}: {:?}", name, e),
+        }
+    }
+
+    dbs
 }
 
 pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) {
@@ -1114,6 +1141,7 @@ pub fn main_butterfly(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: u
 
 pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, asymmetric: bool, save: &str, env: &lmdb::Environment,) {
     // Start with the input circuit
+    let dbs = open_all_dbs(env);
     let bit_shuf_list = (3..=7)
         .map(|n| {
             (0..n)
@@ -1122,6 +1150,7 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
                 .collect::<Vec<Vec<usize>>>()
         })
         .collect();
+    let dbs = open_all_dbs(env);
     println!("Starting len: {}", c.gates.len());
     let mut circuit = c.clone();
     // Repeat obfuscate + compress 'rounds' times
@@ -1130,9 +1159,9 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     for i in 0..rounds {
         let stop = 1000;
         circuit = if asymmetric {
-            abutterfly_big(&circuit, conn, n, i != rounds-1, std::cmp::min(stop*(i+1), 5000), env, i+1, rounds, &bit_shuf_list)
+            abutterfly_big(&circuit, conn, n, i != rounds-1, std::cmp::min(stop*(i+1), 5000), env, i+1, rounds, &bit_shuf_list, &dbs)
         } else {
-            butterfly_big(&circuit,conn,n, i != rounds-1, stop*(i+1), env, &bit_shuf_list)
+            butterfly_big(&circuit,conn,n, i != rounds-1, stop*(i+1), env, &bit_shuf_list, &dbs)
         };
         if circuit.gates.len() == 0 {
             break;
@@ -1223,6 +1252,7 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
 
 pub fn main_butterfly_big_bookendsless(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, _asymmetric: bool, save: &str ,env: &lmdb::Environment,) {
     // Start with the input circuit
+    let dbs = open_all_dbs(env);
     let bit_shuf_list = (3..=7)
         .map(|n| {
             (0..n)
@@ -1272,19 +1302,19 @@ pub fn main_butterfly_big_bookendsless(c: &CircuitSeq, rounds: usize, conn: &mut
     }
 
     println!("Adding bookends");
-    beginning = compress_big(&beginning, 100, n, conn, env, &bit_shuf_list);
-    end = compress_big(&end, 100, n, conn, env, &bit_shuf_list);
+    beginning = compress_big(&beginning, 100, n, conn, env, &bit_shuf_list, &dbs);
+    end = compress_big(&end, 100, n, conn, env, &bit_shuf_list, &dbs);
     circuit = beginning.concat(&circuit).concat(&end);
     let mut c1 = CircuitSeq{ gates: circuit.gates[0..circuit.gates.len()/2].to_vec() };
     let mut c2 = CircuitSeq{ gates: circuit.gates[circuit.gates.len()/2..].to_vec() };
-    c1 = compress_big(&c1, 1_000, n, conn, env, &bit_shuf_list);
-    c2 = compress_big(&c2, 1_000, n, conn, env, &bit_shuf_list);
+    c1 = compress_big(&c1, 1_000, n, conn, env, &bit_shuf_list, &dbs);
+    c2 = compress_big(&c2, 1_000, n, conn, env, &bit_shuf_list, &dbs);
     circuit = c1.concat(&c2);
     let mut stable_count = 0;
     while stable_count < 3 {
         let before = circuit.gates.len();
         //shoot_random_gate(&mut acc, 100_000);
-        circuit = compress_big(&circuit, 1_000, n, conn, env, &bit_shuf_list);
+        circuit = compress_big(&circuit, 1_000, n, conn, env, &bit_shuf_list, &dbs);
         let after = circuit.gates.len();
 
         if after == before {
@@ -1342,6 +1372,7 @@ pub fn main_butterfly_big_bookendsless(c: &CircuitSeq, rounds: usize, conn: &mut
 
 //do targeted compression
 pub fn main_compression(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, save: &str, env: &lmdb::Environment,) {
+    let dbs = open_all_dbs(env);
     // Start with the input circuit
     let bit_shuf_list = (3..=7)
         .map(|n| {
@@ -1357,7 +1388,7 @@ pub fn main_compression(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n:
     let mut post_len = 0;
     let mut count = 0;
     for _ in 0..rounds {
-            butterfly_big(&circuit,conn,n, false, 0, env, &bit_shuf_list);
+            butterfly_big(&circuit,conn,n, false, 0, env, &bit_shuf_list, &dbs);
         if circuit.gates.len() == 0 {
             break;
         }

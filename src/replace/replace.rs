@@ -513,7 +513,8 @@ pub fn expand_lmdb(
     bit_shuf: &Vec<Vec<usize>>,
     n: usize,
     env: &lmdb::Environment,
-    _old_n: usize
+    _old_n: usize,
+    dbs: &HashMap<String, lmdb::Database>,
 ) -> CircuitSeq {
     let mut compressed = c.clone();
     if compressed.gates.is_empty() {
@@ -583,10 +584,9 @@ pub fn expand_lmdb(
         let prefix = canon_perm_blob.as_slice();
         for smaller_m in (1..=max).rev() {
             let db_name = format!("n{}m{}", n, smaller_m);
-            let db = match env.open_db(Some(&db_name)) {
-                Ok(db) => db,
-                Err(lmdb::Error::NotFound) => continue,
-                Err(e) => panic!("Failed to open LMDB database {}: {:?}", db_name, e),
+            let &db = match dbs.get(&db_name) {
+                Some(db) => db,
+                None => continue,
             };
             let mut invert = false;
             let hit = {
@@ -778,7 +778,8 @@ pub fn compress_exhaust(
     compressed
 }
 
-pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>) -> CircuitSeq {
+pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>, dbs: &HashMap<String, lmdb::Database>
+) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
@@ -842,7 +843,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
         PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         let t4 = Instant::now();
-        let subcircuit_temp = compress_lmdb(&subcircuit, 20, conn, &bit_shuf, sub_num_wires, env);
+        let subcircuit_temp = compress_lmdb(&subcircuit, 20, conn, &bit_shuf, sub_num_wires, env, dbs);
         COMPRESS_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         subcircuit = subcircuit_temp;
@@ -915,6 +916,7 @@ pub fn compress_lmdb(
     bit_shuf: &Vec<Vec<usize>>,
     n: usize,
     env: &lmdb::Environment,
+    dbs: &HashMap<String, lmdb::Database>
 ) -> CircuitSeq {
     let id = Permutation::id_perm(n);
 
@@ -1015,10 +1017,10 @@ pub fn compress_lmdb(
 
         for smaller_m in 1..=min {
             let db_open_start = Instant::now();
-            let db = match env.open_db(Some(&format!("n{}m{}", n, smaller_m))) {
-                Ok(db) => db,
-                Err(lmdb::Error::NotFound) => continue,
-                Err(e) => panic!("Failed to open LMDB database: {:?}", e),
+            let db_name = format!("n{}m{}", n, smaller_m);
+            let &db = match dbs.get(&db_name) {
+                Some(db) => db,
+                None => continue,
             };
             DB_OPEN_TIME.fetch_add(db_open_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
@@ -1077,7 +1079,8 @@ pub fn compress_lmdb(
     compressed
 }
 
-pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>) -> CircuitSeq {
+pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>, dbs: &HashMap<String, lmdb::Database>
+) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
@@ -1137,7 +1140,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         
         let bit_shuf = &bit_shuf_list[new_wires - 3];
 
-        let subcircuit_temp = expand_lmdb(&subcircuit, 10, conn, &bit_shuf, new_wires, &env, n_wires);
+        let subcircuit_temp = expand_lmdb(&subcircuit, 10, conn, &bit_shuf, new_wires, &env, n_wires, dbs);
         subcircuit = subcircuit_temp;
 
         subcircuit = CircuitSeq::unrewire_subcircuit(&subcircuit, &used_wires);
@@ -1211,7 +1214,8 @@ pub fn outward_compress(g: &CircuitSeq, r: &CircuitSeq, trials: usize, conn: &mu
     g
 }
 
-pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>) -> CircuitSeq {
+pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>, dbs: &HashMap<String, lmdb::Database>
+) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
@@ -1284,7 +1288,7 @@ pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, co
         // PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         // let t4 = Instant::now();
-        let subcircuit_temp = compress_lmdb(&subcircuit, 20, conn, &bit_shuf, sub_num_wires, env);
+        let subcircuit_temp = compress_lmdb(&subcircuit, 20, conn, &bit_shuf, sub_num_wires, env, dbs);
         // COMPRESS_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         subcircuit = subcircuit_temp;
@@ -1645,6 +1649,7 @@ mod tests {
     use lmdb::Environment;
     use std::path::Path;
     use std::io::Write;
+    use crate::replace::mixing::open_all_dbs;
     #[test]
     fn test_compression_big_time() {
         // let total_start = Instant::now();
@@ -1698,9 +1703,10 @@ mod tests {
                 .collect::<Vec<Vec<usize>>>()
         })
         .collect();
+        let dbs = open_all_dbs(&env);
         while stable_count < 3 {
             let before = acc.gates.len();
-            acc = compress_big(&acc, 1_000, 64, &mut conn, &env, &bit_shuf_list);
+            acc = compress_big(&acc, 1_000, 64, &mut conn, &env, &bit_shuf_list, &dbs);
             let after = acc.gates.len();
 
             if after == before {
