@@ -592,7 +592,7 @@ pub fn abutterfly_big(
     let compressed_blocks: Vec<CircuitSeq> = pre_blocks
         .into_par_iter()
         .enumerate()
-        .map(|(i, block)| {
+        .map(|(_, block)| {
             let mut thread_conn = Connection::open_with_flags(
                 "circuits.db",
                 OpenFlags::SQLITE_OPEN_READ_ONLY,
