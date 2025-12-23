@@ -538,37 +538,25 @@ pub fn expand_lmdb(
         let sub_m = subcircuit.gates.len();
         let (canon_perm_blob, canon_shuf_blob) = if sub_m <= max && (n > 5 || (n == 4 && sub_m > 3) || (n == 5 && sub_m > 2)) {
             let table = format!("n{}m{}", n, sub_m);
-            let query = format!(
-                "SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1",
-                table
-            );
+            let query = format!("SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1", table);
 
-            // let sql_t0 = Instant::now();
             let mut stmt = match conn.prepare(&query) {
                 Ok(s) => s,
                 Err(_) => continue,
             };
-            let rows = stmt.query([&subcircuit.repr_blob()]);
-            // SQL_TIME.fetch_add(sql_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-            let mut r = match rows {
-                Ok(r) => r,
-                Err(_) => continue,
+            let blobs_result: rusqlite::Result<(Vec<u8>, Vec<u8>)> = stmt.query_row(
+                [&subcircuit.repr_blob()],
+                |row| Ok((row.get(0)?, row.get(1)?))
+            );
+
+            let blobs = match blobs_result {
+                Ok(b) => b,
+                Err(rusqlite::Error::QueryReturnedNoRows) => continue,
+                Err(e) => panic!("SQL query failed: {:?}", e),
             };
 
-            if let Some(row_result) = r.next().unwrap() {
-                
-                (row_result
-                    .get(0)
-                    .expect("Failed to get blob"),
-                row_result
-                    .get(1)
-                    .expect("Failed to get blob"))
-                
-            } else {
-                continue
-            }
-
+            blobs
         } else {
             // let t1 = Instant::now();
             let sub_perm = subcircuit.permutation(n);
@@ -984,18 +972,20 @@ pub fn compress_lmdb(
             let table = format!("n{}m{}", n, min);
             let query = format!("SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1", table);
 
-            // SQL prepare + query
             let sql_start = Instant::now();
             let mut stmt = match conn.prepare(&query) { Ok(s) => s, Err(_) => continue };
-            let rows = stmt.query([&subcircuit.repr_blob()]);
             SQL_TIME.fetch_add(sql_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
             let row_start = Instant::now();
-            let mut r = match rows { Ok(r) => r, Err(_) => continue };
-            let blobs = if let Some(row_result) = r.next().unwrap() {
-                (row_result.get(0).unwrap(), row_result.get(1).unwrap())
-            } else {
-                continue;
+            let blobs_result: rusqlite::Result<(Vec<u8>, Vec<u8>)> = stmt.query_row(
+                [&subcircuit.repr_blob()],
+                |row| Ok((row.get(0)?, row.get(1)?))
+            );
+
+            let blobs = match blobs_result {
+                Ok(b) => b,
+                Err(rusqlite::Error::QueryReturnedNoRows) => continue,
+                Err(e) => panic!("SQL query failed: {:?}", e),
             };
             ROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
 

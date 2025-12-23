@@ -2046,112 +2046,122 @@ mod tests {
     use std::time::Duration;
     #[test]
     fn benchmark_sql_vs_canonical() {
+        use std::time::{Duration, Instant};
+        use rusqlite::Connection;
+        use itertools::Itertools; // for permutations
+
         let conn = Connection::open("circuits.db").expect("Failed to open db");
-        let ns_and_ms = vec![
-            (3, 10),
-            (4, 6),
-            (5, 5),
-            (6, 5),
-            (7, 4),
-        ];
-        let perms: Vec<Vec<usize>> = (0..3).permutations(3).collect();
-        let bit_shuf3 = perms.into_iter().skip(1).collect::<Vec<_>>();
-        let perms: Vec<Vec<usize>> = (0..4).permutations(4).collect();
-        let bit_shuf4 = perms.into_iter().skip(1).collect::<Vec<_>>();
-        let perms: Vec<Vec<usize>> = (0..5).permutations(5).collect();
-        let bit_shuf5 = perms.into_iter().skip(1).collect::<Vec<_>>();
-        let perms: Vec<Vec<usize>> = (0..6).permutations(6).collect();
-        let bit_shuf6 = perms.into_iter().skip(1).collect::<Vec<_>>();
-        let perms: Vec<Vec<usize>> = (0..7).permutations(7).collect();
-        let bit_shuf7 = perms.into_iter().skip(1).collect::<Vec<_>>();
-        // Two hashmaps for timers
-        let mut timer_canonical: HashMap<(usize, usize), Duration> = HashMap::new();
-        let mut timer_sql: HashMap<(usize, usize), Duration> = HashMap::new();
+
+        let ns_and_ms = vec![(3, 10), (4, 6), (5, 5), (6, 5), (7, 4)];
+
+        // Generate bit_shufs for get_canonical
+        let bit_shufs: HashMap<usize, Vec<Vec<usize>>> = (3..=7)
+            .map(|n| {
+                let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
+                let shuf = perms.into_iter().skip(1).collect();
+                (n, shuf)
+            })
+            .collect();
+
+        // Timers
+        let mut timer_canonical = HashMap::new();
+        let mut timer_sql_unprepared = HashMap::new();
+        let mut timer_sql_prepared = HashMap::new();
+        let mut timer_sql_prepared_limit1 = HashMap::new();
 
         for &(n, max_m) in &ns_and_ms {
             for m in 1..=max_m {
-                let key = (n, m);
-                timer_canonical.entry(key).or_insert(Duration::ZERO);
-                timer_sql.entry(key).or_insert(Duration::ZERO);
+                timer_canonical.insert((n, m), Duration::ZERO);
+                timer_sql_unprepared.insert((n, m), Duration::ZERO);
+                timer_sql_prepared.insert((n, m), Duration::ZERO);
+                timer_sql_prepared_limit1.insert((n, m), Duration::ZERO);
             }
         }
 
-        //warmpup
-        for _ in 0..1000000 {
+        // Warmup: run some random circuits to prime caches
+        for _ in 0..10000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
-                    // Generate a random circuit
                     let mut circuit = random_circuit(n as u8, m);
-
                     circuit.canonicalize();
-                    let circuit_blob = circuit.repr_blob();
-                    let bit_shuf = match n {
-                        3 => &bit_shuf3,
-                        4 => &bit_shuf4,
-                        5 => &bit_shuf5,
-                        6 => &bit_shuf6,
-                        7 => &bit_shuf7,
-                        _ => panic!("Unsupported n"),
-                    };
-                    // get_canonical timing
-                    // let start = Instant::now();
-                    let perm = circuit.permutation(n);
-                    let _p = perm.canon_simple(&bit_shuf);
-
-                    // SQL timing
+                    let _ = circuit.repr_blob();
+                    let _ = circuit.permutation(n);
                     let table = format!("n{}m{}", n, m);
-                    // let start = Instant::now();
-                    let query = format!("SELECT * FROM {} WHERE circuit = ?", table);
-                    let _res: Option<Vec<u8>> =
-                        conn.query_row(&query, [&circuit_blob], |row| row.get(0)).ok();
+                    let query = format!("SELECT perm, shuf FROM {} WHERE circuit = ?", table);
+                    let _res: Option<Vec<u8>> = conn.query_row(&query, [&circuit.repr_blob()], |row| row.get(0)).ok();
                 }
             }
         }
 
+        // Prepare statements for tests 3 and 4
+        let mut stmts_prepared = HashMap::new();
+        let mut stmts_prepared_limit1 = HashMap::new();
+        for &(n, max_m) in &ns_and_ms {
+            for m in 1..=max_m {
+                let table = format!("n{}m{}", n, m);
+                let query = format!("SELECT perm, shuf FROM {} WHERE circuit = ?", table);
+                let stmt = conn.prepare(&query).unwrap();
+                stmts_prepared.insert((n, m), stmt);
+
+                let query_limit = format!("SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1", table);
+                let stmt_limit = conn.prepare(&query_limit).unwrap();
+                stmts_prepared_limit1.insert((n, m), stmt_limit);
+            }
+        }
+
+        // Benchmark
         for _ in 0..1000000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
-                    // Generate a random circuit
                     let mut circuit = random_circuit(n as u8, m);
-
                     circuit.canonicalize();
                     let circuit_blob = circuit.repr_blob();
-                    let bit_shuf = match n {
-                        3 => &bit_shuf3,
-                        4 => &bit_shuf4,
-                        5 => &bit_shuf5,
-                        6 => &bit_shuf6,
-                        7 => &bit_shuf7,
-                        _ => panic!("Unsupported n"),
-                    };
-                    // get_canonical timing
+                    let bit_shuf = &bit_shufs[&n];
+
+                    // 1. get_canonical
                     let start = Instant::now();
                     let perm = circuit.permutation(n);
-                    let _p = get_canonical(&perm, &bit_shuf);
-                    timer_canonical
-                        .entry((n, m))
-                        .and_modify(|d| *d += start.elapsed());
+                    let _ = get_canonical(&perm, bit_shuf);
+                    timer_canonical.entry((n, m)).and_modify(|d| *d += start.elapsed());
 
-                    // SQL timing
-                    let table = format!("n{}m{}", n, m);
+                    // 2. SQL unprepared
                     let start = Instant::now();
-                    let query = format!("SELECT * FROM {} WHERE circuit = ?", table);
-                    let _res: Option<Vec<u8>> =
-                        conn.query_row(&query, [&circuit_blob], |row| row.get(0)).ok();
-                    timer_sql
-                        .entry((n, m))
-                        .and_modify(|d| *d += start.elapsed());
+                    let query = format!("SELECT perm, shuf FROM n{}m{} WHERE circuit = ?", n, m);
+                    let _res: Option<(Vec<u8>, Vec<u8>)> =
+                        conn.query_row(&query, [&circuit_blob], |row| Ok((row.get(0)?, row.get(1)?))).ok();
+                    timer_sql_unprepared.entry((n, m)).and_modify(|d| *d += start.elapsed());
+
+                    // 3. SQL prepared
+                    if let Some(stmt) = stmts_prepared.get_mut(&(n, m)) {
+                        let start = Instant::now();
+                        let _res: Option<(Vec<u8>, Vec<u8>)> = stmt.query_row([&circuit_blob], |row| Ok((row.get(0)?, row.get(1)?))).ok();
+                        timer_sql_prepared.entry((n, m)).and_modify(|d| *d += start.elapsed());
+                    }
+
+                    // 4. SQL prepared with LIMIT 1
+                    if let Some(stmt) = stmts_prepared_limit1.get_mut(&(n, m)) {
+                        let start = Instant::now();
+                        let _res: Option<(Vec<u8>, Vec<u8>)> = stmt.query_row([&circuit_blob], |row| Ok((row.get(0)?, row.get(1)?))).ok();
+                        timer_sql_prepared_limit1.entry((n, m)).and_modify(|d| *d += start.elapsed());
+                    }
                 }
             }
         }
 
         // Print results
-        for ((n, m), duration) in &timer_canonical {
-            let sql_duration = timer_sql.get(&(*n, *m)).unwrap_or(&Duration::ZERO);
-            println!(
-                "n={} m={} | get_canonical: {:?} | SQL search: {:?}",
-                n, m, duration, sql_duration
-            );
+        for &(n, max_m) in &ns_and_ms {
+            for m in 1..=max_m {
+                println!(
+                    "n={} m={} | get_canonical: {:?} | SQL unprepared: {:?} | SQL prepared: {:?} | SQL prepared LIMIT1: {:?}",
+                    n,
+                    m,
+                    timer_canonical[&(n, m)],
+                    timer_sql_unprepared[&(n, m)],
+                    timer_sql_prepared[&(n, m)],
+                    timer_sql_prepared_limit1[&(n, m)],
+                );
+            }
         }
     }
+
 }
