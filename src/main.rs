@@ -22,7 +22,7 @@ use local_mixing::{
     },
 };
 
-use local_mixing::replace::replace::{compress_big_ancillas, compress_big};
+use local_mixing::replace::replace::{compress_big_ancillas};
 fn main() {
     let matches = Command::new("rainbow")
         .about("Rainbow circuit generator")
@@ -567,11 +567,20 @@ fn main() {
                 .set_map_size(700 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
+
+            let bit_shuf_list = (3..=7)
+                .map(|n| {
+                    (0..n)
+                        .permutations(n)
+                        .filter(|p| !p.iter().enumerate().all(|(i, &x)| i == x))
+                        .collect::<Vec<Vec<usize>>>()
+                })
+                .collect();
             // Call compression logic
             let mut stable_count = 0;
             while stable_count < 3 {
                 let before = acc.gates.len();
-                acc = compress_big_ancillas(&acc, 1_000, n, &mut conn, &env);
+                acc = compress_big_ancillas(&acc, 1_000, n, &mut conn, &env, &bit_shuf_list);
                 let after = acc.gates.len();
 
                 if after == before {

@@ -25,8 +25,6 @@ use libc::{c_uint};
 use std::{ptr, slice, marker::PhantomData};
 extern crate lmdb_sys;
 use lmdb_sys as ffi;
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
 
 pub struct Iter<'txn> {
     cursor: *mut ffi::MDB_cursor,
@@ -111,16 +109,6 @@ impl<'txn> RoCursorExt<'txn> for RoCursor<'txn> {
             Iter::new(self.cursor(), lmdb_sys::MDB_GET_CURRENT, lmdb_sys::MDB_NEXT)
         }
     }
-}
-
-static BIT_SHUF_CACHE: Lazy<Mutex<HashMap<usize, Vec<Vec<usize>>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-
-fn get_bit_shuf(n: usize) -> Vec<Vec<usize>> {
-    let mut cache = BIT_SHUF_CACHE.lock().unwrap();
-    cache.entry(n).or_insert_with(|| {
-        (0..n).permutations(n).skip(1).collect()
-    }).clone()
 }
 
 fn random_perm_from_perm_table(
@@ -781,7 +769,7 @@ pub fn compress_exhaust(
     compressed
 }
 
-pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment) -> CircuitSeq {
+pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
@@ -841,7 +829,7 @@ pub fn compress_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut 
 
         let t3 = Instant::now();
         let sub_num_wires = used_wires.len();
-        let bit_shuf = get_bit_shuf(sub_num_wires);
+        let bit_shuf = &bit_shuf_list[sub_num_wires - 3];
         PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         let t4 = Instant::now();
@@ -1068,7 +1056,7 @@ pub fn compress_lmdb(
     compressed
 }
 
-pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment) -> CircuitSeq {
+pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
@@ -1126,7 +1114,7 @@ pub fn expand_big(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Co
         subcircuit = CircuitSeq::rewire_subcircuit(&mut circuit, &mut subcircuit_gates, &used_wires);
 
         
-        let bit_shuf = get_bit_shuf(new_wires);
+        let bit_shuf = &bit_shuf_list[new_wires - 3];
 
         let subcircuit_temp = expand_lmdb(&subcircuit, 10, conn, &bit_shuf, new_wires, &env, n_wires);
         subcircuit = subcircuit_temp;
@@ -1202,7 +1190,7 @@ pub fn outward_compress(g: &CircuitSeq, r: &CircuitSeq, trials: usize, conn: &mu
     g
 }
 
-pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment) -> CircuitSeq {
+pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment, bit_shuf_list: &Vec<Vec<Vec<usize>>>) -> CircuitSeq {
     let mut circuit = c.clone();
     let mut rng = rand::rng();
 
@@ -1270,7 +1258,7 @@ pub fn compress_big_ancillas(c: &CircuitSeq, trials: usize, num_wires: usize, co
 
         // let t3 = Instant::now();
         let sub_num_wires = used_wires.len();
-        let bit_shuf = get_bit_shuf(sub_num_wires);
+        let bit_shuf = &bit_shuf_list[sub_num_wires - 3];
 
         // PERMUTATION_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
@@ -1664,9 +1652,17 @@ mod tests {
         let mut stable_count = 0;
         let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
         let mut acc = CircuitSeq::from_string(&data2);
+        let bit_shuf_list = (3..=7)
+        .map(|n| {
+            (0..n)
+                .permutations(n)
+                .filter(|p| !p.iter().enumerate().all(|(i, &x)| i == x))
+                .collect::<Vec<Vec<usize>>>()
+        })
+        .collect();
         while stable_count < 3 {
             let before = acc.gates.len();
-            acc = compress_big(&acc, 1_000, 64, &mut conn, &env);
+            acc = compress_big(&acc, 1_000, 64, &mut conn, &env, &bit_shuf_list);
             let after = acc.gates.len();
 
             if after == before {
