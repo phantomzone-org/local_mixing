@@ -13,10 +13,12 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering, AtomicU64},
         Arc,
     },
 };
+use once_cell::sync::Lazy;
+use std::time::Instant;
 
 fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
@@ -510,6 +512,13 @@ pub fn butterfly_big(
     acc
 }
 
+pub static SHOOT_RANDOM_GATE_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
+pub static REPLACE_PAIRS_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
+pub static RANDOM_ID_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
+pub static EXPAND_BIG_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
+pub static COMPRESS_BIG_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
+pub static MERGE_COMBINE_BLOCKS_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
+
 pub fn abutterfly_big(
     c: &CircuitSeq,
     _conn: &mut Connection,
@@ -526,7 +535,9 @@ pub fn abutterfly_big(
     // let mut pre_gates: Vec<[u8;3]> = Vec::with_capacity(c.gates.len());
 
     let mut c = c.clone();
+    let t0 = Instant::now();
     shoot_random_gate(&mut c, 500_000);
+    SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
     // c = random_walk_no_skeleton(&c, &mut rng);
     let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(50..=100));
     let mut prev_r_inv = first_r_inv.clone();
@@ -557,19 +568,26 @@ pub fn abutterfly_big(
     // }
 
     // c.gates = pre_gates;
+    let t1 = Instant::now();
     replace_pairs(&mut c, n, _conn, &env);
+    REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     let mut pre_blocks: Vec<CircuitSeq> = Vec::with_capacity(c.gates.len());
 
     for &g in &c.gates {
+        let t2 = Instant::now();
         let (r, r_inv) = random_id(n as u8, rng.random_range(50..=100));
+        RANDOM_ID_TIME.fetch_add(t2.elapsed().as_nanos() as u64, Ordering::Relaxed);
         let mut block = prev_r_inv.clone().concat(&CircuitSeq { gates: vec![g] }).concat(&r);
         shoot_random_gate(&mut block, 1_000);
         // block = random_walk_no_skeleton(&block, &mut rng);
         pre_blocks.push(block);
         prev_r_inv = r_inv;
     }
-
+    let grew = Arc::new(AtomicUsize::new(0));
+    let reduced = Arc::new(AtomicUsize::new(0));
+    let swapped = Arc::new(AtomicUsize::new(0));
+    let no_change = Arc::new(AtomicUsize::new(0));
     // Parallel compression of each block
     let compressed_blocks: Vec<CircuitSeq> = pre_blocks
         .into_par_iter()
@@ -582,35 +600,44 @@ pub fn abutterfly_big(
             .expect("Failed to open read-only connection");
 
             let before_len = block.gates.len();
-            let compressed_block = compress_big(&expand_big(&block, 100, n, &mut thread_conn, &env), 100, n, &mut thread_conn, env);
+            let t3 = Instant::now();
+            let expanded = expand_big(&block, 100, n, &mut thread_conn, &env);
+            EXPAND_BIG_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            let t4 = Instant::now();
+            let compressed_block = compress_big(&expanded, 100, n, &mut thread_conn, env);
+            COMPRESS_BIG_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
             let after_len = compressed_block.gates.len();
             
-            let color_line = if after_len < before_len {
-                "\x1b[31m──────────────\x1b[0m" // red = decrease
+            if after_len < before_len {
+                reduced.fetch_add(1, Ordering::Relaxed); 
             } else if after_len > before_len {
-                "\x1b[32m──────────────\x1b[0m" // green = increase
+                grew.fetch_add(1, Ordering::Relaxed);
             } else if block.gates != compressed_block.gates {
-                "\x1b[34m──────────────\x1b[0m" // blue = changed
+                swapped.fetch_add(1, Ordering::Relaxed);
             } else {
-                "\x1b[90m──────────────\x1b[0m" // gray = no change
+                no_change.fetch_add(1, Ordering::Relaxed);
             };
 
-            println!(
-                "  Block {}: before {} gates → after {} gates  {}",
-                i, before_len, after_len, color_line
-            );
+            
             //println!("  {}", compressed_block.repr());
 
             compressed_block
         })
         .collect();
+    
+    println!("Summary:");
+    println!("\x1b[32mGrew:      {}\x1b[0m", grew.load(Ordering::Relaxed));
+    println!("\x1b[31mReduced:   {}\x1b[0m", reduced.load(Ordering::Relaxed));
+    println!("\x1b[34mSwapped:   {}\x1b[0m", swapped.load(Ordering::Relaxed));
+    println!("\x1b[90mNo change: {}\x1b[0m", no_change.load(Ordering::Relaxed));
 
     let progress = Arc::new(AtomicUsize::new(0));
     let _total = 2 * compressed_blocks.len() - 1;
 
     println!("Beginning merge");
-    let mut acc =
-        merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, _total, env);
+    let t5 = Instant::now();
+    let mut acc = merge_combine_blocks(&compressed_blocks, n, "./circuits.db", &progress, _total, env);
+    MERGE_COMBINE_BLOCKS_TIME.fetch_add(t5.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     // Add global bookends: first_r ... last_r_inv
     acc = first_r.concat(&acc).concat(&prev_r_inv);
@@ -682,6 +709,13 @@ pub fn abutterfly_big(
 
     println!("Compressed len: {}", acc.gates.len());
     println!("Butterfly done: {} gates", acc.gates.len());
+    println!("Timers (minutes):");
+    println!("  shoot_random_gate:      {:.3}", SHOOT_RANDOM_GATE_TIME.load(Ordering::Relaxed) as f64 / 1e9 / 60.0);
+    println!("  replace_pairs:          {:.3}", REPLACE_PAIRS_TIME.load(Ordering::Relaxed) as f64 / 1e9 / 60.0);
+    println!("  random_id:              {:.3}", RANDOM_ID_TIME.load(Ordering::Relaxed) as f64 / 1e9 / 60.0);
+    println!("  compress_big:           {:.3}", COMPRESS_BIG_TIME.load(Ordering::Relaxed) as f64 / 1e9 / 60.0);
+    println!("  merge_combine_blocks:   {:.3}", MERGE_COMBINE_BLOCKS_TIME.load(Ordering::Relaxed) as f64 / 1e9 / 60.0);
+
     crate::replace::replace::print_compress_timers();
     acc
 }
