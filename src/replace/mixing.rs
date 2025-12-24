@@ -570,7 +570,6 @@ pub fn abutterfly_big(
     println!("Current round: {}/{}", curr_round, last_round);
     println!("Butterfly start: {} gates", c.gates.len());
     let mut rng = rand::rng();
-    // let mut pre_gates: Vec<[u8;3]> = Vec::with_capacity(c.gates.len());
 
     let mut c = c.clone();
     let t0 = Instant::now();
@@ -579,33 +578,6 @@ pub fn abutterfly_big(
     // c = random_walk_no_skeleton(&c, &mut rng);
     let (first_r, first_r_inv) = random_id(n as u8, rng.random_range(10..=30));
     let mut prev_r_inv = first_r_inv.clone();
-    
-    // for (i, g) in c.gates.iter().enumerate() {
-    //     let num = rng.random_range(3..=7);
-    //     if let Ok(mut id) = random_canonical_id(&_conn, num) {
-    //         let mut used_wires = vec![g[0], g[1], g[2]];
-    //         let mut count = 3;
-    //         while count < num {
-    //             let random = rng.random_range(0..n);
-    //             if used_wires.contains(&(random as u8)) {
-    //                 continue
-    //             }
-    //             used_wires.push(random as u8);
-    //             count += 1;
-    //         }
-    //         used_wires.sort();
-    //         let rewired_g = CircuitSeq::rewire_subcircuit(&c, &vec![i], &used_wires);
-    //         id.rewire_first_gate(rewired_g.gates[0], num);
-    //         id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
-    //         id.gates.remove(0);
-    //         let g_ref = CircuitSeq { gates: vec![*g] };
-    //         pre_gates.extend_from_slice(&id.gates);
-    //     } else {
-    //         pre_gates.push(*g);
-    //     }
-    // }
-
-    // c.gates = pre_gates;
     let t1 = Instant::now();
     replace_pairs(&mut c, n, _conn, &env);
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
@@ -642,7 +614,7 @@ pub fn abutterfly_big(
             let expanded = expand_big(&block, 100, n, &mut thread_conn, &env, &bit_shuf_list, dbs);
             EXPAND_BIG_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
             let t4 = Instant::now();
-            let compressed_block = compress_big(&expanded, 100, n, &mut thread_conn, env, &bit_shuf_list ,dbs);
+            let compressed_block = compress_big(&expanded, 100, n, &mut thread_conn, env, &bit_shuf_list, dbs);
             COMPRESS_BIG_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
             let after_len = compressed_block.gates.len();
             
@@ -655,10 +627,6 @@ pub fn abutterfly_big(
             } else {
                 no_change.fetch_add(1, Ordering::Relaxed);
             };
-
-            
-            //println!("  {}", compressed_block.repr());
-
             compressed_block
         })
         .collect();
@@ -687,7 +655,7 @@ pub fn abutterfly_big(
     // Final global compression until stable 3×
     let mut rng = rand::rng();
     let mut stable_count = 0;
-    while stable_count < 3 {
+    while stable_count < 6 {
         // if acc.gates.len() <= milestone {
         //     let mut f = OpenOptions::new()
         //         .create(true)
@@ -747,40 +715,12 @@ pub fn abutterfly_big(
         }
         if after == before {
             stable_count += 1;
-            println!("  {}/{} Final compression stable {}/3 at {} gates", curr_round, last_round, stable_count, after);
+            println!("  {}/{} Final compression stable {}/6 at {} gates", curr_round, last_round, stable_count, after);
         } else {
             println!("  {}/{}: {} → {} gates", curr_round, last_round, before, after);
             stable_count = 0;
         }
     }
-
-    // let mut stable_count = 0;
-    // while stable_count < 3 {
-    //     let before = acc.gates.len();
-    //     acc = compress_big(&acc, 1_000, n, _conn, &env);
-
-    //     {
-    //         let mut guard = CURRENT_ACC.lock().unwrap();
-    //         *guard = Some(acc.clone());
-    //     }
-
-    //     if SHOULD_DUMP.load(Ordering::SeqCst) {
-    //         dump_and_exit();
-    //     }
-    //     if last && acc.gates.len() <= stop {
-    //         break
-    //     }
-
-    //     let after = acc.gates.len();
-
-    //     if after == before {
-    //         stable_count += 1;
-    //         println!("  {}/{} Final compression stable {}/3 at {} gates", curr_round, last_round, stable_count, after);
-    //     } else {
-    //         println!("  {}/{}: {} → {} gates", curr_round, last_round, before, after);
-    //         stable_count = 0;
-    //     }
-    // }
 
     println!("Compressed len: {}", acc.gates.len());
     println!("Butterfly done: {} gates", acc.gates.len());
