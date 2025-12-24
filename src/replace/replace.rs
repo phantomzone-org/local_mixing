@@ -1845,14 +1845,14 @@ mod tests {
             }
         }
         let mut conn = Connection::open("circuits.db").expect("Failed to open DB");
-        while stable_count < 3 {
+        while stable_count < 6 {
             let before = acc.gates.len();
             acc = compress_big(&acc, 1_000, 64, &mut conn, &env, &bit_shuf_list, &dbs);
             let after = acc.gates.len();
 
             if after == before {
                 stable_count += 1;
-                println!("  Final compression stable {}/3 at {} gates", stable_count, after);
+                println!("  Final compression stable {}/6 at {} gates", stable_count, after);
             } else {
                 println!("  Final compression reduced: {} → {} gates", before, after);
                 stable_count = 0;
