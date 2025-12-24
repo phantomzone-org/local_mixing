@@ -327,6 +327,7 @@ static DEDUP_TIME: AtomicU64 = AtomicU64::new(0);
 static PICK_SUBCIRCUIT_TIME: AtomicU64 = AtomicU64::new(0);
 static CANONICALIZE_TIME: AtomicU64 = AtomicU64::new(0);
 static ROW_FETCH_TIME: AtomicU64 = AtomicU64::new(0);
+static LROW_FETCH_TIME: AtomicU64 = AtomicU64::new(0);
 static DB_OPEN_TIME: AtomicU64 = AtomicU64::new(0);
 static TXN_TIME: AtomicU64 = AtomicU64::new(0);
 static LMDB_LOOKUP_TIME: AtomicU64 = AtomicU64::new(0);
@@ -554,7 +555,7 @@ pub fn expand_lmdb<'a>(
                     Err(lmdb::Error::NotFound) => continue,
                     Err(e) => panic!("LMDB get failed: {:?}", e),
                 };
-                ROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                LROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
                 let perm = val[..perm_len].to_vec();
                 let shuf = val[perm_len..].to_vec();
@@ -1047,7 +1048,7 @@ pub fn compress_lmdb<'a>(
                     Err(lmdb::Error::NotFound) => continue,
                     Err(e) => panic!("LMDB get failed: {:?}", e),
                 };
-                ROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                LROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
                 let perm = val[..perm_len].to_vec();
                 let shuf = val[perm_len..].to_vec();
@@ -1691,6 +1692,7 @@ pub fn print_compress_timers() {
     let pick = PICK_SUBCIRCUIT_TIME.load(Ordering::Relaxed);
     let canonicalize = CANONICALIZE_TIME.load(Ordering::Relaxed);
     let row_fetch = ROW_FETCH_TIME.load(Ordering::Relaxed);
+    let lrow_fetch = LROW_FETCH_TIME.load(Ordering::Relaxed);
     let db_open = DB_OPEN_TIME.load(Ordering::Relaxed);
     let txn = TXN_TIME.load(Ordering::Relaxed);
     let lmdb_lookup = LMDB_LOOKUP_TIME.load(Ordering::Relaxed);
@@ -1712,6 +1714,7 @@ pub fn print_compress_timers() {
     println!("Pick subcircuit time: {:.2} min", pick as f64 / 60_000_000_000.0);
     println!("Subcircuit canonicalize time: {:.2} min", canonicalize as f64 / 60_000_000_000.0);
     println!("SQL row fetch time: {:.2} min", row_fetch as f64 / 60_000_000_000.0);
+    println!("LMDB row fetch time: {:.2} min", row_fetch as f64 / 60_000_000_000.0);
     println!("LMDB DB open time: {:.2} min", db_open as f64 / 60_000_000_000.0);
     println!("LMDB transaction begin time: {:.2} min", txn as f64 / 60_000_000_000.0);
     println!("LMDB lookup time: {:.2} min", lmdb_lookup as f64 / 60_000_000_000.0);
