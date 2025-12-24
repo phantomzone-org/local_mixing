@@ -877,6 +877,77 @@ pub fn sql_to_lmdb(n: usize, m: usize) -> Result<(), ()> {
     Ok(())
 }
 
+pub fn sql_to_lmdb_perms(n: usize, m: usize) -> Result<(), ()> {
+    let sqlite_path = "circuits.db";
+    let lmdb_path = "./db";
+    let map_size_bytes: usize = 800 * 1024 * 1024 * 1024;
+    let batch_max_entries: usize = 100_000;
+
+    // Open SQLite
+    let conn = Connection::open(sqlite_path).expect("Failed to open SQLite database");
+    let table = format!("n{}m{}perms", n, m);
+    let query = format!("SELECT * FROM {}", table);
+    let mut stmt = conn.prepare(&query).expect("Failed to prepare SQLite query");
+    let mut rows = stmt.query([]).expect("Failed to query SQLite rows");
+
+    // Open LMDB
+    fs::create_dir_all(lmdb_path).expect("Failed to create LMDB directory");
+    let env = Environment::new()
+        .set_max_dbs(50)
+        .set_map_size(map_size_bytes)
+        .open(Path::new(lmdb_path))
+        .expect("Failed to open LMDB environment");
+
+    let db = env.create_db(Some(&table), lmdb::DatabaseFlags::empty())
+        .expect("Failed to create LMDB database");
+
+    let mut batch: Vec<(Vec<u8>, Vec<u8>)> = Vec::with_capacity(batch_max_entries);
+    let mut rows_processed: u64 = 0;
+
+    // Flush function writes batch to LMDB
+    let flush = |env: &Environment, db: Database, batch: &mut Vec<(Vec<u8>, Vec<u8>)>| {
+        if batch.is_empty() { return; }
+        let mut txn = env.begin_rw_txn().expect("Failed to begin LMDB RW transaction");
+        for (key, val) in batch.iter() {
+            txn.put(db, key, val, WriteFlags::empty())
+                .expect("Failed to write LMDB entry");
+        }
+        txn.commit().expect("Failed to commit LMDB transaction");
+        batch.clear();
+    };
+
+    // Iterate SQLite rows
+    while let Some(row) = rows.next().expect("Failed getting next SQLite row") {
+        rows_processed += 1;
+
+        let circuit: Vec<u8> = row.get(0).expect("Failed to read 'circuit'");
+        let perm: Vec<u8> = row.get(1).expect("Failed to read 'perm'");
+        let shuf: Vec<u8> = row.get(2).expect("Failed to read 'shuf'");
+
+        // Serialize (perm, shuf) together
+        let mut val = Vec::with_capacity(perm.len() + shuf.len());
+        val.extend_from_slice(&perm);
+        val.extend_from_slice(&shuf);
+
+        batch.push((circuit, val));
+
+        if batch.len() >= batch_max_entries {
+            flush(&env, db, &mut batch);
+        }
+
+        if rows_processed % 100_000 == 0 {
+            println!("Processed {} rows in {}", rows_processed, table);
+        }
+    }
+
+    if !batch.is_empty() {
+        flush(&env, db, &mut batch);
+    }
+
+    println!("Finished copying {} rows into LMDB table {}", rows_processed, table);
+    Ok(())
+}
+
 /// Scans all tables and creates a DB of perms with multiple circuits
 use std::collections::HashMap;
 
