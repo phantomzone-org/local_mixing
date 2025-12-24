@@ -621,7 +621,7 @@ fn main() {
         Some(("lmdb", sub)) => {
             let n: usize = *sub.get_one("n").unwrap();
             let m: usize = *sub.get_one("m").unwrap();
-            let _ = sql_to_lmdb(n, m);
+            let _ = sql_to_lmdb_perms(n, m);
         }
         Some(("lmdbcounts", _)) => {
             let env_path = "./db";
