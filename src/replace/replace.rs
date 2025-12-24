@@ -1714,7 +1714,7 @@ pub fn print_compress_timers() {
     println!("Pick subcircuit time: {:.2} min", pick as f64 / 60_000_000_000.0);
     println!("Subcircuit canonicalize time: {:.2} min", canonicalize as f64 / 60_000_000_000.0);
     println!("SQL row fetch time: {:.2} min", row_fetch as f64 / 60_000_000_000.0);
-    println!("LMDB row fetch time: {:.2} min", row_fetch as f64 / 60_000_000_000.0);
+    println!("LMDB row fetch time: {:.2} min", lrow_fetch as f64 / 60_000_000_000.0);
     println!("LMDB DB open time: {:.2} min", db_open as f64 / 60_000_000_000.0);
     println!("LMDB transaction begin time: {:.2} min", txn as f64 / 60_000_000_000.0);
     println!("LMDB lookup time: {:.2} min", lmdb_lookup as f64 / 60_000_000_000.0);
