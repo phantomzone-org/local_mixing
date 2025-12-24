@@ -885,7 +885,8 @@ pub fn sql_to_lmdb_perms(n: usize, m: usize) -> Result<(), ()> {
 
     // Open SQLite
     let conn = Connection::open(sqlite_path).expect("Failed to open SQLite database");
-    let table = format!("n{}m{}perms", n, m);
+    let table = format!("n{}m{}", n, m);
+    let table2 = format!("n{}m{}perms", n, m);
     let query = format!("SELECT * FROM {}", table);
     let mut stmt = conn.prepare(&query).expect("Failed to prepare SQLite query");
     let mut rows = stmt.query([]).expect("Failed to query SQLite rows");
@@ -898,7 +899,7 @@ pub fn sql_to_lmdb_perms(n: usize, m: usize) -> Result<(), ()> {
         .open(Path::new(lmdb_path))
         .expect("Failed to open LMDB environment");
 
-    let db = env.create_db(Some(&table), lmdb::DatabaseFlags::empty())
+    let db = env.create_db(Some(&table2), lmdb::DatabaseFlags::empty())
         .expect("Failed to create LMDB database");
 
     let mut batch: Vec<(Vec<u8>, Vec<u8>)> = Vec::with_capacity(batch_max_entries);
