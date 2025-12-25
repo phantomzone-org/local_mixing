@@ -2033,7 +2033,7 @@ mod tests {
         use lmdb::Transaction;
         let conn = Connection::open("circuits.db").expect("Failed to open db");
 
-        let ns_and_ms = vec![(4, 6), (5, 5), (6, 5), (7, 4)];
+        let ns_and_ms = vec![(4, 6), (5, 5), (6, 4), (7, 3)];
 
         let mut stmts_prepared_limit1 = HashMap::new();
         for &(n, max_m) in &ns_and_ms {
@@ -2067,7 +2067,7 @@ mod tests {
         }
 
         // --- Warmup: run some random circuits to prime caches ---
-        for _ in 0..10_000 {
+        for _ in 0..100_000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
                     let mut circuit = random_circuit(n as u8, m);
@@ -2082,7 +2082,6 @@ mod tests {
             }
         }
 
-        // --- Prepare LMDB environment ---
         let env = Environment::new()
             .set_max_dbs(100)
             .open(Path::new("./db"))
@@ -2098,8 +2097,7 @@ mod tests {
             }
         }
 
-        // --- Benchmark loop ---
-        for _ in 0..100_000 {
+        for _ in 0..1_000_000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
                     let mut circuit = random_circuit(n as u8, m);
