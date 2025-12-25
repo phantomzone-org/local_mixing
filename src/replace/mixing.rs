@@ -615,18 +615,10 @@ pub fn abutterfly_big(
 
         let before = acc.gates.len();
 
-        let k = if before > 50_000 {
-            60
-        } else if before > 10_000 {
-            50
-        } else if before > 5_000 {
-            30
-        } else if before > 1_000 {
-            8
-        } else if before > 500 {
-            2
-        } else {
+        let k = if before <= 1500 {
             1
+        } else {
+            (before + 1499) / 1500 
         };
 
         let chunks = split_into_random_chunks(&acc.gates, k, &mut rng);
