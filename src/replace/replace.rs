@@ -516,28 +516,7 @@ pub fn expand_lmdb<'a>(
 
         let sub_m = subcircuit.gates.len();
         let (canon_perm_blob, canon_shuf_blob) =
-        if sub_m <= max && ((n == 5 && sub_m == 3) || (n == 6 && sub_m <= 4) || (n == 7 && sub_m <= 3)) {
-            let db_name = format!("n{}m{}perms", n, sub_m);
-                let db = match dbs.get(&db_name) {
-                    Some(db) => *db,
-                    None => continue,
-                };
-
-                let txn = env.begin_ro_txn().expect("lmdb ro txn");
-
-                let row_start = Instant::now();
-                let val = match txn.get(db, &subcircuit.repr_blob()) {
-                    Ok(v) => v,
-                    Err(lmdb::Error::NotFound) => continue,
-                    Err(e) => panic!("LMDB get failed: {:?}", e),
-                };
-                LROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-                let perm = val[..perm_len].to_vec();
-                let shuf = val[perm_len..].to_vec();
-
-                (perm, shuf)
-        } else if sub_m <= max && ((n == 4 && sub_m > 3) || (n == 5 && sub_m > 3) || (n == 6 && sub_m == 5) || (n == 7 && sub_m  == 4)) {
+        if sub_m <= max && ((n == 6 && sub_m == 5) || (n == 7 && sub_m  == 4)) {
             if n == 7 && sub_m == 4 {
                 let stmt: &mut Statement<'_> = &mut *prepared_stmt;
 
@@ -606,6 +585,27 @@ pub fn expand_lmdb<'a>(
                     Err(e) => panic!("SQL query failed: {:?}", e),
                 }
             }
+        } else if sub_m <= max && (n >= 4) {
+            let db_name = format!("n{}m{}perms", n, sub_m);
+                let db = match dbs.get(&db_name) {
+                    Some(db) => *db,
+                    None => continue,
+                };
+
+                let txn = env.begin_ro_txn().expect("lmdb ro txn");
+
+                let row_start = Instant::now();
+                let val = match txn.get(db, &subcircuit.repr_blob()) {
+                    Ok(v) => v,
+                    Err(lmdb::Error::NotFound) => continue,
+                    Err(e) => panic!("LMDB get failed: {:?}", e),
+                };
+                LROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+                let perm = val[..perm_len].to_vec();
+                let shuf = val[perm_len..].to_vec();
+
+                (perm, shuf)
         } else {
             // let t1 = Instant::now();
             let sub_perm = subcircuit.permutation(n);
@@ -1033,28 +1033,7 @@ pub fn compress_lmdb<'a>(
         let min = min(sub_m, max);
 
         let (canon_perm_blob, canon_shuf_blob) = 
-            if sub_m <= max && ((n == 4 && sub_m > 3) || (n == 5 && sub_m >= 3) || (n == 6 && sub_m <= 4) || (n == 7 && sub_m <= 3)) {
-                let db_name = format!("n{}m{}perms", n, min);
-                let db = match dbs.get(&db_name) {
-                    Some(db) => *db,
-                    None => continue,
-                };
-
-                let txn = env.begin_ro_txn().expect("lmdb ro txn");
-
-                let row_start = Instant::now();
-                let val = match txn.get(db, &subcircuit.repr_blob()) {
-                    Ok(v) => v,
-                    Err(lmdb::Error::NotFound) => continue,
-                    Err(e) => panic!("LMDB get failed: {:?}", e),
-                };
-                LROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-                let perm = val[..perm_len].to_vec();
-                let shuf = val[perm_len..].to_vec();
-
-                (perm, shuf)
-            } else if sub_m <= max && ((n == 6 && sub_m == 5) || (n == 7 && sub_m  == 4)) {
+            if sub_m <= max && ((n == 6 && sub_m == 5) || (n == 7 && sub_m  == 4)) {
                 if n == 7 && sub_m == 4 {
                     let stmt: &mut Statement<'_> = &mut *prepared_stmt;
 
@@ -1124,6 +1103,27 @@ pub fn compress_lmdb<'a>(
                         Err(e) => panic!("SQL query failed: {:?}", e),
                     }
                 }
+            } else if sub_m <= max && (n >= 4) {
+                let db_name = format!("n{}m{}perms", n, min);
+                let db = match dbs.get(&db_name) {
+                    Some(db) => *db,
+                    None => continue,
+                };
+
+                let txn = env.begin_ro_txn().expect("lmdb ro txn");
+
+                let row_start = Instant::now();
+                let val = match txn.get(db, &subcircuit.repr_blob()) {
+                    Ok(v) => v,
+                    Err(lmdb::Error::NotFound) => continue,
+                    Err(e) => panic!("LMDB get failed: {:?}", e),
+                };
+                LROW_FETCH_TIME.fetch_add(row_start.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+                let perm = val[..perm_len].to_vec();
+                let shuf = val[perm_len..].to_vec();
+
+                (perm, shuf)
             } else {
             // Permutation + canonicalization
             let perm_start = Instant::now();
