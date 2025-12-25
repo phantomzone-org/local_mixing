@@ -1419,32 +1419,12 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
             let success_count =
                 insert_circuits_batch(&mut conn, &table_name, &batch).unwrap_or(0);
             //let elapsed = start.elapsed();
-
-            // Log timing to file
-            // let mut file = OpenOptions::new()
-            //     .create(true)
-            //     .append(true)
-            //     .open("time5000.txt")
-            //     .expect("Failed to open time.txt");
-            // writeln!(
-            //     file,
-            //     "Batch of {} attempted, {} inserted, time: {:?}",
-            //     batch_size, success_count, elapsed
-            // ).expect("Failed to write to time.txt");
-
             inserted += success_count;
             recent += success_count;
             batch.clear();
 
             // Early stop if >=99% of last batch failed
             if success_count * 100 <= batch_size {
-                // writeln!(
-                //     file,
-                //     "Stopping early: only {}/{} inserts succeeded (~{:.2}% success)",
-                //     success_count,
-                //     batch_size,
-                //     (success_count as f64 / batch_size as f64) * 100.0
-                // ).expect("Failed to write to time.txt");
 
                 println!(
                     "Stopping early: only {}/{} inserts succeeded (~{:.2}% success)",

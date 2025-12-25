@@ -1,31 +1,38 @@
 use crate::{
     circuit::circuit::{CircuitSeq, Permutation},
     random::random_data::{
-        contiguous_convex, find_convex_subcircuit, get_canonical, 
+        contiguous_convex,
+        find_convex_subcircuit,
+        get_canonical,
         random_circuit,
     },
-    rainbow::canonical::Canonicalization
+    rainbow::canonical::Canonicalization,
 };
+
 use itertools::Itertools;
-use rand::{Rng};
-use rusqlite::{Connection};
+use rand::Rng;
+
+use rusqlite::{Connection, Statement};
+
+use lmdb::{Cursor, Database, RoCursor, RoTransaction, Transaction};
+
+use libc::c_uint;
+extern crate lmdb_sys;
+use lmdb_sys as ffi;
+
 use std::{
     cmp::{max, min},
-    collections::{HashSet, HashMap},
+    collections::{HashMap, HashSet},
     // fs::OpenOptions, // used for testing
     // io::Write,
     // sync::Arc,
-    time::{Instant},
+    marker::PhantomData,
+    ptr,
+    slice,
+    time::Instant,
 };
-use std::sync::atomic::Ordering;
-use std::sync::atomic::AtomicU64;
-use lmdb::{Cursor, Database, Transaction, RoTransaction};
-use lmdb::RoCursor;
-use libc::{c_uint};
-use std::{ptr, slice, marker::PhantomData};
-extern crate lmdb_sys;
-use lmdb_sys as ffi;
-use rusqlite::Statement;
+
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub struct Iter<'txn> {
     cursor: *mut ffi::MDB_cursor,
@@ -262,29 +269,6 @@ pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
     let subcircuit = circuit.gates[start..end].to_vec();
 
     (CircuitSeq{ gates: subcircuit }, start, end)
-
-    // let len = circuit.gates.len();
-    
-    // if len == 0 {
-    //     return (CircuitSeq { gates: Vec::new() }, 0, 0);
-    // }
-
-    // let mut rng = rand::rng();
-
-    // // Pick a random start index
-    // let start = rng.random_range(0..len);
-
-    // // Maximum subcircuit length is 8, but can't go past end of circuit
-    // let max_len = 8.min(len - start);
-
-    // // Pick random length from 1..=max_len
-    // let sub_len = rng.random_range(1..=max_len);
-
-    // let end = start + sub_len;
-
-    // let subcircuit = circuit.gates[start..end].to_vec();
-
-    // (CircuitSeq { gates: subcircuit }, start, end)
 }
 
 pub fn random_subcircuit_max(circuit: &CircuitSeq, max_len: usize) -> (CircuitSeq, usize, usize) {
@@ -477,18 +461,7 @@ pub fn compress(
                         repl.rewire(&rc.shuffle, n);
                     }
                     
-                    // TODO: !!! Fix all of this
                     repl.rewire(&Permutation::from_blob(&canon_shuf_blob).invert(), n);
-
-                    // let t5 = Instant::now();
-                    // let final_check = repl.permutation(n);
-                    // PERMUTATION_TIME.fetch_add(t5.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-                    // let sub_perm = Permutation::from_blob(&canon_perm_blob).bit_shuffle(&Permutation::from_blob(&canon_shuf_blob).invert().data);
-
-                    // if final_check != sub_perm {
-                    //     panic!("Replacement permutation mismatch!");
-                    // }
 
                     compressed.gates.splice(start..end, repl.gates);
                     break;

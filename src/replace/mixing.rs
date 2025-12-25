@@ -1,26 +1,37 @@
 use crate::{
     circuit::circuit::CircuitSeq,
-    replace::replace::{compress, compress_big, expand_big, obfuscate, outward_compress,random_id},
+    random::random_data::shoot_random_gate,
+    replace::replace::{
+        compress,
+        compress_big,
+        expand_big,
+        obfuscate,
+        outward_compress,
+        random_id,
+        replace_pairs,
+    },
 };
-use crate::random::random_data::shoot_random_gate;
 // use crate::random::random_data::random_walk_no_skeleton;
-use crate::replace::replace::replace_pairs;
+
 use itertools::Itertools;
 use rand::Rng;
 use rayon::prelude::*;
+
 use rusqlite::{Connection, OpenFlags};
+
+use once_cell::sync::Lazy;
+
 use std::{
+    collections::HashMap,
     fs::{File, OpenOptions},
     io::Write,
     sync::{
-        atomic::{AtomicUsize, Ordering, AtomicU64},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc,
+        Mutex,
     },
+    time::Instant,
 };
-use std::collections::HashMap;
-use once_cell::sync::Lazy;
-use std::time::Instant;
-use std::sync::{Mutex, atomic::{AtomicBool}};
 fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
     let (mut final_circuit, inverse_starts) = obfuscate(c, n);
@@ -178,48 +189,6 @@ pub fn butterfly(
     acc
 }
 
-// TODO change this so its faster. just do less merging
-// fn merge_combine_blocks(
-//     blocks: &[CircuitSeq],
-//     n: usize,
-//     db_path: &str,
-//     progress: &Arc<AtomicUsize>,
-//     total: usize,
-// ) -> CircuitSeq {
-//     if blocks.is_empty() {
-//         return CircuitSeq { gates: vec![] };
-//     }
-//     if blocks.len() == 1 {
-//         let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
-//         if done % 10 == 0 || done == total {
-//             println!("Progress: {}/{}", done, total);
-//         }
-//         return blocks[0].clone();
-//     }
-
-//     let mid = blocks.len() / 2;
-
-//     let (left, right) = rayon::join(
-//         || merge_combine_blocks(&blocks[..mid], n, db_path, progress, total),
-//         || merge_combine_blocks(&blocks[mid..], n, db_path, progress, total),
-//     );
-
-//     let mut conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-//         .expect("Failed to open read-only DB");
-
-//     let combined = left.concat(&right);
-//     // shoot_random_gate(&mut combined, 100_000);
-    
-//     let acc = compress_big(&combined, 200, n, &mut conn);
-
-//     let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
-//     if done % 10 == 0 || done == total {
-//         println!("Progress: {}/{}", done, total);
-//     }
-
-//     acc
-// }
-
 pub fn merge_combine_blocks(
     blocks: &[CircuitSeq],
     n: usize,
@@ -248,12 +217,6 @@ pub fn merge_combine_blocks(
             };
 
             let compressed = compress_big(&combined, 30, n, &mut conn, env, &bit_shuf_list, dbs);
-
-            // let done = progress.fetch_add(1, Ordering::Relaxed) + 1;
-            // if done % 10 == 0 {
-            //     println!("Phase 1 progress: {}/{}", done, total_1);
-            // }
-
             compressed
         })
         .collect();
@@ -266,9 +229,6 @@ pub fn merge_combine_blocks(
 
     // Pair the rest starting from index 1
     let rest = &pairs[1..];
-
-    // let _total_2 = (rest.len() + 1) / 2;
-    // let progress2 = AtomicUsize::new(0);
 
     let phase2_pairs: Vec<CircuitSeq> = rest
         .par_chunks(2)
@@ -496,20 +456,6 @@ pub fn butterfly_big(
             stable_count = 0;
         }
     }
-
-    // let mut i = 0;
-    // while i < acc.gates.len().saturating_sub(1) {
-    //     if acc.gates[i] == acc.gates[i + 1] {
-    //         // remove elements at i and i+1
-    //         acc.gates.drain(i..=i + 1);
-
-    //         // step back up to 2 indices, but not below 0
-    //         i = i.saturating_sub(2);
-    //     } else {
-    //         i += 1;
-    //     }
-    // }
-    //writeln!(file, "Permutation after remove identities 2 is: \n{:?}", acc.permutation(n).data).unwrap();
     println!("Compressed len: {}", acc.gates.len());
 
     println!("Butterfly done: {} gates", acc.gates.len());
@@ -652,7 +598,7 @@ pub fn abutterfly_big(
     println!("After adding bookends: {} gates", acc.gates.len());
     
     // let mut milestone = initial_milestone(acc.gates.len());
-    // Final global compression until stable 3×
+    // Final global compression until stable 6×
     let mut rng = rand::rng();
     let mut stable_count = 0;
     while stable_count < 6 {
@@ -1133,23 +1079,6 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
         }
     }
     println!("Final len: {}", circuit.gates.len());
-    // println!("Final cycle: {:?}", circuit.permutation(n).to_cycle());
-    // println!("Final Permutation: {:?}", circuit.permutation(n).data);
-    // if circuit.permutation(n).data != c.permutation(n).data {
-    //     panic!(
-    //         // "The permutation differs from the original.\nOriginal: {:?}\nNew: {:?}",
-    //         // c.permutation(n).data,
-    //         // circuit.permutation(n).data
-    //         "The permutation differs from the original"
-    //     );
-    // }
-    // let mut rev_gates = Vec::with_capacity(c.gates.len());
-    // for g in c.gates.iter().rev() {
-    //     rev_gates.push(*g); // copy [u8;3]
-    // }
-    // let rev = CircuitSeq { gates: rev_gates };
-    // let good_id = circuit.concat(&rev);
-
     circuit
     .probably_equal(&c, n, 150_000)
     .expect("The circuits differ somewhere!");
@@ -1359,16 +1288,6 @@ pub fn main_compression(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n:
         }
     }
     println!("Final len: {}", circuit.gates.len());
-    // println!("Final cycle: {:?}", circuit.permutation(n).to_cycle());
-    // println!("Final Permutation: {:?}", circuit.permutation(n).data);
-    // if circuit.permutation(n).data != c.permutation(n).data {
-    //     panic!(
-    //         // "The permutation differs from the original.\nOriginal: {:?}\nNew: {:?}",
-    //         // c.permutation(n).data,
-    //         // circuit.permutation(n).data
-    //         "The permutation differs from the original"
-    //     );
-    // }
 
     circuit
     .probably_equal(&c, n, 150_000)

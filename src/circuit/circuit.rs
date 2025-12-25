@@ -9,8 +9,6 @@ use std::{
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Gate{
     pub pins: [usize;3], //one active wire (0) and two control wires (1,2)
-    pub control_function: u8,
-    pub id: usize
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -25,69 +23,6 @@ pub struct Permutation {
 }
 
 impl Gate {
-    pub fn new(active: usize, first_control: usize, second_control: usize, control_function: u8, id:usize) -> Self {
-        Self {
-            pins: [active, first_control, second_control],
-            control_function,
-            id,
-        }
-    }
-    
-    //currenlty doesn't use n
-    pub fn repr(&self, _n: usize) -> String {
-        // Convert the gate id to a char if valid, otherwise fallback
-        std::char::from_u32(self.id as u32)
-            .map(|c| c.to_string())
-            .unwrap_or_else(|| format!("{}", self.id))
-    }
-
-    //two gates collide if an active and a control pins are on the same wire
-    pub fn collides(&self, other_gate: &Self) -> bool {
-        self.pins[0] == other_gate.pins[1] 
-            || self.pins[0] == other_gate.pins[2]
-            || self.pins[1] == other_gate.pins[0] 
-            || self.pins[2] == other_gate.pins[0]
-    }
-
-    //only consider r57
-    #[inline]
-    pub fn evaluate_gate(&self, state: &mut usize) -> usize {
-        let c1 = (*state >> self.pins[1]) & 1;
-        let c2 = (*state >> self.pins[2]) & 1;
-        *state ^= (c1 | ((!c2) & 1)) << self.pins[0];
-        *state
-    }
-
-    pub fn equal(&self, other: &Self) -> bool {
-        self.pins == other.pins && self.control_function == other.control_function
-    }
-
-    pub fn evaluate_gate_list(gate_list: &Vec<Gate>, input_wires: usize) -> usize {
-        let mut current_wires = input_wires;
-
-        for gate in gate_list {
-            gate.evaluate_gate(&mut current_wires);
-        }
-
-        current_wires
-    }
-
-    //give ordering to gates for later canonicalization
-    pub fn ordered(&self, other: &Self) -> bool {
-        if self.pins[0] > other.pins[0] {
-            return false
-        }
-        else if self.pins[0] == other.pins[0]{
-            if self.pins[1] > other.pins[1] {
-                return false
-            }
-            else if self.pins[1] == other.pins[1] {
-                return self.pins[2] < other.pins[2]
-            }
-        }
-        true
-    }
-
     pub fn bottom(&self) -> usize {
         // println!("bottom is {}", std_max((std_max(self.pins[0], self.pins[1])), self.pins[2]));
         std_max(std_max(self.pins[0], self.pins[1]), self.pins[2])
@@ -697,40 +632,11 @@ pub fn base_gates(n: usize) -> Vec<[u8; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use crate::rainbow::init;
-    // #[test]
-    // fn test_to_circuit_and_canon() {
-    //     init(3);
-    //     let mut circuit1: Vec<usize> = Vec::new();
-    //     circuit1.push(3);
-    //     circuit1.push(5);
-    //     circuit1.push(0);
-    //     let circuit1 = CircuitSeq { gates: circuit1 };
-    //     let base_gates = base_gates(3);
-    //     let circuit1 = circuit1.to_circuit();
-
-    //     let mut circuit2: Vec<usize> = Vec::new();
-    //     circuit2.push(4);
-    //     circuit2.push(0);
-    //     circuit2.push(3);
-    //     let circuit2 = CircuitSeq { gates: circuit2 };
-    //     let circuit2 = circuit2.to_circuit();
-
-    //     println!("{:?}", circuit1.permutation().canonical());
-    //     println!("{:?}", circuit2.permutation().canonical());
-    // } 
-
     #[test]
     fn test_from_string() {
         let s = "lej;egu;gdt;pt0;vib;cp8;tes;8pt;p0h;h59;cl7;d7e;agc;laq;u39;pog;u39;laq;d7e;pog;agc;cl7;h59;p0h;8pt;cp8;tes;vib;pt0;032;324;024;213;pt0;vib;cp8;tes;8pt;p0h;h59;d7e;cl7;u39;pog;p8h;sd6;783;agc;la9;laq;nlc;9j2;nlc;783;sd6;9j2;u39;341;213;132;432;la9;p8h;pog;laq;agc;d7e;cl7;h59;p0h;8pt;cl7;d7e;agc;laq;8pt;p0h;h59;p8h;pog;p8h;pog;u39;laq;agc;d7e;cl7;h59;p0h;8pt;tes;cp8;tes;cp8;8pt;p0h;h59;d7e;pog;p8h;cl7;agc;la9;laq;la9;p8h;pog;laq;agc;d7e;cl7;h59;p0h;8pt;tes;cp8;vib;pt0;vib;pt0;cp8;tes;8pt;p0h;cl7;d7e;pog;h59;7hu;p8h;sd6;783;agc;la9;laq;504;tsi;7hu;tsi;504;783;u39;314;sd6;la9;p8h;pog;laq;agc;d7e;cl7;h59;p0h;8pt;tes;cp8;vib;pt0;gdt;132;gdt;pt0;vib;cp8;tes;8pt;vib;8pt;tes;cp8;pt0;gdt;egu;lej;031;lej;egu;pt0;vib;cp8;gdt;tes;d7e;8pt;p0h;h59;cl7;d7e;cl7;h59;p0h;8pt;tes;cp8;vib;pt0;gdt;egu;lej;132;lej;egu;gdt;pt0;vib;cp8;tes;8pt;p0h;h59;cl7;d7e;u39;pog;p8h;sd6;783;agc;la9;laq;nlc;9j2;nlc;504;tsi;7hu;tsi;504;9j2;783;sd6;la9;p8h;pog;laq;agc;7hu;u39;h59;d7e;cl7;h59;cl7;d7e;agc;laq;314;u39;pog;la9;sd6;783;nlc;504;783;sd6;pog;nlc;9j2;504;9j2;u39;la9;laq;agc;d7e;cl7;h59;p0h;vib;8pt;tes;cp8;vib;cp8;tes;cl7;d7e;agc;laq;u39;8pt;p0h;h59;pog;la9;sd6;783;p8h;7hu;783;sd6;la9;pog;laq;agc;7hu;u39;d7e;cl7;p8h;h59;p0h;8pt;tes;cp8;tes;cl7;d7e;cp8;agc;8pt;laq;pog;la9;sd6;783;p0h;h59;p8h;u39;432;132;213;504;nlc;504;nlc;783;sd6;la9;p8h;pog;u39;341;laq;agc;d7e;cl7;h59;p0h;8pt;tes;cp8;vib;pt0;gdt;pt0;vib;cp8;gdt;d7e;tes;sd6;8pt;p0h;h59;cl7;agc;laq;u39;pog;p8h;la9;783;9j2;nlc;504;tsi;504;nlc;9j2;783;tsi;sd6;p8h;pog;u39;d7e;la9;laq;agc;cl7;h59;p0h;8pt;cp8;tes;vib;pt0;vib;032;213;024;pt0;cp8;tes;8pt;p0h;h59;cl7;d7e;agc;laq;u39;pog;p8h;la9;pog;u39;324;laq;d7e;la9;agc;cl7;p8h;h59;cl7;d7e;agc;laq;u39;pog;sd6;783;h59;p8h;504;la9;9j2;nlc;504;nlc;9j2;783;sd6;la9;p8h;pog;u39;laq;agc;d7e;cl7;h59;p0h;8pt;tes;cp8;vib;pt0;gdt;egu;lej;032;lej;egu;gdt;pt0;vib;tes;cp8;8pt;cl7;d7e;783;agc;laq;u39;pog;la9;sd6;p0h;h59;p8h;504;9j2;nlc;504;nlc;9j2;783;sd6;la9;p8h;pog;u39;laq;agc;d7e;cl7;h59;p0h;8pt;tes;cp8;vib;pt0;gdt;egu;lej;";
         println!("{:?}", CircuitSeq::from_string(s).gates);
     }
-
-    // #[test]
-    // fn test_circuit_string() {
-    //     let s = "012;123;234";
-    //     println!("{}", Circuit::from_string(s.to_string()).to_string());
-    // }
 
     use std::fs;
     use std::fs::File;

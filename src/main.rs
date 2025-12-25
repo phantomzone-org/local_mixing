@@ -1,28 +1,31 @@
 use clap::{Arg, ArgAction, Command};
 use itertools::Itertools;
 use plotters::prelude::*;
-use rand::{Rng};
+
 use rusqlite::{Connection, OpenFlags};
-use std::{
-    fs::{self},
-    io::Write,
-    path::Path,
-    time::Instant,
-};
+
 use local_mixing::{
     circuit::CircuitSeq,
-    rainbow::{
-        explore::explore_db,
-        rainbow::main_rainbow_load,
-    },
     random::random_data::{build_from_sql, main_random, random_circuit},
     replace::{
-        mixing::{install_kill_handler, main_butterfly, main_butterfly_big, main_butterfly_big_bookendsless, main_mix},
+        mixing::{
+            install_kill_handler,
+            main_butterfly,
+            main_butterfly_big,
+            main_butterfly_big_bookendsless,
+            main_mix,
+        },
         replace::random_canonical_id,
     },
 };
 use local_mixing::replace::mixing::open_all_dbs;
-use local_mixing::replace::replace::{compress_big_ancillas};
+use local_mixing::replace::replace::compress_big_ancillas;
+
+use std::{
+    fs::{self},
+    io::Write,
+    path::Path,
+};
 fn main() {
     let matches = Command::new("rainbow")
         .about("Rainbow circuit generator")
@@ -328,16 +331,6 @@ fn main() {
             let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
             build_from_sql(&mut conn, n,m, &bit_shuf).expect("Unknown error occured");
         }
-        Some(("binload", sub)) => {
-            let n: usize = *sub.get_one("n").unwrap();
-            let m: usize = *sub.get_one("m").unwrap();
-            main_rainbow_load(n, m, "./db");
-        }
-        Some(("explore", sub)) => {
-            let n: usize = *sub.get_one("n").unwrap();
-            let m: usize = *sub.get_one("m").unwrap();
-            explore_db(n, m);
-        }
         Some(("random", sub)) => {
             let n: usize = *sub.get_one("n").unwrap();
             let m: usize = *sub.get_one("m").unwrap();
@@ -522,27 +515,6 @@ fn main() {
                 }
             }
         }
-        Some(("heatmap", sub)) => {
-            let num_inputs: usize = *sub.get_one("inputs").unwrap();
-            let _n: usize = *sub.get_one("num_wires").unwrap();
-
-            // let xlabel = sub
-            //     .get_one::<String>("xlabel")
-            //     .map(|s| s.as_str())
-            //     .unwrap_or("Circuit 1 gate index");
-            // let ylabel = sub
-            //     .get_one::<String>("ylabel")
-            //     .map(|s| s.as_str())
-            //     .unwrap_or("Circuit 2 gate index");
-
-            // let flag = sub.get_flag("std"); // true if -s was given
-
-            println!(
-                "Running distinguisher with {} inputs...",
-                num_inputs
-            );
-            // heatmap(n, num_inputs, flag);
-        }
         Some(("reverse", sub)) => {
             let from_path = sub.get_one::<String>("source").unwrap();
             let dest_path = sub.get_one::<String>("dest").unwrap();
@@ -578,7 +550,7 @@ fn main() {
                 .collect();
             // Call compression logic
             let mut stable_count = 0;
-            while stable_count < 3 {
+            while stable_count < 6 {
                 let before = acc.gates.len();
                 acc = compress_big_ancillas(&acc, 1_000, n, &mut conn, &env, &bit_shuf_list, &dbs);
                 let after = acc.gates.len();
@@ -669,50 +641,6 @@ fn main() {
             }
         _ => unreachable!(),
     }
-}
-
-pub fn heatmap(circuit_one: &CircuitSeq, circuit_two: &CircuitSeq, num_wires: usize, num_inputs: usize, flag: bool) -> f64 {
-    let mut circuit_one = circuit_one.clone();
-    let mut circuit_two = circuit_two.clone();
-    if flag {
-        circuit_one.canonicalize();
-        circuit_two.canonicalize();
-    }
-    let circuit_one_len = circuit_one.gates.len();
-    let circuit_two_len = circuit_two.gates.len();
-
-    let mut average = vec![[0f64, 0f64, 0f64]; (circuit_one_len + 1) * (circuit_two_len + 1)];
-    let mut rng = rand::rng();
-    let start_time = Instant::now();
-
-    for _ in 0..num_inputs {
-        let input_bits: usize = if num_wires < usize::BITS as usize {
-            rng.random_range(0..(1usize << num_wires))
-        } else {
-            rng.random_range(0..=usize::MAX)
-        };
-
-        let evolution_one = circuit_one.evaluate_evolution(input_bits);
-        let evolution_two = circuit_two.evaluate_evolution(input_bits);
-        for i1 in 0..=circuit_one_len {
-            for i2 in 0..=circuit_two_len {
-                let diff = evolution_one[i1] ^ evolution_two[i2];
-                let hamming_dist = diff.count_ones() as f64;
-                let overlap = (2.0 * hamming_dist / num_wires as f64) - 1.0;
-                let abs_overlap = overlap.abs();
-
-                let index = i1 * (circuit_two_len + 1) + i2;
-                average[index][2] += abs_overlap / num_inputs as f64;
-            }
-        }
-    }
-
-    println!("Time elapsed: {:?}", Instant::now() - start_time);
-
-    let total_points = average.len();
-    let mean_all: f64 = average.iter().map(|p| p[2]).sum::<f64>() / total_points as f64;
-
-    mean_all
 }
 
 pub fn reverse(from_path: &str, dest_path: &str) {
