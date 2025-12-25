@@ -2028,11 +2028,22 @@ mod tests {
         use std::time::{Duration, Instant};
         use rusqlite::Connection;
         use itertools::Itertools; // for permutations
-
+        use lmdb::Environment;
+        use std::path::Path;
+        use lmdb::Transaction;
         let conn = Connection::open("circuits.db").expect("Failed to open db");
 
-        let ns_and_ms = vec![(3, 10), (4, 6), (5, 5), (6, 5), (7, 4)];
+        let ns_and_ms = vec![(4, 6), (5, 5), (6, 5), (7, 4)];
 
+        let mut stmts_prepared_limit1 = HashMap::new();
+        for &(n, max_m) in &ns_and_ms {
+            for m in 1..=max_m {
+                let table = format!("n{}m{}", n, m);
+                let query_limit = format!("SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1", table);
+                let stmt_limit = conn.prepare(&query_limit).unwrap();
+                stmts_prepared_limit1.insert((n, m), stmt_limit);
+            }
+        }
         // Generate bit_shufs for get_canonical
         let bit_shufs: HashMap<usize, Vec<Vec<usize>>> = (3..=7)
             .map(|n| {
@@ -2044,62 +2055,51 @@ mod tests {
 
         // Timers
         let mut timer_canonical = HashMap::new();
-        let mut timer_sql_unprepared = HashMap::new();
-        let mut timer_sql_prepared = HashMap::new();
         let mut timer_sql_prepared_limit1 = HashMap::new();
+        let mut timer_lmdb = HashMap::new();
 
         for &(n, max_m) in &ns_and_ms {
             for m in 1..=max_m {
                 timer_canonical.insert((n, m), Duration::ZERO);
-                timer_sql_unprepared.insert((n, m), Duration::ZERO);
-                timer_sql_prepared.insert((n, m), Duration::ZERO);
                 timer_sql_prepared_limit1.insert((n, m), Duration::ZERO);
+                timer_lmdb.insert((n, m), Duration::ZERO);
             }
         }
 
-        // Warmup: run some random circuits to prime caches
-        for _ in 0..10000 {
+        // --- Warmup: run some random circuits to prime caches ---
+        for _ in 0..10_000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
                     let mut circuit = random_circuit(n as u8, m);
                     circuit.canonicalize();
                     let _ = circuit.repr_blob();
                     let _ = circuit.permutation(n);
-                    let table = format!("n{}m{}", n, m);
-                    let query = format!("SELECT perm, shuf FROM {} WHERE circuit = ?", table);
-                    let _res: Option<Vec<u8>> = conn.query_row(&query, [&circuit.repr_blob()], |row| row.get(0)).ok();
-                }
-            }
-        }
-        let start = Instant::now();
-        for _ in 0..10_000 {
-            for &(n, max_m) in &ns_and_ms {
-                for m in 1..=max_m {
+                    // SQL warmup if needed
                     let table = format!("n{}m{}", n, m);
                     let query_limit = format!("SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1", table);
-                    let _ = conn.prepare(&query_limit).unwrap();
+                    let _ = conn.prepare(&query_limit).ok();
                 }
             }
         }
-        println!("Prepared statements 10,000 times in {:?}", start.elapsed());
-        // Prepare statements for tests 3 and 4
-        let mut stmts_prepared = HashMap::new();
-        let mut stmts_prepared_limit1 = HashMap::new();
+
+        // --- Prepare LMDB environment ---
+        let env = Environment::new()
+            .set_max_dbs(100)
+            .open(Path::new("./db"))
+            .expect("Failed to open LMDB env");
+
+        // Open all nXmYperms DBs
+        let mut lmdb_dbs = HashMap::new();
         for &(n, max_m) in &ns_and_ms {
             for m in 1..=max_m {
-                let table = format!("n{}m{}", n, m);
-                let query = format!("SELECT perm, shuf FROM {} WHERE circuit = ?", table);
-                let stmt = conn.prepare(&query).unwrap();
-                stmts_prepared.insert((n, m), stmt);
-
-                let query_limit = format!("SELECT perm, shuf FROM {} WHERE circuit = ?1 LIMIT 1", table);
-                let stmt_limit = conn.prepare(&query_limit).unwrap();
-                stmts_prepared_limit1.insert((n, m), stmt_limit);
+                let db_name = format!("n{}m{}perms", n, m);
+                let db = env.open_db(Some(&db_name)).expect("Failed to open LMDB db");
+                lmdb_dbs.insert((n, m), db);
             }
         }
 
-        // Benchmark
-        for _ in 0..1000000 {
+        // --- Benchmark loop ---
+        for _ in 0..100_000 {
             for &(n, max_m) in &ns_and_ms {
                 for m in 1..=max_m {
                     let mut circuit = random_circuit(n as u8, m);
@@ -2113,41 +2113,35 @@ mod tests {
                     let _ = get_canonical(&perm, bit_shuf);
                     timer_canonical.entry((n, m)).and_modify(|d| *d += start.elapsed());
 
-                    // 2. SQL unprepared
-                    let start = Instant::now();
-                    let query = format!("SELECT perm, shuf FROM n{}m{} WHERE circuit = ?", n, m);
-                    let _res: Option<(Vec<u8>, Vec<u8>)> =
-                        conn.query_row(&query, [&circuit_blob], |row| Ok((row.get(0)?, row.get(1)?))).ok();
-                    timer_sql_unprepared.entry((n, m)).and_modify(|d| *d += start.elapsed());
-
-                    // 3. SQL prepared
-                    if let Some(stmt) = stmts_prepared.get_mut(&(n, m)) {
-                        let start = Instant::now();
-                        let _res: Option<(Vec<u8>, Vec<u8>)> = stmt.query_row([&circuit_blob], |row| Ok((row.get(0)?, row.get(1)?))).ok();
-                        timer_sql_prepared.entry((n, m)).and_modify(|d| *d += start.elapsed());
-                    }
-
-                    // 4. SQL prepared with LIMIT 1
+                    // 2. SQL prepared LIMIT 1
                     if let Some(stmt) = stmts_prepared_limit1.get_mut(&(n, m)) {
                         let start = Instant::now();
-                        let _res: Option<(Vec<u8>, Vec<u8>)> = stmt.query_row([&circuit_blob], |row| Ok((row.get(0)?, row.get(1)?))).ok();
+                        let _res: Option<(Vec<u8>, Vec<u8>)> =
+                            stmt.query_row([&circuit_blob], |row| Ok((row.get(0)?, row.get(1)?))).ok();
                         timer_sql_prepared_limit1.entry((n, m)).and_modify(|d| *d += start.elapsed());
+                    }
+
+                    // 3. LMDB lookup
+                    if let Some(&db) = lmdb_dbs.get(&(n, m)) {
+                        let start = Instant::now();
+                        let txn = env.begin_ro_txn().unwrap();
+                        let _res = txn.get(db, &circuit_blob).ok();
+                        timer_lmdb.entry((n, m)).and_modify(|d| *d += start.elapsed());
                     }
                 }
             }
         }
 
-        // Print results
+        // --- Print results ---
         for &(n, max_m) in &ns_and_ms {
             for m in 1..=max_m {
                 println!(
-                    "n={} m={} | get_canonical: {:?} | SQL unprepared: {:?} | SQL prepared: {:?} | SQL prepared LIMIT1: {:?}",
+                    "n={} m={} | get_canonical: {:?} | SQL prepared LIMIT1: {:?} | LMDB: {:?}",
                     n,
                     m,
                     timer_canonical[&(n, m)],
-                    timer_sql_unprepared[&(n, m)],
-                    timer_sql_prepared[&(n, m)],
                     timer_sql_prepared_limit1[&(n, m)],
+                    timer_lmdb[&(n, m)],
                 );
             }
         }
