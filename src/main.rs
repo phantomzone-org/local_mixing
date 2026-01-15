@@ -592,6 +592,8 @@ fn main() {
                     let num = stem.strip_prefix("circuit").unwrap_or(stem);
                     format!("Circuit {}", num)
                 };
+                let path_s = std::path::Path::new(s).file_stem().unwrap().to_str().unwrap();
+                let path_d = std::path::Path::new(d).file_stem().unwrap().to_str().unwrap();
                 println!(
                     "For generating heatmaps:\n\
                     python3 ./heatmap/heatmap_raw.py \
@@ -602,7 +604,7 @@ fn main() {
                     --c1 \"{}\" \
                     --c2 \"{}\" \
                     --path ./{}{}.png",
-                        n, x_label, y_label, s, d, s, d
+                        n, x_label, y_label, s, d, path_s, path_d
                 );
             }
         }
