@@ -14,6 +14,7 @@ use local_mixing::{
             main_butterfly_big,
             main_butterfly_big_bookendsless,
             main_mix,
+            main_rac_big,
         },
         replace::random_canonical_id,
     },
@@ -153,6 +154,42 @@ fn main() {
                     .help("Enable bookendless mode")
                     .action(clap::ArgAction::SetTrue),
             ),
+    )
+    .subcommand(
+        Command::new("abbutterfly")
+            .about("Obfuscate and compress an existing circuit via asymmetric butterfly_big method")
+            .arg(
+                Arg::new("rounds")
+                    .short('r')
+                    .long("rounds")
+                    .required(true)
+                    .value_parser(clap::value_parser!(usize)),
+            )
+            .arg(
+                Arg::new("source")
+                    .short('s')
+                    .long("source")
+                    .required(true)
+                    .value_parser(clap::value_parser!(String))
+                    .help("Path to the input circuit file"),
+            )
+            .arg(
+                Arg::new("destination")
+                    .short('d')
+                    .long("destination")
+                    .required(true)
+                    .value_parser(clap::value_parser!(String))
+                    .help("Path to the output circuit file"),
+            )
+            .arg(
+                Arg::new("n")
+                    .short('n')
+                    .long("n")
+                    .required(false)
+                    .default_value("32")
+                    .value_parser(clap::value_parser!(usize))
+                    .help("Number of wires (default: 32)"),
+            )
     )
         .subcommand(
             Command::new("heatmap")
@@ -513,6 +550,60 @@ fn main() {
                 } else {
                     main_butterfly_big(&c, rounds, &mut conn, n, true, path, &env);
                 }
+            }
+        }
+        Some(("rac", sub)) => {
+            let rounds: usize = *sub.get_one("rounds").unwrap();
+            let s: &str = sub.get_one::<String>("source").unwrap().as_str();
+            let d: &str = sub.get_one::<String>("destination").unwrap().as_str();
+            let n: usize = *sub.get_one("n").unwrap_or(&32); // default to 32 if not provided
+            let data = fs::read_to_string(s).expect("Failed to read initial.txt");
+
+            let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
+            conn.execute_batch(
+                "
+                PRAGMA temp_store = MEMORY;
+                PRAGMA cache_size = -200000;
+                "
+            ).unwrap();
+            let lmdb = "./db";
+            let _ = std::fs::create_dir_all(lmdb);
+
+            let env = Environment::new()
+                .set_max_readers(10000) 
+                .set_max_dbs(60)      
+                .set_map_size(800 * 1024 * 1024 * 1024) 
+                .open(Path::new(lmdb))
+                .expect("Failed to open lmdb");
+            install_kill_handler();
+            if data.trim().is_empty() {
+                println!("Empty file");
+            } else {
+                let c = CircuitSeq::from_string(&data);
+                main_rac_big(&c, rounds, &mut conn, n, d, &env);
+                let x_label = {
+                    let stem = std::path::Path::new(s).file_stem().unwrap().to_str().unwrap();
+                    let num = stem.strip_prefix("circuit").unwrap_or(stem);
+                    format!("Circuit {}", num)
+                };
+
+                let y_label = {
+                    let stem = std::path::Path::new(d).file_stem().unwrap().to_str().unwrap();
+                    let num = stem.strip_prefix("circuit").unwrap_or(stem);
+                    format!("Circuit {}", num)
+                };
+                println!(
+                    "For generating heatmaps:\n\
+                    python3 ./heatmap/heatmap_raw.py \
+                    --n {} \
+                    --i 100 \
+                    --x \"{}\" \
+                    --y \"{}\" \
+                    --c1 \"{}\" \
+                    --c2 \"{}\" \
+                    --path ./{}{}.png",
+                        n, x_label, y_label, s, d, s, d
+                );
             }
         }
         Some(("reverse", sub)) => {
