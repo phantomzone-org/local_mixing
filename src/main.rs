@@ -156,7 +156,7 @@ fn main() {
             ),
     )
     .subcommand(
-        Command::new("abbutterfly")
+        Command::new("rac")
             .about("Obfuscate and compress an existing circuit via asymmetric butterfly_big method")
             .arg(
                 Arg::new("rounds")
