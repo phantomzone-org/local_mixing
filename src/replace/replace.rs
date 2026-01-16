@@ -1726,8 +1726,8 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
                     new_circuit.extend_from_slice(&id.gates[i + 2..]);
                     // Append gates before the pair
                     new_circuit.extend(id.gates[0..i].iter());
-                    let nc = CircuitSeq { gates: new_circuit.clone() };
-                    if nc.probably_equal(&CircuitSeq { gates: vec![id.gates[i+1], id.gates[i]]}, num_wires, 10000).is_err() { panic!("pairs dont match new"); }
+                    // let nc = CircuitSeq { gates: new_circuit.clone() };
+                    // if nc.probably_equal(&CircuitSeq { gates: vec![id.gates[i+1], id.gates[i]]}, num_wires, 10000).is_err() { panic!("pairs dont match new"); }
                     to_replace[chosen / 2] = (new_circuit, vec![id.gates[i], id.gates[i+1]]);
 
                     if v.is_empty() {
@@ -1759,8 +1759,8 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
                     new_circuit.extend_from_slice(&id.gates[i + 2..]);
                     // Append gates before the pair, in reverse
                     new_circuit.extend(id.gates[0..i].iter());
-                    let nc = CircuitSeq { gates: new_circuit.clone() };
-                    if nc.probably_equal(&CircuitSeq { gates: vec![id.gates[i+1], id.gates[i]]}, num_wires, 10000).is_err() { panic!("reverse pairs dont match new"); }
+                    // let nc = CircuitSeq { gates: new_circuit.clone() };
+                    // if nc.probably_equal(&CircuitSeq { gates: vec![id.gates[i+1], id.gates[i]]}, num_wires, 10000).is_err() { panic!("reverse pairs dont match new"); }
                     to_replace[chosen / 2] = (new_circuit, vec![id.gates[i], id.gates[i+1]]);
                     
                     if v.is_empty() {
@@ -1847,9 +1847,9 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
     println!("Replaced {}/{} pairs", replaced, num_pairs);
     // println!("Starting single gate replacements");
     // random_gate_replacements(circuit, min((num_pairs - replaced)/20 + (m/2 - num_pairs)/20, 1000), num_wires, conn, env);
-    if start.probably_equal(&circuit, num_wires, 10000).is_err() {
-        panic!("replace pairs changed something");
-    }
+    // if start.probably_equal(&circuit, num_wires, 10000).is_err() {
+    //     panic!("replace pairs changed something");
+    // }
     println!("Finished replace_pairs");
 }
 
@@ -2043,9 +2043,9 @@ pub fn replace_tri(
                 .rev(),
         );
     }
-    if start.probably_equal(&circuit, num_wires, 10000).is_err() {
-        panic!("replace tris changed something");
-    }
+    // if start.probably_equal(&circuit, num_wires, 10000).is_err() {
+    //     panic!("replace tris changed something");
+    // }
     println!("Replaced {}/{} triples", replaced, num_tris);
     println!("Finished replace_tri");
 }

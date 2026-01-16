@@ -829,17 +829,24 @@ pub fn replace_and_compress_big(
     println!("Butterfly start: {} gates", c.gates.len());
     let mut c = c.clone();
     let t0 = Instant::now();
-    shoot_random_gate(&mut c, 500_000);
+    shoot_random_gate(&mut c, 200_000);
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     let t1 = Instant::now();
     let len = c.gates.len();
     while c.gates.len() < len + 1000 {
         random_gate_replacements(&mut c, len/100, n, _conn, &env);
+        let t0 = Instant::now();
+        shoot_random_gate(&mut c, 200_000);
+        SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         replace_pairs(&mut c, n, _conn, &env);
+        let t0 = Instant::now();
+        shoot_random_gate(&mut c, 200_000);
+        SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         replace_tri(&mut c, n, _conn, &env);
         for i in 1..=5 {
             println!("Expanding and replacing: {}/5", i);
+            shoot_random_gate(&mut c, 200_000);
             let k = if c.gates.len() <= 1500 {
                 1
             } else {
