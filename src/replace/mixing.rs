@@ -907,7 +907,7 @@ pub fn replace_and_compress_big(
         };
 
         let chunks = split_into_random_chunks(&acc.gates, k, &mut rng);
-
+        let t4 = Instant::now();
         let compressed_chunks: Vec<Vec<[u8;3]>> =
         chunks
             .into_par_iter()
@@ -918,10 +918,11 @@ pub fn replace_and_compress_big(
                     OpenFlags::SQLITE_OPEN_READ_ONLY,
                 )
                 .expect("Failed to open read-only connection");
+                
                 compress_big(&sub, 100, n, &mut thread_conn, env, &bit_shuf_list, dbs).gates
             })
             .collect();
-
+        COMPRESS_BIG_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
         let new_gates: Vec<[u8;3]> = compressed_chunks.into_iter().flatten().collect();
         acc.gates = new_gates;
         if SHOULD_DUMP.load(Ordering::SeqCst) {
