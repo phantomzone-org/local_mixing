@@ -838,7 +838,7 @@ pub fn replace_and_compress_big(
         random_gate_replacements(&mut c, len/100, n, _conn, &env);
         replace_pairs(&mut c, n, _conn, &env);
         replace_tri(&mut c, n, _conn, &env);
-        for i in 1..=35 {
+        for i in 1..=5 {
             println!("Expanding and replacing: {}/35", i);
             let k = if c.gates.len() <= 1500 {
                 1
@@ -875,6 +875,7 @@ pub fn replace_and_compress_big(
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
     // let mut milestone = initial_milestone(acc.gates.len());
     // Final global compression until stable 6×
+    println!("Beginning compression");
     let mut acc = c;
     let mut rng = rand::rng();
     let mut stable_count = 0;
