@@ -282,6 +282,14 @@ fn main() {
                         .help("Path to the starting circuit file"),
                 )
                 .arg(
+                    Arg::new("d")
+                        .short('d')
+                        .long("destination")
+                        .required(true)
+                        .value_parser(clap::value_parser!(String))
+                        .help("Path to the new circuit file"),
+                )
+                .arg(
                     Arg::new("n")
                         .short('n')
                         .long("wires")
@@ -616,7 +624,7 @@ fn main() {
         Some(("compress", sub)) => {
             let p: &String = sub.get_one("p").expect("Missing -p <path>");
             let n: usize = *sub.get_one("n").expect("Missing -n <wires>");
-
+            let d: &String = sub.get_one("d").expect("Missing -d <path>");
             let contents = fs::read_to_string(p)
                 .unwrap_or_else(|_| panic!("Failed to read circuit file at {}", p));
 
@@ -656,12 +664,12 @@ fn main() {
                     stable_count = 0;
                 }
             }
-            let mut file = fs::File::create("compressed.txt")
-                .expect("Failed to create compressed.txt");
+            let mut file = fs::File::create(d)
+                .expect("Failed to create new file");
             write!(file, "{}", acc.repr())
                 .expect("Failed to write compressed circuit to file");
 
-            println!("Compressed circuit written to compressed.txt");
+            println!("Compressed circuit written to {}", d);
         }
         Some(("wiredot", sub)) => {
             let n: usize = *sub.get_one("num_wires").unwrap();
