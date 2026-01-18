@@ -2,7 +2,17 @@ use crate::{
     circuit::circuit::CircuitSeq,
     random::random_data::shoot_random_gate,
     replace::replace::{
-        compress, compress_big, expand_big, obfuscate, outward_compress, random_gate_replacements, random_id, replace_pairs, replace_tri, sequential_compress_big
+        compress, 
+        compress_big, 
+        expand_big, 
+        obfuscate, 
+        outward_compress, 
+        random_gate_replacements, 
+        random_id, 
+        replace_pairs, 
+        replace_tri, 
+        sequential_compress_big, 
+        replace_sequential_pairs
     },
 };
 // use crate::random::random_data::random_walk_no_skeleton;
@@ -843,7 +853,8 @@ pub fn replace_and_compress_big(
         let t0 = Instant::now();
         shoot_random_gate(&mut c, 200_000);
         SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
-        replace_tri(&mut c, n, _conn, &env);
+        replace_sequential_pairs(&mut c, n, _conn, &env, &bit_shuf_list, dbs);
+        // replace_tri(&mut c, n, _conn, &env);
         for i in 1..=5 {
             println!("Expanding and replacing: {}/5", i);
             shoot_random_gate(&mut c, 200_000);
