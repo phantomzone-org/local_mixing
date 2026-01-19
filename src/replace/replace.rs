@@ -1927,7 +1927,13 @@ pub fn replace_sequential_pairs(
 
                         let mut used_wires: Vec<u8> = vec![
                             (num_wires + 1) as u8;
-                                replacement_circ.max_wire() + 1
+                            std::cmp::max(
+                                replacement_circ.max_wire(),
+                                CircuitSeq {
+                                    gates: vec![id.gates[j], id.gates[j+1]],
+                                }
+                                .max_wire(),
+                            ) + 1
                         ];
 
                         used_wires[id.gates[j][0] as usize] = left[0];
@@ -1981,7 +1987,13 @@ pub fn replace_sequential_pairs(
 
                             let mut used_wires: Vec<u8> = vec![
                                 (num_wires + 1) as u8;
-                                    replacement_circ.max_wire() + 1
+                                std::cmp::max(
+                                    replacement_circ.max_wire(),
+                                    CircuitSeq {
+                                        gates: vec![id.gates[j], id.gates[j+1]],
+                                    }
+                                    .max_wire(),
+                                ) + 1
                             ];
 
                             used_wires[id.gates[j][0] as usize] = left[0];
@@ -2106,7 +2118,10 @@ pub fn replace_sequential_pairs(
 
                             let replacement_circ = CircuitSeq { gates: new_circuit };
 
-                            let mut used_wires: Vec<u8> = vec![(num_wires + 1) as u8; replacement_circ.max_wire() + 1];
+                            let mut used_wires: Vec<u8> = 
+                                vec![(num_wires + 1) as u8; 
+                                    std::cmp::max(replacement_circ.max_wire(),
+                                    CircuitSeq { gates: vec![id.gates[j], id.gates[j+1]] }.max_wire()) + 1];
 
                             used_wires[id.gates[j][0] as usize] = left_gate[0];
                             used_wires[id.gates[j][1] as usize] = left_gate[1];
