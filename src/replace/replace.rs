@@ -1892,16 +1892,6 @@ pub fn replace_sequential_pairs(
     let mut i = 1;
     let mut fail = 0;
     while i < n {
-        
-        {
-            let mut buf = [0u8; 1];
-            if let Ok(n) = io::stdin().read(&mut buf) {
-                if n > 0 && buf[0] == b'\n' {
-                    println!("i = {}\n fail = {}", i, fail);
-                }
-            }
-        }
-        
         let right = gates[i];
         let tax = gate_pair_taxonomy(&left, &right);
 
@@ -1909,6 +1899,14 @@ pub fn replace_sequential_pairs(
             let mut produced: Option<Vec<[u8; 3]>> = None;
 
             while produced.is_none() && fail < 100 {
+                {
+                    let mut buf = [0u8; 1];
+                    if let Ok(n) = io::stdin().read(&mut buf) {
+                        if n > 0 && buf[0] == b'\n' {
+                            println!("i = {}\n fail = {}", i, fail);
+                        }
+                    }
+                }
                 fail += 1;
                 let id_len = rng.random_range(5..=7);
                 let mut id = match random_canonical_id(env, conn, id_len) {
@@ -2092,6 +2090,14 @@ pub fn replace_sequential_pairs(
                 let mut produced: Option<Vec<[u8; 3]>> = None;
                 
                 while produced.is_none() && fail < 100 {
+                    {
+                        let mut buf = [0u8; 1];
+                        if let Ok(n) = io::stdin().read(&mut buf) {
+                            if n > 0 && buf[0] == b'\n' {
+                                println!("i = {}\n fail = {}", i, fail);
+                            }
+                        }
+                    }
                     fail += 1;
                     let id_len = rng.random_range(5..=7);
                     let mut id = match random_canonical_id(env, conn, id_len) {
