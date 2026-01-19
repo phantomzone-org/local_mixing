@@ -33,7 +33,9 @@ use std::{
     slice,
     time::Instant,
 };
-
+use std::io::{self, Read};
+use std::os::unix::io::AsRawFd;
+use libc::{fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub struct Iter<'txn> {
@@ -1854,6 +1856,14 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
     println!("Finished replace_pairs");
 }
 
+fn make_stdin_nonblocking() {
+    let fd = io::stdin().as_raw_fd();
+    unsafe {
+        let flags = fcntl(fd, F_GETFL);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    }
+}
+
 pub fn replace_sequential_pairs(
     circuit: &mut CircuitSeq,
     num_wires: usize,
@@ -1866,7 +1876,7 @@ pub fn replace_sequential_pairs(
         "Starting replace_sequential_pairs , circuit length: {}",
         circuit.gates.len()
     );
-
+    make_stdin_nonblocking();
     let gates = circuit.gates.clone();
     let n = gates.len();
     if n < 2 {
@@ -1882,6 +1892,14 @@ pub fn replace_sequential_pairs(
     let mut i = 1;
 
     while i < n {
+        {
+            let mut buf = [0u8; 1];
+            if let Ok(n) = io::stdin().read(&mut buf) {
+                if n > 0 && buf[0] == b'\n' {
+                    println!("i = {}", i);
+                }
+            }
+        }
         let right = gates[i];
         let tax = gate_pair_taxonomy(&left, &right);
 
