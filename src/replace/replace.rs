@@ -1927,13 +1927,7 @@ pub fn replace_sequential_pairs(
 
                         let mut used_wires: Vec<u8> = vec![
                             (num_wires + 1) as u8;
-                            std::cmp::max(
-                                replacement_circ.max_wire(),
-                                CircuitSeq {
-                                    gates: vec![left, right],
-                                }
-                                .max_wire(),
-                            ) + 1
+                                replacement_circ.max_wire() + 1
                         ];
 
                         used_wires[id.gates[j][0] as usize] = left[0];
@@ -1987,13 +1981,7 @@ pub fn replace_sequential_pairs(
 
                             let mut used_wires: Vec<u8> = vec![
                                 (num_wires + 1) as u8;
-                                std::cmp::max(
-                                    replacement_circ.max_wire(),
-                                    CircuitSeq {
-                                        gates: vec![left, right],
-                                    }
-                                    .max_wire(),
-                                ) + 1
+                                    replacement_circ.max_wire() + 1
                             ];
 
                             used_wires[id.gates[j][0] as usize] = left[0];
