@@ -1968,7 +1968,6 @@ pub fn replace_sequential_pairs(
                                 .rev()
                                 .collect()
                         );
-                        fail = 0;
                         break;
                     }
                 }
@@ -2027,7 +2026,6 @@ pub fn replace_sequential_pairs(
                                     .rev()
                                     .collect()
                             );
-                            fail = 0;
                             break;
                         }
                     }
@@ -2041,13 +2039,12 @@ pub fn replace_sequential_pairs(
             if let Some(mut gates_out) = produced {
                 out.append(&mut gates_out);
                 left = *out.last().unwrap();
-                fail = 0;
             } else {
                 // extremely unlikely fallback
                 out.push(left);
                 left = right;
-                fail = 0;
             }
+            fail = 0;
             i += 1;
         } else {
             // no collision: shoot right left
@@ -2077,9 +2074,11 @@ pub fn replace_sequential_pairs(
                     id = CircuitSeq::unrewire_subcircuit(&id, &used_wires);
                     id.gates.remove(0);
                     out.splice(0..1, id.gates);
+                    
                 } 
 
                 // return to stream
+                fail = 0;
                 i += 1;
                 continue;
             }
@@ -2152,7 +2151,6 @@ pub fn replace_sequential_pairs(
                                     .rev()
                                     .collect(),
                             );
-                            fail = 0;
                             break;
                         }
                     }
@@ -2210,7 +2208,6 @@ pub fn replace_sequential_pairs(
                                         .rev()
                                         .collect(),
                                 );
-                                fail = 0;
                                 break;
                             }
                         }
