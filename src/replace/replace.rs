@@ -2046,15 +2046,15 @@ pub fn replace_sequential_pairs(
                 out.push(left);
                 left = right;
             }
-            println!("1");
             fail = 0;
             i += 1;
         } else {
             // no collision: shoot right left
             out.push(gates[i]);
             let out_len = out.len();
+            println!("running shoot left");
             let new_index = shoot_left_vec(&mut out, out_len-1);
-
+            println!("complete shoot left");
             if new_index == 0 {
                 // nothing to collide with so single gate repl
                 let g = &out[0];
@@ -2081,7 +2081,6 @@ pub fn replace_sequential_pairs(
                 } 
 
                 // return to stream
-                println!("2");
                 fail = 0;
                 i += 1;
                 continue;
@@ -2227,11 +2226,9 @@ pub fn replace_sequential_pairs(
                 if let Some(mut gates_out) = produced {
                     out
                         .splice((new_index - 1)..=new_index, gates_out.drain(..));
-                    println!("3");
                     fail = 0;
                     i += 1;
                 } else {
-                    println!("4");
                     fail = 0;
                     i += 1;
                 }
