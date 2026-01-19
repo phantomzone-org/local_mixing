@@ -1888,7 +1888,7 @@ pub fn replace_sequential_pairs(
         if !GatePair::is_none(&tax) {
             let mut produced: Option<Vec<[u8; 3]>> = None;
             let mut fail = 0;
-
+            println!("col");
             while produced.is_none() && fail < 100 {
                 let id_len = rng.random_range(5..=7);
                 let mut id = match random_canonical_id(env, conn, id_len) {
@@ -2028,6 +2028,7 @@ pub fn replace_sequential_pairs(
             i += 1;
         } else {
             // no collision: shoot right left
+            println!("shoot");
             out.push(gates[i]);
             let out_len = out.len();
             let new_index = shoot_left_vec(&mut out, out_len-1);
