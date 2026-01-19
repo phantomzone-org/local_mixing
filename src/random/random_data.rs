@@ -803,6 +803,23 @@ pub fn shoot_random_gate(circuit: &mut CircuitSeq, rounds: usize) {
     }
 }
 
+pub fn shoot_left_vec(circuit: &mut Vec<[u8;3]>, gate_idx: usize) -> usize { 
+    let mut target = gate_idx;
+    while target > 0 {
+        if Gate::collides_index(&circuit[target - 1], &circuit[gate_idx]) {
+            break;
+        }
+        target -= 1;
+    }
+
+    if target != gate_idx {
+        let gate = circuit.remove(gate_idx);
+        circuit.insert(target, gate);
+    }
+
+    target
+}
+
 pub fn is_level_zero(circuit: &CircuitSeq, index: usize) -> bool {
     let mut target = index;
     while target > 0 {

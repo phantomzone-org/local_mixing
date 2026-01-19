@@ -844,51 +844,51 @@ pub fn replace_and_compress_big(
 
     let t1 = Instant::now();
     let len = c.gates.len();
-    while c.gates.len() < len + 1000 {
-        random_gate_replacements(&mut c, len/100, n, _conn, &env);
+    for _ in 0..4 {
+        // random_gate_replacements(&mut c, len/100, n, _conn, &env);
         let t0 = Instant::now();
         shoot_random_gate(&mut c, 200_000);
         SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
-        replace_pairs(&mut c, n, _conn, &env);
-        let t0 = Instant::now();
-        shoot_random_gate(&mut c, 200_000);
-        SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        // replace_pairs(&mut c, n, _conn, &env);
+        // let t0 = Instant::now();
+        // shoot_random_gate(&mut c, 200_000);
+        // SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         replace_sequential_pairs(&mut c, n, _conn, &env, &bit_shuf_list, dbs);
         // replace_tri(&mut c, n, _conn, &env);
-        for i in 1..=5 {
-            println!("Expanding and replacing: {}/5", i);
-            shoot_random_gate(&mut c, 200_000);
-            let k = if c.gates.len() <= 1500 {
-                1
-            } else {
-                (c.gates.len() + 1499) / 1500 
-            };
-            let mut rng = rand::rng();
-            let chunks = split_into_random_chunks(&c.gates, k, &mut rng);
-            let compressed_chunks: Vec<Vec<[u8;3]>> =
-            chunks
-                .into_par_iter()
-                .map(|chunk| {
-                    let sub = CircuitSeq { gates: chunk };
-                    let mut thread_conn = Connection::open_with_flags(
-                        "circuits.db",
-                        OpenFlags::SQLITE_OPEN_READ_ONLY,
-                    )
-                    .expect("Failed to open read-only connection");
-                    // TXN
-                    let t3 = Instant::now();
-                    let expanded = expand_big(&sub, 100, n, &mut thread_conn, &env, &bit_shuf_list, dbs);
-                    EXPAND_BIG_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
-                    let t4 = Instant::now();
+        // for i in 1..=5 {
+        //     println!("Expanding and replacing: {}/5", i);
+        //     shoot_random_gate(&mut c, 200_000);
+        //     let k = if c.gates.len() <= 1500 {
+        //         1
+        //     } else {
+        //         (c.gates.len() + 1499) / 1500 
+        //     };
+        //     let mut rng = rand::rng();
+        //     let chunks = split_into_random_chunks(&c.gates, k, &mut rng);
+        //     let compressed_chunks: Vec<Vec<[u8;3]>> =
+        //     chunks
+        //         .into_par_iter()
+        //         .map(|chunk| {
+        //             let sub = CircuitSeq { gates: chunk };
+        //             let mut thread_conn = Connection::open_with_flags(
+        //                 "circuits.db",
+        //                 OpenFlags::SQLITE_OPEN_READ_ONLY,
+        //             )
+        //             .expect("Failed to open read-only connection");
+        //             // TXN
+        //             let t3 = Instant::now();
+        //             let expanded = expand_big(&sub, 100, n, &mut thread_conn, &env, &bit_shuf_list, dbs);
+        //             EXPAND_BIG_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        //             let t4 = Instant::now();
 
-                    let compressed = compress_big(&expanded, 100, n, &mut thread_conn, env, &bit_shuf_list, dbs);
-                    COMPRESS_BIG_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
-                    compressed.gates
-                })
-                .collect();
-            let new_gates: Vec<[u8;3]> = compressed_chunks.into_iter().flatten().collect();
-            c.gates = new_gates;
-        }
+        //             let compressed = compress_big(&expanded, 100, n, &mut thread_conn, env, &bit_shuf_list, dbs);
+        //             COMPRESS_BIG_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        //             compressed.gates
+        //         })
+        //         .collect();
+        //     let new_gates: Vec<[u8;3]> = compressed_chunks.into_iter().flatten().collect();
+        //     c.gates = new_gates;
+        // }
     }
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
     // let mut milestone = initial_milestone(acc.gates.len());
@@ -1283,6 +1283,13 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
 
 pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, save: &str, env: &lmdb::Environment,) {
     // Start with the input circuit
+    let progress_path = format!("{}_progress.txt", save);
+    OpenOptions::new()
+    .create(true)
+    .write(true)
+    .truncate(true)
+    .open(&progress_path)
+    .expect("Failed to create progress file");
     let bit_shuf_list = (3..=7)
         .map(|n| {
             (0..n)
@@ -1315,18 +1322,32 @@ pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usi
         if count > 2 {
             break;
         }
-        let mut i = 0;
-        while i < circuit.gates.len().saturating_sub(1) {
-            if circuit.gates[i] == circuit.gates[i + 1] {
+        let mut j = 0;
+        while j < circuit.gates.len().saturating_sub(1) {
+            if circuit.gates[j] == circuit.gates[j + 1] {
                 // remove elements at i and i+1
-                circuit.gates.drain(i..=i + 1);
+                circuit.gates.drain(j..=j + 1);
 
                 // step back up to 2 indices, but not below 0
-                i = i.saturating_sub(2);
+                j = j.saturating_sub(2);
             } else {
-                i += 1;
+                j += 1;
             }
         }
+        {
+        let mut f = OpenOptions::new()
+            .append(true)
+            .open(&progress_path)
+            .expect("Failed to open progress file");
+
+        writeln!(
+            f,
+            "=== Round {} ===\n{}\n",
+            i + 1,
+            circuit.repr()
+        )
+        .expect("Failed to write progress");
+    }
     }
     println!("Final len: {}", circuit.gates.len());
     circuit
