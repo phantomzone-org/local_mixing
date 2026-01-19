@@ -2034,6 +2034,7 @@ pub fn replace_sequential_pairs(
                 if produced.is_none() {
                     fail += 1;
                 }
+                fail += 1;
             }
 
             if let Some(mut gates_out) = produced {
@@ -2216,6 +2217,7 @@ pub fn replace_sequential_pairs(
                     if produced.is_none() {
                         fail += 1;
                     }
+                    fail += 1;
                 }
 
                 if let Some(mut gates_out) = produced {
