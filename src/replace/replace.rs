@@ -1948,14 +1948,17 @@ pub fn replace_sequential_pairs(
                             k += 1;
                         }
 
+                        let mut available_wires: Vec<u8> = (0..num_wires as u8)
+                            .filter(|w| !used_wires.contains(w))
+                            .collect();
+
                         for w in 0..used_wires.len() {
                             if used_wires[w] == (num_wires + 1) as u8 {
-                                loop {
-                                    let wire = rng.random_range(0..num_wires) as u8;
-                                    if !used_wires.contains(&wire) {
-                                        used_wires[w] = wire;
-                                        break;
-                                    }
+                                if let Some(&wire) = available_wires.get(0) {
+                                    used_wires[w] = wire;
+                                    available_wires.remove(0);
+                                } else {
+                                    panic!("No available wires left to assign!");
                                 }
                             }
                         }
@@ -2005,15 +2008,17 @@ pub fn replace_sequential_pairs(
                                 k += 1;
                             }
 
+                            let mut available_wires: Vec<u8> = (0..num_wires as u8)
+                                .filter(|w| !used_wires.contains(w))
+                                .collect();
+
                             for w in 0..used_wires.len() {
                                 if used_wires[w] == (num_wires + 1) as u8 {
-                                    loop {
-                                        let wire =
-                                            rng.random_range(0..num_wires) as u8;
-                                        if !used_wires.contains(&wire) {
-                                            used_wires[w] = wire;
-                                            break;
-                                        }
+                                    if let Some(&wire) = available_wires.get(0) {
+                                        used_wires[w] = wire;
+                                        available_wires.remove(0);
+                                    } else {
+                                        panic!("No available wires left to assign!");
                                     }
                                 }
                             }
@@ -2163,14 +2168,17 @@ pub fn replace_sequential_pairs(
                                 k += 1;
                             }
 
+                            let mut available_wires: Vec<u8> = (0..num_wires as u8)
+                                .filter(|w| !used_wires.contains(w))
+                                .collect();
+
                             for w in 0..used_wires.len() {
                                 if used_wires[w] == (num_wires + 1) as u8 {
-                                    loop {
-                                        let wire = rng.random_range(0..num_wires) as u8;
-                                        if !used_wires.contains(&wire) {
-                                            used_wires[w] = wire;
-                                            break;
-                                        }
+                                    if let Some(&wire) = available_wires.get(0) {
+                                        used_wires[w] = wire;
+                                        available_wires.remove(0);
+                                    } else {
+                                        panic!("No available wires left to assign!");
                                     }
                                 }
                             }
