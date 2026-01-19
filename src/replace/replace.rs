@@ -2052,10 +2052,9 @@ pub fn replace_sequential_pairs(
             // no collision: shoot right left
             out.push(gates[i]);
             let out_len = out.len();
-            println!("running shoot left");
             let new_index = shoot_left_vec(&mut out, out_len-1);
-            println!("complete shoot left");
             if new_index == 0 {
+                println!("found layer 0");
                 // nothing to collide with so single gate repl
                 let g = &out[0];
                 let temp_out_circ = CircuitSeq { gates: out.clone() };
@@ -2090,7 +2089,7 @@ pub fn replace_sequential_pairs(
             let left_gate = circuit.gates[new_index - 1];
             let right_gate = circuit.gates[new_index];
             let tax = gate_pair_taxonomy(&left_gate, &right_gate);
-
+            println!("found col");
             if !GatePair::is_none(&tax) {
                 let mut produced: Option<Vec<[u8; 3]>> = None;
                 
