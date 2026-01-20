@@ -33,6 +33,7 @@ use std::{
     slice,
     time::Instant,
 };
+use rand::prelude::SliceRandom;
 use std::io::{self, Read};
 use std::os::unix::io::AsRawFd;
 use libc::{fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
@@ -1873,8 +1874,8 @@ pub fn replace_sequential_pairs(
     dbs: &HashMap<String, lmdb::Database>
 ) {
     println!(
-        "Starting replace_sequential_pairs , circuit length: {}",
-        circuit.gates.len()
+        "Starting replace_sequential_pairs , circuit length: {} , num_wires: {}",
+        circuit.gates.len(), num_wires
     );
     make_stdin_nonblocking();
     let gates = circuit.gates.clone();
@@ -1951,7 +1952,8 @@ pub fn replace_sequential_pairs(
                         let mut available_wires: Vec<u8> = (0..num_wires as u8)
                             .filter(|w| !used_wires.contains(w))
                             .collect();
-
+                        println!("available_wires: {:?}", available_wires);
+                        available_wires.shuffle(&mut rng);
                         for w in 0..used_wires.len() {
                             if used_wires[w] == (num_wires + 1) as u8 {
                                 if let Some(&wire) = available_wires.get(0) {
@@ -2011,7 +2013,8 @@ pub fn replace_sequential_pairs(
                             let mut available_wires: Vec<u8> = (0..num_wires as u8)
                                 .filter(|w| !used_wires.contains(w))
                                 .collect();
-
+                            println!("available_wires: {:?}", available_wires);
+                            available_wires.shuffle(&mut rng);
                             for w in 0..used_wires.len() {
                                 if used_wires[w] == (num_wires + 1) as u8 {
                                     if let Some(&wire) = available_wires.get(0) {
@@ -2138,6 +2141,8 @@ pub fn replace_sequential_pairs(
                             let mut available_wires: Vec<u8> = (0..num_wires as u8)
                                 .filter(|w| !used_wires.contains(w))
                                 .collect();
+                            println!("available_wires: {:?}", available_wires);
+                            available_wires.shuffle(&mut rng);
 
                             for w in 0..used_wires.len() {
                                 if used_wires[w] == (num_wires + 1) as u8 {
