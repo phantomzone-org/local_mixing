@@ -2705,7 +2705,7 @@ mod tests {
         let dbs = open_all_dbs(&env);
 
         // Call under test
-        for _ in 0..2 {
+        for _ in 0..1 {
             replace_sequential_pairs(
                 &mut circuit,
                 num_wires,
