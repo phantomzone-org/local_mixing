@@ -21,7 +21,8 @@ use itertools::Itertools;
 use lmdb::RoTransaction;
 use rand::Rng;
 use rayon::prelude::*;
-
+use std::io;
+use std::io::Read;
 use rusqlite::{Connection, OpenFlags};
 
 use once_cell::sync::Lazy;
@@ -823,6 +824,11 @@ pub fn abutterfly_big(
 //     (acc, first_r, prev_r_inv)
 // }
 
+static ALREADY_COLLIDED: AtomicUsize = AtomicUsize::new(0);
+static SHOOT_COUNT: AtomicUsize = AtomicUsize::new(0);
+static MADE_LEFT: AtomicUsize = AtomicUsize::new(0);
+static TRAVERSE_LEFT: AtomicUsize = AtomicUsize::new(0);
+
 pub fn replace_and_compress_big(
     c: &CircuitSeq,
     _conn: &mut Connection,
@@ -833,9 +839,16 @@ pub fn replace_and_compress_big(
     curr_round: usize,
     last_round: usize,
     bit_shuf_list: &Vec<Vec<Vec<usize>>>,
-    dbs: &HashMap<String, lmdb::Database>
-) -> CircuitSeq {
+    dbs: &HashMap<String, lmdb::Database>,
+    intermediate: &str,
+) -> (CircuitSeq, usize, usize, usize, usize) {
     println!("Current round: {}/{}", curr_round, last_round);
+
+    ALREADY_COLLIDED.store(0, Ordering::SeqCst);
+    SHOOT_COUNT.store(0, Ordering::SeqCst);
+    MADE_LEFT.store(0, Ordering::SeqCst);
+    TRAVERSE_LEFT.store(0, Ordering::SeqCst);
+
     println!("Butterfly start: {} gates", c.gates.len());
     let mut c = c.clone();
     let t0 = Instant::now();
@@ -843,57 +856,55 @@ pub fn replace_and_compress_big(
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     let t1 = Instant::now();
-    let len = c.gates.len();
     for _ in 0..2 {
-        // random_gate_replacements(&mut c, len/100, n, _conn, &env);
         let t0 = Instant::now();
         shoot_random_gate(&mut c, 200_000);
         SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
-        // replace_pairs(&mut c, n, _conn, &env);
-        // let t0 = Instant::now();
-        // shoot_random_gate(&mut c, 200_000);
-        // SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
-        replace_sequential_pairs(&mut c, n, _conn, &env, &bit_shuf_list, dbs);
-        c.gates.reverse();
-        replace_sequential_pairs(&mut c, n, _conn, &env, &bit_shuf_list, dbs);
-        c.gates.reverse();
-        // replace_tri(&mut c, n, _conn, &env);
-        // for i in 1..=5 {
-        //     println!("Expanding and replacing: {}/5", i);
-        //     shoot_random_gate(&mut c, 200_000);
-        //     let k = if c.gates.len() <= 1500 {
-        //         1
-        //     } else {
-        //         (c.gates.len() + 1499) / 1500 
-        //     };
-        //     let mut rng = rand::rng();
-        //     let chunks = split_into_random_chunks(&c.gates, k, &mut rng);
-        //     let compressed_chunks: Vec<Vec<[u8;3]>> =
-        //     chunks
-        //         .into_par_iter()
-        //         .map(|chunk| {
-        //             let sub = CircuitSeq { gates: chunk };
-        //             let mut thread_conn = Connection::open_with_flags(
-        //                 "circuits.db",
-        //                 OpenFlags::SQLITE_OPEN_READ_ONLY,
-        //             )
-        //             .expect("Failed to open read-only connection");
-        //             // TXN
-        //             let t3 = Instant::now();
-        //             let expanded = expand_big(&sub, 100, n, &mut thread_conn, &env, &bit_shuf_list, dbs);
-        //             EXPAND_BIG_TIME.fetch_add(t3.elapsed().as_nanos() as u64, Ordering::Relaxed);
-        //             let t4 = Instant::now();
-
-        //             let compressed = compress_big(&expanded, 100, n, &mut thread_conn, env, &bit_shuf_list, dbs);
-        //             COMPRESS_BIG_TIME.fetch_add(t4.elapsed().as_nanos() as u64, Ordering::Relaxed);
-        //             compressed.gates
-        //         })
-        //         .collect();
-        //     let new_gates: Vec<[u8;3]> = compressed_chunks.into_iter().flatten().collect();
-        //     c.gates = new_gates;
-        // }
+        let k = if c.gates.len() <= 1500 {
+            1
+        } else {
+            (c.gates.len() + 1499) / 1500 
+        };
+        let k = std::cmp::min(k, 60);
+        let mut rng = rand::rng();
+        let chunks = split_into_random_chunks(&c.gates, k, &mut rng);
+        let replaced_chunks: Vec<Vec<[u8;3]>> =
+        chunks
+            .into_par_iter()
+            .map(|chunk| {
+                let mut sub = CircuitSeq { gates: chunk };
+                let mut thread_conn = Connection::open_with_flags(
+                    "circuits.db",
+                    OpenFlags::SQLITE_OPEN_READ_ONLY,
+                )
+                .expect("Failed to open read-only connection");
+                let (col, shoot, zero, trav) = replace_sequential_pairs(&mut sub, n, &mut thread_conn, &env, &bit_shuf_list, dbs);
+                ALREADY_COLLIDED.fetch_add(col, Ordering::SeqCst);
+                SHOOT_COUNT.fetch_add(shoot, Ordering::SeqCst);
+                MADE_LEFT.fetch_add(zero, Ordering::SeqCst);
+                TRAVERSE_LEFT.fetch_add(trav, Ordering::SeqCst);
+                sub.gates.reverse();
+                let (col, shoot, zero, trav) = replace_sequential_pairs(&mut sub, n, &mut thread_conn, &env, &bit_shuf_list, dbs);
+                ALREADY_COLLIDED.fetch_add(col, Ordering::SeqCst);
+                SHOOT_COUNT.fetch_add(shoot, Ordering::SeqCst);
+                MADE_LEFT.fetch_add(zero, Ordering::SeqCst);
+                TRAVERSE_LEFT.fetch_add(trav, Ordering::SeqCst);
+                sub.gates.reverse();
+                sub.gates
+            })
+            .collect();
+            let new_gates: Vec<[u8;3]> = replaced_chunks.into_iter().flatten().collect();
+            c.gates = new_gates;
     }
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
+
+    let mut f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(intermediate)
+        .expect("Failed to open replacednocomp.txt");
+    writeln!(f, "{}", c.repr()).expect("Failed to write intermediate CircuitSeq");
+
     // let mut milestone = initial_milestone(acc.gates.len());
     // Final global compression until stable 6×
     println!("Beginning compression");
@@ -953,10 +964,17 @@ pub fn replace_and_compress_big(
         }
         if after == before {
             stable_count += 1;
-            println!("  {}/{} Final compression stable {}/12 at {} gates", curr_round, last_round, stable_count, after);
+            // println!("  {}/{} Final compression stable {}/12 at {} gates", curr_round, last_round, stable_count, after);
         } else {
-            println!("  {}/{}: {} → {} gates", curr_round, last_round, before, after);
+            // println!("  {}/{}: {} → {} gates", curr_round, last_round, before, after);
             stable_count = 0;
+        }
+
+        let mut buf = [0u8; 1];
+        if let Ok(n) = io::stdin().read(&mut buf) {
+            if n > 0 && buf[0] == b'\n' {
+                println!("  {}/{}: Current gates: {} gates", curr_round, last_round, after);
+            }
         }
     }
 
@@ -970,7 +988,13 @@ pub fn replace_and_compress_big(
     println!("  merge_combine_blocks:   {:.3}", MERGE_COMBINE_BLOCKS_TIME.load(Ordering::Relaxed) as f64 / 1e9 / 60.0);
 
     crate::replace::replace::print_compress_timers();
-    acc
+    (
+        acc,
+        ALREADY_COLLIDED.load(Ordering::SeqCst),
+        SHOOT_COUNT.load(Ordering::SeqCst),
+        MADE_LEFT.load(Ordering::SeqCst),
+        TRAVERSE_LEFT.load(Ordering::SeqCst),
+    )
 }
 
 pub fn split_into_random_chunks<T: Clone>(
@@ -1284,9 +1308,14 @@ pub fn main_butterfly_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, 
     println!("Final circuit written to recent_circuit.txt");
 }
 
-pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, save: &str, env: &lmdb::Environment,) {
+pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, save: &str, env: &lmdb::Environment, intermediate: &str) {
     // Start with the input circuit
-    let progress_path = format!("{}_progress.txt", save);
+    let save_base = save.strip_suffix(".txt").unwrap_or(save);
+    let progress_path = format!("{}_progress", save_base);
+    let mut sum_already_coll = 0usize;
+    let mut sum_shoot = 0usize;
+    let mut sum_made_left = 0usize;
+    let mut sum_traverse_left = 0usize;
     OpenOptions::new()
     .create(true)
     .write(true)
@@ -1309,7 +1338,32 @@ pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usi
     let mut count = 0;
     for i in 0..rounds {
         let stop = 1000;
-        circuit = replace_and_compress_big(&circuit, conn, n, i != rounds-1, 100, env, i+1, rounds, &bit_shuf_list, &dbs);
+        let (new_circuit, already_coll, shoot, made_left, traverse_left)  = replace_and_compress_big(&circuit, conn, n, i != rounds-1, 100, env, i+1, rounds, &bit_shuf_list, &dbs, intermediate);
+        circuit = new_circuit;
+
+        sum_already_coll += already_coll;
+        sum_shoot += shoot;
+        sum_made_left += made_left;
+        sum_traverse_left += traverse_left;
+
+        let total_attempts = already_coll + shoot;
+        let already_coll_pct = if total_attempts > 0 {
+            already_coll as f64 / total_attempts as f64 * 100.0
+        } else { 0.0 };
+        let shoot_pct = if total_attempts > 0 {
+            shoot as f64 / total_attempts as f64 * 100.0
+        } else { 0.0 };
+        let made_left_pct = if shoot > 0 {
+            made_left as f64 / shoot as f64 * 100.0
+        } else { 0.0 };
+        let traverse_left_avg = if shoot > 0 {
+            traverse_left as f64 / shoot as f64
+        } else { 0.0 };
+
+        println!(
+            "Round {} stats: Total Attempts: {} | Already-collided {:.2}% | Shoot {:.2}% | Made-left {:.2}% | Traverse-left avg {:.2}",
+            i + 1, total_attempts, already_coll_pct, shoot_pct, made_left_pct, traverse_left_avg
+        );
 
         if circuit.gates.len() == 0 {
             break;
@@ -1338,6 +1392,7 @@ pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usi
             }
         }
         {
+        println!("Updating progress");
         let mut f = OpenOptions::new()
             .append(true)
             .open(&progress_path)
@@ -1350,8 +1405,33 @@ pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usi
             circuit.repr()
         )
         .expect("Failed to write progress");
+        }
     }
-    }
+
+    let total_attempts = sum_already_coll + sum_shoot;
+    let overall_already_coll_pct = if total_attempts > 0 {
+        sum_already_coll as f64 / total_attempts as f64 * 100.0
+    } else { 0.0 };
+    let overall_shoot_pct = if total_attempts > 0 {
+        sum_shoot as f64 / total_attempts as f64 * 100.0
+    } else { 0.0 };
+    let overall_made_left_pct = if sum_shoot > 0 {
+        sum_made_left as f64 / sum_shoot as f64 * 100.0
+    } else { 0.0 };
+    let overall_traverse_left_avg = if sum_made_left > 0 {
+        sum_traverse_left as f64 / sum_made_left as f64
+    } else { 0.0 };
+
+    println!("=== Overall Stats ===");
+    println!(
+        "Total Attempts {} \n Already-collided {:.2}% | Shoot {:.2}% | Made-left {:.2}% | Traverse-left avg {:.2}",
+        total_attempts,
+        overall_already_coll_pct,
+        overall_shoot_pct,
+        overall_made_left_pct,
+        overall_traverse_left_avg
+    );
+
     println!("Final len: {}", circuit.gates.len());
     circuit
     .probably_equal(&c, n, 150_000)
