@@ -2016,7 +2016,7 @@ mod tests {
         println!("start and end designated: {:?}", &circ.gates[start..=end]);
     }
 
-    use crate::replace::replace::compress;
+    use crate::replace::replace::{compress, gate_pair_taxonomy};
     #[test]
     fn test_compression_speed() {
         // Hard-coded random circuit
@@ -2611,6 +2611,7 @@ mod tests {
     use lmdb::Environment;
     use lmdb::Transaction;
     use lmdb::Cursor;
+    use crate::replace::replace::GatePair;
     // use rand::prelude::IteratorRandom;
     #[test]
     fn test_random_circuit_identity() {
@@ -2644,11 +2645,19 @@ mod tests {
         for (key, circuits) in circuit_table.iter() {
             for blob in circuits {
                 let circuit = CircuitSeq::from_blob(blob);
+                let tax: GatePair = bincode::deserialize(&key).expect("Can not recover Gate Pair");
                 assert_eq!(
                     circuit.permutation(7),
                     id,
                     "Circuit for key {:?} is not an identity!",
                     key
+                );
+                assert_eq!(
+                    tax,
+                    gate_pair_taxonomy(&circuit.gates[0], &circuit.gates[1]),
+                    "The gate taxonomy does not match the key {:?} vs {:?}",
+                    gate_pair_taxonomy(&circuit.gates[0], &circuit.gates[1]),
+                    tax
                 );
             }
         }
