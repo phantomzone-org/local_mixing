@@ -1171,7 +1171,7 @@ fn circuit_tables_gen(
         for (k, v) in cursor.iter() {
             let perm = &k[..perm_len];
             let circuit = v.to_vec();
-
+            println!("{:?}", CircuitSeq::from_blob(&circuit));
             perms_to_circuits
                 .entry(perm.to_vec())
                 .or_default()
