@@ -1168,14 +1168,13 @@ fn circuit_tables_gen(
         let ro_txn = env.begin_ro_txn()?;
         let mut cursor = ro_txn.open_ro_cursor(db)?;
 
-        for (k, v) in cursor.iter() {
+        for (k, _) in cursor.iter() {
             let perm = &k[..perm_len];
-            let circuit = v.to_vec();
-            println!("{:?}", CircuitSeq::from_blob(&circuit));
+            let circuit = &k[perm_len..];
             perms_to_circuits
                 .entry(perm.to_vec())
                 .or_default()
-                .push(circuit);
+                .push(circuit.to_vec());
         }
     }
 
@@ -1205,7 +1204,6 @@ fn create_tax_id_table(circuit_table: HashMap<Vec<u8>, Vec<Vec<u8>>>) -> HashMap
                 let mut back = c2.concat(&c1);
 
                 let len = forward.gates.len();
-                println!("len: {}", len);
                 for _ in 0..len {
                     let g1 = forward.gates[0];
                     let g2 = forward.gates[1];
