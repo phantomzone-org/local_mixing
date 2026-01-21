@@ -2301,12 +2301,7 @@ pub fn replace_sequential_pairs(
     // flush final carried gate
     out.push(left);
 
-    let out_circ = CircuitSeq{ gates: out };
-
-    if circuit.probably_equal(&out_circ, num_wires, 100_000).is_ok() {
-        panic!("Functionality was changed");
-    }
-    circuit.gates = out_circ.gates;
+    circuit.gates = out;
 
     (already_collided, shoot_count, curr_zero, traverse_left)
 }
@@ -2798,6 +2793,10 @@ mod tests {
         }
     }
 
+    use crate::replace::mixing::split_into_random_chunks;
+    use rayon::iter::IntoParallelIterator;
+    use rayon::iter::ParallelIterator;
+    use rusqlite::OpenFlags;
     #[test]
     fn replace_sequential_pair_preserves_invariants() {
         use rand::{SeedableRng, rngs::StdRng};
@@ -2819,36 +2818,34 @@ mod tests {
         })
         .collect();
         let dbs = open_all_dbs(&env);
-
+        let chunks = split_into_random_chunks(&circuit.gates, 10, &mut rng);
         // Call under test
-        for _ in 0..1 {
-            replace_sequential_pairs(
-                &mut circuit,
-                num_wires,
-                &mut conn,
-                &env,
-                &bit_shuf_list,
-                &dbs
-            );
-            circuit.gates.reverse();
-            replace_sequential_pairs(
-                &mut circuit,
-                num_wires,
-                &mut conn,
-                &env,
-                &bit_shuf_list,
-                &dbs
-                /* whatever other params you have */
-            );
-            circuit.gates.reverse();
-        }
+        let replaced_chunks: Vec<Vec<[u8;3]>> =
+        chunks
+            .into_par_iter()
+            .map(|chunk| {
+                let mut sub = CircuitSeq { gates: chunk };
+                let mut thread_conn = Connection::open_with_flags(
+                    "circuits.db",
+                    OpenFlags::SQLITE_OPEN_READ_ONLY,
+                )
+                .expect("Failed to open read-only connection");
+                let (col, shoot, zero, trav) = replace_sequential_pairs(&mut sub, 64, &mut thread_conn, &env, &bit_shuf_list, &dbs);
+                sub.gates.reverse();
+                let (col, shoot, zero, trav) = replace_sequential_pairs(&mut sub, 64, &mut thread_conn, &env, &bit_shuf_list, &dbs);
+                sub.gates.reverse();
+                sub.gates
+            })
+            .collect();
+            let new_gates: Vec<[u8;3]> = replaced_chunks.into_iter().flatten().collect();
+            circuit.gates = new_gates;
 
         if circuit.probably_equal(&out_circ, num_wires, 100_000).is_ok() {
             panic!("Functionality was changed");
         }
 
         println!("All good");
-        
+
         // No invalid wire indices
         for (i, gate) in circuit.gates.iter().enumerate() {
             for &w in gate {
