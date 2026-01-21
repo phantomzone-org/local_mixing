@@ -2378,4 +2378,48 @@ mod tests {
         }
     }
 
+    use lmdb::Database;
+    use std::path::Path;
+    use lmdb::Environment;
+    use lmdb::Transaction;
+    use lmdb::Cursor;
+    use rand::prelude::IteratorRandom;
+    #[test]
+    fn test_random_circuit_identity() {
+        let id = Permutation::id_perm(7);
+        let env_path = "./db"; 
+        let env = Environment::new()
+            .set_max_dbs(80)
+            .set_map_size(800 * 1024 * 1024 * 1024)
+            .open(Path::new(env_path))
+            .expect("Failed to open LMDB env");
+
+        let tables = ["ids_n5", "ids_n6", "ids_n7"];
+        let mut circuit_table: HashMap<Vec<u8>, Vec<Vec<u8>>> = HashMap::new();
+
+        for table_name in tables {
+            let db: Database = env.open_db(Some(table_name)).expect("DB not found");
+            let txn = env.begin_ro_txn().expect("Failed to begin txn");
+            let mut cursor = txn.open_ro_cursor(db).expect("Failed to open cursor");
+
+            for (key, value) in cursor.iter() {
+                let circuits = circuit_table.entry(key.to_vec()).or_default();
+                circuits.push(value.to_vec());
+            }
+        }
+
+        // Pick a random key
+        let mut rng = rand::rng();
+        let key = circuit_table.keys().choose(&mut rng).expect("No circuits found");
+
+        // Pick a random circuit for that key
+        let circuits = &circuit_table[key];
+        let blob = circuits.choose(&mut rng).expect("No circuit blobs");
+
+        let circuit = CircuitSeq::from_blob(blob);
+
+        // Check that it is an identity
+        assert!(circuit.permutation(7) == id, "Random circuit is not an identity!");
+        println!("Random circuit for key {:?} is an identity!", key);
+    }
 }
