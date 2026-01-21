@@ -2150,9 +2150,13 @@ pub fn replace_sequential_pairs(
                         .rev()
                         .collect()
                 );
-                let Some(temp) = produced;
-                let two = CircuitSeq { gates: vec![id.gates[0], id.gates[1] ]};
-                if two.probably_equal(&temp).is_err(){
+                let temp = CircuitSeq::unrewire_subcircuit(&replacement_circ, &used_wires)
+                        .gates
+                        .into_iter()
+                        .rev()
+                        .collect();
+                let two = CircuitSeq { gates: vec![left, right ]};
+                if two.probably_equal(&CircuitSeq{ gates: temp } , n, 100_000).is_err(){
                     panic!("BB");
                 }
                 if produced.is_none() {
