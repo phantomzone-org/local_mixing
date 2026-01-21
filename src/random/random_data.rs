@@ -2413,20 +2413,21 @@ mod tests {
             }
         }
 
-        let mut rng = rand::rng();
-        let key = circuit_table.keys().choose(&mut rng).expect("No circuits found");
+        for (key, circuits) in circuit_table.iter() {
+            for blob in circuits {
+                let circuit = CircuitSeq::from_blob(blob);
+                assert_eq!(
+                    circuit.permutation(7),
+                    id,
+                    "Circuit for key {:?} is not an identity!",
+                    key
+                );
+            }
+        }
 
-        let circuits = &circuit_table[key];
-        let blob = circuits.choose(&mut rng).expect("No circuit blobs");
-
-        let circuit = CircuitSeq::from_blob(blob);
-
-        assert_eq!(
-            circuit.permutation(7),
-            id,
-            "Random circuit is not an identity!"
+        println!(
+            "All circuits for all keys in tables {:?} are verified as identities!",
+            tables
         );
-
-        println!("Random circuit for key {:?} is an identity!", key);
     }
 }
