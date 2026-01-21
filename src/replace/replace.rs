@@ -2300,8 +2300,11 @@ pub fn replace_sequential_pairs(
 
     // flush final carried gate
     out.push(left);
-
-    circuit.gates = out;
+    let out_circ = CircuitSeq { gates: out };
+    if out_circ.probably_equal(&circuit, n, 100_000).is_err() {
+        panic!("Broken");
+    }
+    circuit.gates = out_circ.gates;
 
     (already_collided, shoot_count, curr_zero, traverse_left)
 }
