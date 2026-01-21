@@ -2819,7 +2819,7 @@ mod tests {
         })
         .collect();
         let dbs = open_all_dbs(&env);
-        let chunks = split_into_random_chunks(&circuit.gates, 20, &mut rng);
+        let chunks = split_into_random_chunks(&circuit.gates, 10, &mut rng);
         // Call under test
         let replaced_chunks: Vec<Vec<[u8;3]>> =
         chunks
