@@ -1793,6 +1793,10 @@ pub struct GateTri {
 }
 
 impl GatePair {
+    pub fn new() -> Self {
+        GatePair { a: CollisionType::OnNew, c1: CollisionType::OnNew, c2: CollisionType::OnNew }
+    }
+    
     pub fn is_none(gate_pair: &Self) -> bool {
         gate_pair.a == CollisionType::OnNew && gate_pair.c1 == CollisionType::OnNew && gate_pair.c2 == CollisionType::OnNew
     }
