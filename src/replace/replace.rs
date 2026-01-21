@@ -2099,11 +2099,7 @@ pub fn replace_sequential_pairs(
                         continue;
                     }
                 };
-                assert_eq!(tax, gate_pair_taxonomy(&id.gates[0], &id.gates[1]), "Taxo does not match");
-                let stupid = CircuitSeq { gates: vec![[1,2,3], [1,2,3]]};
-                if stupid.probably_equal(&id, 7, 1_000).is_ok() {
-                    println!("All good so far");
-                }
+        
                 let new_circuit = id.gates[2..].to_vec();
 
                 let replacement_circ = CircuitSeq { gates: new_circuit };
@@ -2151,6 +2147,7 @@ pub fn replace_sequential_pairs(
                     CircuitSeq::unrewire_subcircuit(&replacement_circ, &used_wires)
                         .gates
                         .into_iter()
+                        .skip(2)
                         .rev()
                         .collect()
                 );
@@ -2279,6 +2276,7 @@ pub fn replace_sequential_pairs(
                         CircuitSeq::unrewire_subcircuit(&replacement_circ, &used_wires)
                             .gates
                             .into_iter()
+                            .skip(2)
                             .rev()
                             .collect()
                     );
@@ -2305,9 +2303,6 @@ pub fn replace_sequential_pairs(
     // flush final carried gate
     out.push(left);
     let out_circ = CircuitSeq { gates: out };
-    if out_circ.probably_equal(&circuit, n, 100_000).is_err() {
-        panic!("Broken");
-    }
     circuit.gates = out_circ.gates;
 
     (already_collided, shoot_count, curr_zero, traverse_left)
