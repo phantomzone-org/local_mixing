@@ -2386,7 +2386,7 @@ mod tests {
     use rand::prelude::IteratorRandom;
     #[test]
     fn test_random_circuit_identity() {
-        let id = Permutation::id_perm(7);
+        let id = Permutation::id_perm(1 << 7);
 
         // Open LMDB
         let env_path = "./db";
@@ -2422,7 +2422,7 @@ mod tests {
         let circuit = CircuitSeq::from_blob(blob);
 
         assert_eq!(
-            circuit.permutation(1 << 7),
+            circuit.permutation(7),
             id,
             "Random circuit is not an identity!"
         );
