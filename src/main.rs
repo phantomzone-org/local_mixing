@@ -1186,6 +1186,7 @@ fn circuit_tables_gen(
 }
 
 fn create_tax_id_table(circuit_table: HashMap<Vec<u8>, Vec<Vec<u8>>>) -> HashMap<GatePair, Vec<Vec<u8>>> {
+    println!("circuit_table has {} perms", circuit_table.len());
     let mut tax_table: HashMap<GatePair, HashSet<Vec<u8>>> = HashMap::new();
     for (_, circuits) in circuit_table {
         let n = circuits.len();
@@ -1214,7 +1215,6 @@ fn create_tax_id_table(circuit_table: HashMap<Vec<u8>, Vec<Vec<u8>>>) -> HashMap
                     let g2 = back.gates[1];
                     let btax = gate_pair_taxonomy(&g1, &g2);
                     if curr_tax_f.insert(ftax) {
-                        println!("insert");
                         tax_table
                             .entry(ftax)
                             .or_default()
