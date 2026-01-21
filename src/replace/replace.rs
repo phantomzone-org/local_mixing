@@ -1,15 +1,7 @@
 use crate::{
-    circuit::circuit::{CircuitSeq, Permutation},
-    random::random_data::{
-        contiguous_convex,
-        find_convex_subcircuit,
-        simple_find_convex_subcircuit,
-        get_canonical,
-        random_circuit,
-        targeted_convex_subcircuit,
-        shoot_left_vec,
-    },
-    rainbow::canonical::Canonicalization,
+    circuit::circuit::{CircuitSeq, Permutation}, rainbow::canonical::Canonicalization, random::random_data::{
+        contiguous_convex, find_convex_subcircuit, get_canonical, random_circuit, shoot_left_vec, shoot_random_gate, simple_find_convex_subcircuit, targeted_convex_subcircuit
+    }
 };
 
 use itertools::Itertools;
@@ -230,9 +222,13 @@ fn get_random_identity(
     n: usize,
     gate_pair: GatePair,
     env: &lmdb::Environment,
+    dbs: &HashMap<String, lmdb::Database>,
 ) -> Result<CircuitSeq, Box<dyn std::error::Error>> {
-    let table_name = format!("ids_n{}", n);
-    let db: lmdb::Database = env.open_db(Some(&table_name))?;
+    let db_name = format!("ids_n{}", n);
+    let db = match dbs.get(&db_name) {
+                Some(db) => *db,
+                None => panic!("No db {}", db_name),
+            };
 
     let txn = env.begin_ro_txn()?;
 
@@ -877,6 +873,7 @@ pub fn compress_big(
     }
 
     for _ in 0..trials {
+        shoot_random_gate(&mut circuit, 100_000);
         let t0 = Instant::now();
         let mut subcircuit_gates = vec![];
         let random_max_wires = rng.random_range(5..=7);
@@ -2092,7 +2089,7 @@ pub fn replace_sequential_pairs(
                 }
                 fail += 1;
                 let id_len = rng.random_range(5..=7);
-                let id = match get_random_identity(id_len, tax, env) {
+                let id = match get_random_identity(id_len, tax, env, dbs) {
                     Ok(id) => id,
                     Err(_) => {
                         fail += 1;
@@ -2220,7 +2217,7 @@ pub fn replace_sequential_pairs(
                 while produced.is_none() && fail < 100 {
                     fail += 1;
                     let id_len = rng.random_range(5..=7);
-                    let id = match get_random_identity(id_len, tax, env) {
+                    let id = match get_random_identity(id_len, tax, env, dbs) {
                         Ok(id) => id,
                         Err(_) => {
                             fail += 1;
