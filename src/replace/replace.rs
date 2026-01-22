@@ -2957,6 +2957,9 @@ mod tests {
             panic!("Functionality was changed");
         }
 
+        let tt = TOTAL_TIME.load(Ordering::Relaxed);
+
+        println!("Permutation computation time: {:.2} min", tt as f64 / 60_000_000_000.0);
         println!("All good");
         print_compress_timers();
         // No invalid wire indices
