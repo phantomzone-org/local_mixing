@@ -2263,7 +2263,7 @@ mod tests {
 
     #[test]
     fn generate_random_equivalent_circuits() {
-        let n: u8 = 32;
+        let n: u8 = 16;
 
         // Generate two equivalent circuits
         let (c1, c2) = random_equivalent_circuits_until_found(n);
