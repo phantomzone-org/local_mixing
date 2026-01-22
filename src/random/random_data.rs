@@ -108,7 +108,7 @@ pub fn random_equivalent_circuits_until_found(n: u8) -> (CircuitSeq, CircuitSeq)
     let mut total_generated = 0usize;
 
     loop {
-        let m = fastrand::usize(10..=30);
+        let m = fastrand::usize(100..=300);
         let circuit = random_circuit(n, m);
         total_generated += 1;
 
