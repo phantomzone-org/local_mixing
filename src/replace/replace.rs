@@ -3032,7 +3032,7 @@ mod tests {
             .expect("Failed to open lmdb");
         let dbs = open_all_dbs(&env);
 
-        for _ in 0..10_000 {
+        for _ in 0..10_000_000 {
             let c = random_circuit(64, 2);
             let tax = gate_pair_taxonomy(&c.gates[0], &c.gates[1]);
             let id = get_random_identity(w, tax, &env, &dbs);
