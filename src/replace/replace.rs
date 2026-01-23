@@ -3040,19 +3040,14 @@ mod tests {
         let ns_to_min = |v: u64| v as f64 / (60.0 * 1_000_000_000.0);
         println!("\n=== get_random_identity timers ===");
 
-        println!("DB_OPEN_TIME          : {:.6}", ns_to_min(DB_OPEN_TIME.load(Ordering::Relaxed)));
-        println!("TXN_TIME              : {:.6}", ns_to_min(TXN_TIME.load(Ordering::Relaxed)));
-        println!("LMDB_LOOKUP_TIME      : {:.6}", ns_to_min(LMDB_LOOKUP_TIME.load(Ordering::Relaxed)));
-        println!("ROW_FETCH_TIME        : {:.6}", ns_to_min(ROW_FETCH_TIME.load(Ordering::Relaxed)));
-        println!("SROW_FETCH_TIME       : {:.6}", ns_to_min(SROW_FETCH_TIME.load(Ordering::Relaxed)));
-        println!("SIXROW_FETCH_TIME     : {:.6}", ns_to_min(SIXROW_FETCH_TIME.load(Ordering::Relaxed)));
-        println!("LROW_FETCH_TIME       : {:.6}", ns_to_min(LROW_FETCH_TIME.load(Ordering::Relaxed)));
+        println!("DB_NAME_TIME          : {:.6}", ns_to_min(DB_NAME_TIME.load(Ordering::Relaxed)));
+        println!("DB_LOOKUP_TIME        : {:.6}", ns_to_min(DB_LOOKUP_TIME.load(Ordering::Relaxed)));
+        println!("TXN_BEGIN_TIME        : {:.6}", ns_to_min(TXN_BEGIN_TIME.load(Ordering::Relaxed)));
+        println!("SERIALIZE_KEY_TIME    : {:.6}", ns_to_min(SERIALIZE_KEY_TIME.load(Ordering::Relaxed)));
+        println!("LMDB_GET_TIME         : {:.6}", ns_to_min(LMDB_GET_TIME.load(Ordering::Relaxed)));
+        println!("DESERIALIZE_LIST_TIME : {:.6}", ns_to_min(DESERIALIZE_LIST_TIME.load(Ordering::Relaxed)));
+        println!("RNG_CHOOSE_TIME       : {:.6}", ns_to_min(RNG_CHOOSE_TIME.load(Ordering::Relaxed)));
         println!("FROM_BLOB_TIME        : {:.6}", ns_to_min(FROM_BLOB_TIME.load(Ordering::Relaxed)));
-        println!("CANONICALIZE_TIME     : {:.6}", ns_to_min(CANONICALIZE_TIME.load(Ordering::Relaxed)));
-        println!("PICK_SUBCIRCUIT_TIME  : {:.6}", ns_to_min(PICK_SUBCIRCUIT_TIME.load(Ordering::Relaxed)));
-        println!("PERMUTATION_TIME      : {:.6}", ns_to_min(PERMUTATION_TIME.load(Ordering::Relaxed)));
-        println!("CANON_TIME            : {:.6}", ns_to_min(CANON_TIME.load(Ordering::Relaxed)));
-        println!("TRIAL_TIME            : {:.6}", ns_to_min(TRIAL_TIME.load(Ordering::Relaxed)));
 
         println!("=================================\n");
     }
