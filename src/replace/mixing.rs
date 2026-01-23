@@ -1053,7 +1053,18 @@ pub fn open_all_dbs(env: &lmdb::Environment) -> HashMap<String, lmdb::Database> 
         "n5m1perms","n5m2perms","n5m3perms","n5m4perms","n5m5perms",
         "n6m1perms","n6m2perms","n6m3perms","n6m4perms",
         "n7m1perms","n7m2perms","n7m3perms",
-        "ids_n5", "ids_n6", "ids_n7",
+        "ids_n5g0", "ids_n5g1", "ids_n5g2", "ids_n5g3", "ids_n5g4", "ids_n5g5", "ids_n5g6", "ids_n5g7", "ids_n5g8", "ids_n5g9", 
+        "ids_n5g10", "ids_n5g11", "ids_n5g12", "ids_n5g13", "ids_n5g14", "ids_n5g15", "ids_n5g16", "ids_n5g17", "ids_n5g18", "ids_n5g19", 
+        "ids_n5g20", "ids_n5g21", "ids_n5g22", "ids_n5g23", "ids_n5g24", "ids_n5g25", "ids_n5g26", "ids_n5g27", "ids_n5g28", "ids_n5g29", 
+        "ids_n5g30", "ids_n5g31", "ids_n5g32", "ids_n5g33",
+        "ids_n6g0", "ids_n6g1", "ids_n6g2", "ids_n6g3", "ids_n6g4", "ids_n6g5", "ids_n6g6", "ids_n6g7", "ids_n6g8", "ids_n6g9", 
+        "ids_n6g10", "ids_n6g11", "ids_n6g12", "ids_n6g13", "ids_n6g14", "ids_n6g15", "ids_n6g16", "ids_n6g17", "ids_n6g18", "ids_n6g19", 
+        "ids_n6g20", "ids_n6g21", "ids_n6g22", "ids_n6g23", "ids_n6g24", "ids_n6g25", "ids_n6g26", "ids_n6g27", "ids_n6g28", "ids_n6g29", 
+        "ids_n6g30", "ids_n6g31", "ids_n6g32", "ids_n6g33",
+        "ids_n7g0", "ids_n7g1", "ids_n7g2", "ids_n7g3", "ids_n7g4", "ids_n7g5", "ids_n7g6", "ids_n7g7", "ids_n7g8", "ids_n7g9", 
+        "ids_n7g10", "ids_n7g11", "ids_n7g12", "ids_n7g13", "ids_n7g14", "ids_n7g15", "ids_n7g16", "ids_n7g17", "ids_n7g18", "ids_n7g19", 
+        "ids_n7g20", "ids_n7g21", "ids_n7g22", "ids_n7g23", "ids_n7g24", "ids_n7g25", "ids_n7g26", "ids_n7g27", "ids_n7g28", "ids_n7g29", 
+        "ids_n7g30", "ids_n7g31", "ids_n7g32", "ids_n7g33",
     ];
 
     for name in db_names.iter() {
@@ -1335,6 +1346,9 @@ pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usi
         })
         .collect();
     let dbs = open_all_dbs(env);
+    for (name, db) in &dbs {
+        println!("name: {}", name);
+    }
     println!("Starting len: {}", c.gates.len());
     let mut circuit = c.clone();
     // Repeat obfuscate + compress 'rounds' times
