@@ -3035,7 +3035,7 @@ mod tests {
         for _ in 0..10_000 {
             let c = random_circuit(64, 2);
             let tax = gate_pair_taxonomy(&c.gates[0], &c.gates[1]);
-            let id = get_random_identity(n, tax, &env, &dbs);
+            let id = get_random_identity(w, tax, &env, &dbs);
         }
         let ns_to_min = |v: u64| v as f64 / (60.0 * 1_000_000_000.0);
         println!("\n=== get_random_identity timers ===");
