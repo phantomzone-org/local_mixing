@@ -231,53 +231,136 @@ fn get_random_identity(
     n: usize,
     gate_pair: GatePair,
     env: &lmdb::Environment,
-    dbs: &HashMap<String, lmdb::Database>,
+    dbs: &HashMap<String, Database>,
 ) -> Result<CircuitSeq, Box<dyn std::error::Error>> {
-    use std::time::Instant;
-    use std::sync::atomic::Ordering;
-
     let total_start = Instant::now();
 
     let g = GatePair::to_int(&gate_pair);
-    let t = Instant::now();
     let db_name = format!("ids_n{}g{}", n, g);
-    DB_NAME_TIME.fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-    let t = Instant::now();
-    let db = match dbs.get(&db_name) {
-        Some(db) => *db,
-        None => panic!("No db {}", db_name),
+    let db = dbs.get(&db_name).expect("No DB with that name");
+
+    // Hardcoded max entries for all DBs
+    let max_entries: usize = match db_name.as_str() {
+        // n5
+        "ids_n5g1" => 100_235,
+        "ids_n5g2" => 177_541,
+        "ids_n5g3" => 169_347,
+        "ids_n5g4" => 177_481,
+        "ids_n5g5" => 88_913,
+        "ids_n5g6" => 119_879,
+        "ids_n5g7" => 169_161,
+        "ids_n5g8" => 119_872,
+        "ids_n5g9" => 90_257,
+        "ids_n5g10" => 294_944,
+        "ids_n5g11" => 158_422,
+        "ids_n5g12" => 158_411,
+        "ids_n5g13" => 340_518,
+        "ids_n5g14" => 494_202,
+        "ids_n5g15" => 133_325,
+        "ids_n5g16" => 136_497,
+        "ids_n5g17" => 530_248,
+        "ids_n5g18" => 116_600,
+        "ids_n5g19" => 283_097,
+        "ids_n5g20" => 122_255,
+        "ids_n5g21" => 156_822,
+        "ids_n5g22" => 116_524,
+        "ids_n5g23" => 291_005,
+        "ids_n5g24" => 140_980,
+        "ids_n5g25" => 447_910,
+        "ids_n5g26" => 156_746,
+        "ids_n5g27" => 121_233,
+        "ids_n5g28" => 529_131,
+        "ids_n5g29" => 282_660,
+        "ids_n5g30" => 290_595,
+        "ids_n5g31" => 138_000,
+        "ids_n5g32" => 446_888,
+        "ids_n5g33" => 138_616,
+        // n6
+        "ids_n6g0" => 289_970,
+        "ids_n6g1" => 467_194,
+        "ids_n6g2" => 832_725,
+        "ids_n6g3" => 774_667,
+        "ids_n6g4" => 832_405,
+        "ids_n6g5" => 349_762,
+        "ids_n6g6" => 498_925,
+        "ids_n6g7" => 774_303,
+        "ids_n6g8" => 498_838,
+        "ids_n6g9" => 386_650,
+        "ids_n6g10" => 861_396,
+        "ids_n6g11" => 441_737,
+        "ids_n6g12" => 441_678,
+        "ids_n6g13" => 1_084_718,
+        "ids_n6g14" => 1_644_996,
+        "ids_n6g15" => 284_939,
+        "ids_n6g16" => 429_717,
+        "ids_n6g17" => 1_700_523,
+        "ids_n6g18" => 306_587,
+        "ids_n6g19" => 795_521,
+        "ids_n6g20" => 280_532,
+        "ids_n6g21" => 302_158,
+        "ids_n6g22" => 306_536,
+        "ids_n6g23" => 709_587,
+        "ids_n6g24" => 400_341,
+        "ids_n6g25" => 1_386_212,
+        "ids_n6g26" => 301_986,
+        "ids_n6g27" => 245_057,
+        "ids_n6g28" => 1_694_936,
+        "ids_n6g29" => 794_260,
+        "ids_n6g30" => 708_822,
+        "ids_n6g31" => 357_496,
+        "ids_n6g32" => 1_381_063,
+        "ids_n6g33" => 316_088,
+        // n7
+        "ids_n7g0" => 1_068,
+        "ids_n7g1" => 3_213,
+        "ids_n7g2" => 2_705,
+        "ids_n7g3" => 4_613,
+        "ids_n7g4" => 2_704,
+        "ids_n7g5" => 1_019,
+        "ids_n7g6" => 2_371,
+        "ids_n7g7" => 4_635,
+        "ids_n7g8" => 2_371,
+        "ids_n7g9" => 2_392,
+        "ids_n7g10" => 6_651,
+        "ids_n7g11" => 1_811,
+        "ids_n7g12" => 1_805,
+        "ids_n7g13" => 8_085,
+        "ids_n7g14" => 9_850,
+        "ids_n7g15" => 1_293,
+        "ids_n7g16" => 2_675,
+        "ids_n7g17" => 13_193,
+        "ids_n7g18" => 1_000,
+        "ids_n7g19" => 4_741,
+        "ids_n7g20" => 1_819,
+        "ids_n7g21" => 1_002,
+        "ids_n7g22" => 1_000,
+        "ids_n7g23" => 4_844,
+        "ids_n7g24" => 3_899,
+        "ids_n7g25" => 19_153,
+        "ids_n7g26" => 1_003,
+        "ids_n7g27" => 2_172,
+        "ids_n7g28" => 12_904,
+        "ids_n7g29" => 4_711,
+        "ids_n7g30" => 4_816,
+        "ids_n7g31" => 2_536,
+        "ids_n7g32" => 18_903,
+        "ids_n7g33" => 1_433,
+        _ => panic!("DB {} not in hardcoded max_entries", db_name),
     };
-    DB_LOOKUP_TIME.fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
-    let t = Instant::now();
+    let mut rng = rand::rng();
+    let random_index = rng.random_range(0..max_entries);
+
     let txn = env.begin_ro_txn()?;
-    TXN_BEGIN_TIME.fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    let mut cursor = txn.open_ro_cursor(*db)?;
 
-    let t = Instant::now();
-    let key_bytes = bincode::serialize(&gate_pair)
-        .unwrap_or_else(|e| panic!("Failed to serialize gate pair: {}", e));
-    SERIALIZE_KEY_TIME.fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    let value_bytes = cursor.iter_start()
+        .nth(random_index)
+        .map(|(k, _v)| k)
+        .expect("Failed to get random key");
 
-    let t = Instant::now();
-    let value_bytes = txn.get(db, &key_bytes)?;
-    LMDB_GET_TIME.fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-    let t = Instant::now();
-    let circuits: Vec<Vec<u8>> =
-        bincode::deserialize(value_bytes)
-            .unwrap_or_else(|e| panic!("Failed to deserialize circuit list: {}", e));
-    DESERIALIZE_LIST_TIME.fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-    let t = Instant::now();
-    let blob = circuits
-        .choose(&mut rand::rng())
-        .expect("Failed to choose a random circuit");
-    RNG_CHOOSE_TIME.fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
-
-    let t = Instant::now();
-    let out = CircuitSeq::from_blob(blob);
-    FROM_BLOB_TIME.fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    let out = CircuitSeq::from_blob(value_bytes);
 
     GET_ID_TOTAL_TIME.fetch_add(
         total_start.elapsed().as_nanos() as u64,
