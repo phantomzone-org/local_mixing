@@ -814,7 +814,7 @@ fn main() {
                         .expect("Failed to compute perms");
 
                 let tax_id_table = create_tax_id_table(perm_circuit_table);
-                let db_name = format!("ids_n{}", n);
+                let db_name = format!("{}", n);
                 save_tax_id_tables_to_lmdb(&env_path, &db_name, &tax_id_table)
                     .expect("Failed to save perms");
 
@@ -1273,7 +1273,7 @@ fn save_tax_id_tables_to_lmdb(
         if let Ok(db) = env.open_db(Some(&db_to_delete)) {
             let mut txn = env.begin_rw_txn()?;
             unsafe {
-                txn.drop_db(db)?;
+                txn.drop_db(db)?;                                            
             }
             txn.commit()?;
         }
