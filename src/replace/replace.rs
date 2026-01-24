@@ -2708,6 +2708,7 @@ pub fn replace_pair_distances(
 
         // Recompute bounds once after batch
         let (l, r) = update_bounds(&distances);
+        curr += 1;
         left = l;
         right = r;
     }
