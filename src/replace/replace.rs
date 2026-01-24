@@ -2676,7 +2676,18 @@ pub fn replace_pair_distances(
                 );
 
                 // Save what to do later
-                pending.push((i, id_len, id));
+                if curr == 0 {
+                    circuit.gates.splice(i - 1..=i, id);
+                    update_distance(&mut distances, i, id_len);
+
+                    let (l, r) = update_bounds(&distances);
+                    left = l;
+                    right = r;
+
+                    continue;
+                } else {
+                    pending.push((i, id_len, id));
+                }
             }
             i += 1;
         }
