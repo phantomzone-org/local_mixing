@@ -2830,7 +2830,7 @@ pub fn replace_pair_distances_linear(
             i += 1;
         }
         lb = temp_lb;
-        rb = out_dists.len();
+        rb = out_dists.len() - 1;
         while rb > 0
             && out_dists[rb - 1] == out_dists[rb] + 1
         {
