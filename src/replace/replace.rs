@@ -2802,8 +2802,7 @@ pub fn replace_pair_distances_linear(
                 if id_len > 0 {
                     // remove left gate
                     out_gates.pop();
-                    out_dists.pop();
-                    let left_dist = *out_dists.last().unwrap() + 1;
+                    let left_dist = out_dists.last().unwrap() + 1;
                     let right_dist = dists[i+1] + 1;
                     // emit replacement
                     for j in 0..(id_len - 1) {
