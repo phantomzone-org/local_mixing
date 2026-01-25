@@ -3536,5 +3536,19 @@ mod tests {
         let id = get_random_wide_identity(16, &env, &dbs);
         assert!(id.probably_equal(&CircuitSeq{ gates: Vec::new() }, 16, 100_000).is_ok(), "Not an identity");
         println!("id: {:?}", id.gates);
+
+        let mut wires: HashMap<u8, Vec<usize>> = HashMap::new();
+        for (i, gates) in id.gates.into_iter().enumerate() {
+            for pins in gates {
+                    wires.entry(pins)
+                    .or_insert_with(Vec::new)
+                    .push(i);
+                }
+        }
+
+        for (k, v) in &wires {
+            println!("wire: {}, # of gates: {}", k, v.len());
+        }
+
     }
 }
