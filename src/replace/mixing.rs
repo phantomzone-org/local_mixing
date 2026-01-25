@@ -1113,6 +1113,10 @@ pub fn split_into_random_chunks(
     k: usize,
     rng: &mut impl Rng,
 ) -> Vec<Vec<[u8;3]>> {
+
+    if k == 1 {
+        return vec![v.clone()]
+    }
     let min_size = 100;
     let n = v.len();
     assert!(k * min_size <= n);
