@@ -2775,7 +2775,7 @@ pub fn replace_pair_distances_linear(
         // println!("Working on curr = {}", curr);
         let mut out_gates = Vec::with_capacity(gates.len());
         let mut out_dists = Vec::with_capacity(gates.len() + 1);
-
+        let mut temp_lb = lb;
         for i in 0..lb {
             out_gates.push(gates[i].clone());
             out_dists.push(dists[i]);
@@ -2807,7 +2807,7 @@ pub fn replace_pair_distances_linear(
                     for j in 0..id_len {
                         out_gates.push(id[j].clone());
                         if j != id_len - 1 {
-                            let d = (left_dist + j).min(right_dist + id_len - 1 - j);
+                            let d = (left_dist + j).min(right_dist + id_len - 2 - j);
                             out_dists.push(d);
                         }
                     }
@@ -2815,9 +2815,9 @@ pub fn replace_pair_distances_linear(
                         while lb + 1 < out_dists.len()
                             && out_dists[lb + 1] == out_dists[lb] + 1
                         {
-                            lb += 1;
+                            temp_lb += 1;
                         }
-                        lb += 1;
+                        temp_lb += 1;
                     } else if i == rb {
                         while rb > 0
                             && out_dists[rb - 1] == out_dists[rb] + 1
@@ -2827,7 +2827,6 @@ pub fn replace_pair_distances_linear(
                         rb -= 1;
                     }
                     i += 1;
-
                     continue;
                 }
             }
@@ -2837,7 +2836,7 @@ pub fn replace_pair_distances_linear(
             out_dists.push(dist);
             i += 1;
         }
-
+        lb = temp_lb;
         // close tail distance
         out_dists.push(0);
 
