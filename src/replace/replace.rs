@@ -2845,6 +2845,7 @@ pub fn replace_pair_distances_linear(
         dists = out_dists;
     }
     println!("{:?}", dists);
+    println!("left = {} right = {}", lb, rb);
     circuit.gates = gates;
 }
 
