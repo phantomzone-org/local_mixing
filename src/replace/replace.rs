@@ -3549,9 +3549,11 @@ mod tests {
                 }
         }
 
+        let mut i = 0;
         for (k, v) in &wires {
             println!("wire: {}, # of gates: {}", k, v.len());
+            i += 1;
         }
-
+        println!("Num wires: {}", i)
     }
 }
