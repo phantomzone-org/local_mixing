@@ -2772,7 +2772,7 @@ pub fn replace_pair_distances_linear(
     let mut rb = dists.len() - 1;
 
     for curr in 0..min {
-        println!("Working on curr = {}", curr);
+        // println!("Working on curr = {}", curr);
         let mut out_gates = Vec::with_capacity(gates.len());
         let mut out_dists = Vec::with_capacity(gates.len() + 1);
 
