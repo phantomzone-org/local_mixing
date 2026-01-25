@@ -379,6 +379,75 @@ fn get_random_identity(
     Ok(out)
 }
 
+pub fn get_random_wide_identity(
+    n: usize, 
+    env: &lmdb::Environment,
+    dbs: &HashMap<String, Database>,
+) -> CircuitSeq {
+    let mut id = CircuitSeq { gates: Vec::new() };
+    let mut uw = id.used_wires();
+    let mut wires = uw.len();
+    let max_wires = n;
+    let gp = GatePair::new();
+    let mut rng = rand::rng();
+    while wires < 16 {
+        let mut i = match get_random_identity(6, gp, env, dbs) {
+            Ok(i) => {
+                i
+            }
+            Err(_) => {
+                continue;
+            }
+        };
+        if id.clone().gates.is_empty() {
+            id = i;
+        } else {
+            let mut wires: HashMap<u8, Vec<usize>> = HashMap::new();
+            for (idx, gates) in id.clone().gates.into_iter().enumerate() {
+                for pins in gates {
+                    wires.entry(pins)
+                    .or_insert_with(Vec::new)
+                    .push(idx);
+                }
+            }
+            let min_vals: &Vec<usize> = wires
+                .iter()
+                .min_by_key(|(_, v)| v.len())
+                .map(|(_, v)| v)
+                .unwrap();
+            let min = min_vals[0];
+            let mut used_wires = vec![id.gates[min][0], id.gates[min][1], id.gates[min][2]];
+            let mut unused_wires: Vec<u8> = (0..n as u8)
+                .filter(|w| !used_wires.contains(w))
+                .collect();
+            unused_wires.shuffle(&mut rng);
+            let mut count = 3;
+            while count < 6 {
+                if !unused_wires.is_empty() {
+                    let random = unused_wires.pop().unwrap();
+                    used_wires.push(random);
+                    count += 1;
+                } else {
+                    let random = rng.random_range(0..n);
+                    if used_wires.contains(&(random as u8)) {
+                        continue;
+                    }
+                    used_wires.push(random as u8);
+                    count += 1;
+                }
+            }
+            let rewired_g = CircuitSeq::rewire_subcircuit(&id, &vec![min], &used_wires);
+            i.rewire_first_gate(rewired_g.gates[min], 6);
+            i = CircuitSeq::unrewire_subcircuit(&i, &used_wires);
+            i.gates.remove(0);
+            id.gates.splice(min..=min, i.gates);
+        }
+        uw = id.used_wires();
+        wires = uw.len();
+    }
+    id
+}
+
 // To just get a completely random circuit and reverse for identity, rather than using canonical ones from our rainbow table
 pub fn random_id(n: u8, m: usize) -> (CircuitSeq, CircuitSeq) {
     let circuit = random_circuit(n, m);
@@ -3452,5 +3521,20 @@ mod tests {
         println!("FROM_BLOB_TIME        : {:.6}", ns_to_min(FROM_BLOB_TIME.load(Ordering::Relaxed)));
 
         println!("=================================\n");
+    }
+
+    #[test]
+    pub fn test_gen_id_16() {
+        let env_path = "./db";
+
+        let env = Environment::new()
+            .set_max_dbs(155)
+            .set_map_size(800 * 1024 * 1024 * 1024)
+            .open(Path::new(env_path))
+            .expect("Failed to open lmdb");
+        let dbs = open_all_dbs(&env);
+        let id = get_random_wide_identity(16, &env, &dbs);
+        assert!(id.probably_equal(&CircuitSeq{ gates: Vec::new() }, 16, 100_000).is_ok(), "Not an identity");
+        println!("id: {:?}", id.gates);
     }
 }
