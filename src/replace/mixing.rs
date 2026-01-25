@@ -2,7 +2,7 @@ use crate::{
     circuit::circuit::CircuitSeq,
     random::random_data::shoot_random_gate,
     replace::replace::{
-        compress, compress_big, expand_big, obfuscate, outward_compress, random_id, replace_pair_distances, replace_pairs, replace_sequential_pairs
+        compress, compress_big, expand_big, obfuscate, outward_compress, random_id, replace_pair_distances, replace_pair_distances_linear, replace_pairs, replace_sequential_pairs
     },
 };
 // use crate::random::random_data::random_walk_no_skeleton;
@@ -1016,7 +1016,7 @@ pub fn replace_and_compress_big_distance(
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     let t1 = Instant::now();
-    replace_pair_distances(&mut c, n, _conn, env, bit_shuf_list, dbs);
+    replace_pair_distances_linear(&mut c, n, _conn, env, bit_shuf_list, dbs);
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
     println!(
         "Finished replace_sequential_pairs, new length: {}",

@@ -2633,6 +2633,8 @@ pub fn replace_single_pair(
 }
 
 //TODO maybe parallelize this
+// do smarter scans for updating the bounds by tracking as we go. also only update if left or right is replaced
+// don't splice, just rebuild at the end
 pub fn replace_pair_distances(
     circuit: &mut CircuitSeq,
     num_wires: usize,
@@ -2661,7 +2663,8 @@ pub fn replace_pair_distances(
             let mut buf = [0u8; 1];
             if let Ok(n) = io::stdin().read(&mut buf) {
                 if n > 0 && buf[0] == b'\n' {
-                    println!("  curr = {}", curr);
+                    println!("  curr = {}\n
+                                gates = {}", curr, circuit.gates.len());
                 }
             }
             if distances[i] == curr {
@@ -2751,6 +2754,98 @@ pub fn update_distance(
     }
 
     distances.splice(didx..=didx, replacement);
+}
+
+pub fn replace_pair_distances_linear(
+    circuit: &mut CircuitSeq,
+    num_wires: usize,
+    conn: &mut Connection,
+    env: &lmdb::Environment,
+    bit_shuf_list: &Vec<Vec<Vec<usize>>>,
+    dbs: &HashMap<String, lmdb::Database>,
+) {
+    let min = 30;
+
+    // initialize pair distances
+    let mut gates = circuit.gates.drain(..).collect::<Vec<_>>();
+    let mut dists = vec![0usize; gates.len() + 1];
+    let mut lb = 1;
+    let mut rb = dists.len() - 1;
+
+    for curr in 0..min {
+        println!("Working on curr = {}", curr);
+        let mut out_gates = Vec::with_capacity(gates.len());
+        let mut out_dists = Vec::with_capacity(gates.len() + 1);
+
+        for i in 0..lb {
+            out_gates.push(gates[i].clone());
+            out_dists.push(dists[i]);
+        }
+
+        let mut i = lb;
+        while i < gates.len() {
+            let left = out_gates.last().unwrap();
+            let right = &gates[i];
+            let dist = dists[i];
+
+            if dist == curr && i <= rb{
+                let (id, id_len) = replace_single_pair(
+                    left,
+                    right,
+                    num_wires,
+                    conn,
+                    env,
+                    bit_shuf_list,
+                    dbs,
+                );
+
+                if id_len > 0 {
+                    // remove left gate
+                    out_gates.pop();
+                    out_dists.pop();
+                    let left_dist = *out_dists.last().unwrap() + 1;
+                    let right_dist = dists[i+1] + 1;
+                    // emit replacement
+                    for j in 0..(id_len - 1) {
+                        out_gates.push(id[j].clone());
+                        let d = (left_dist + j).min(right_dist + id_len - 1 - j);
+                        out_dists.push(d);
+                    }
+                    if i == lb {
+                        while lb + 1 < out_dists.len()
+                            && out_dists[lb + 1] == out_dists[lb] + 1
+                        {
+                            lb += 1;
+                        }
+                        lb += 1;
+                    } else if i == rb {
+                        while rb > 0
+                            && out_dists[rb - 1] == out_dists[rb] + 1
+                        {
+                            rb -= 1;
+                        }
+                        rb -= 1;
+                    }
+                    i += 1;
+
+                    continue;
+                }
+            }
+
+            // no replacement
+            out_gates.push(right.clone());
+            out_dists.push(dist);
+            i += 1;
+        }
+
+        // close tail distance
+        out_dists.push(0);
+
+        gates = out_gates;
+        dists = out_dists;
+    }
+
+    circuit.gates = gates;
 }
 
 pub fn replace_tri(
