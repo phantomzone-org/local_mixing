@@ -2763,9 +2763,8 @@ pub fn replace_pair_distances_linear(
     env: &lmdb::Environment,
     bit_shuf_list: &Vec<Vec<Vec<usize>>>,
     dbs: &HashMap<String, lmdb::Database>,
+    min: usize,
 ) {
-    let min = 30;
-
     // initialize pair distances
     let mut gates = circuit.gates.drain(..).collect::<Vec<_>>();
     let mut dists = vec![0usize; gates.len() + 1];

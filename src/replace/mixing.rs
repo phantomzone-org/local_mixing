@@ -1007,6 +1007,7 @@ pub fn replace_and_compress_big_distance(
     bit_shuf_list: &Vec<Vec<Vec<usize>>>,
     dbs: &HashMap<String, lmdb::Database>,
     intermediate: &str,
+    min: usize,
 ) -> CircuitSeq {
     println!("Current round: {}/{}", curr_round, last_round);
     println!("Replace and compress distance start: {} gates", circuit.gates.len());
@@ -1016,7 +1017,7 @@ pub fn replace_and_compress_big_distance(
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     let t1 = Instant::now();
-    replace_pair_distances_linear(&mut c, n, _conn, env, bit_shuf_list, dbs);
+    replace_pair_distances_linear(&mut c, n, _conn, env, bit_shuf_list, dbs, min);
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
     println!(
         "Finished replace_sequential_pairs, new length: {}",
@@ -1573,7 +1574,7 @@ pub fn main_rac_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usi
     println!("Final circuit written to recent_circuit.txt");
 }
 
-pub fn main_rac_big_distance(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, save: &str, env: &lmdb::Environment, intermediate: &str) {
+pub fn main_rac_big_distance(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, save: &str, env: &lmdb::Environment, intermediate: &str, min: usize,) {
     // Start with the input circuit
     let save_base = save.strip_suffix(".txt").unwrap_or(save);
     let progress_path = format!("{}_progress.txt", save_base);
@@ -1599,7 +1600,7 @@ pub fn main_rac_big_distance(c: &CircuitSeq, rounds: usize, conn: &mut Connectio
     let mut count = 0;
     for i in 0..rounds {
         let _stop = 1000;
-        let new_circuit = replace_and_compress_big_distance(&circuit, conn, n, i != rounds-1, 100, env, i+1, rounds, &bit_shuf_list, &dbs, intermediate);
+        let new_circuit = replace_and_compress_big_distance(&circuit, conn, n, i != rounds-1, 100, env, i+1, rounds, &bit_shuf_list, &dbs, intermediate, min);
         circuit = new_circuit;
 
         if circuit.gates.len() == 0 {

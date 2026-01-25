@@ -243,6 +243,15 @@ fn main() {
                     .required(true)
                     .value_parser(clap::value_parser!(String))
                     .help("Path to the intermediate circuit file"),
+            )
+            .arg(
+                Arg::new("m")
+                    .short('m')
+                    .long("min")
+                    .required(false)
+                    .default_value("30")
+                    .value_parser(clap::value_parser!(usize))
+                    .help("Minimum distance"),
             ),
     )
         .subcommand(
@@ -717,6 +726,7 @@ fn main() {
             let i: &str = sub.get_one::<String>("intermediate").unwrap().as_str();
             let d: &str = sub.get_one::<String>("destination").unwrap().as_str();
             let n: usize = *sub.get_one("n").unwrap_or(&32); // default to 32 if not provided
+            let m: usize = *sub.get_one("m").unwrap_or(&30); // default to 30f not provided
             let data = fs::read_to_string(s).expect("Failed to read initial.txt");
 
             let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
@@ -740,7 +750,7 @@ fn main() {
                 println!("Empty file");
             } else {
                 let c = CircuitSeq::from_string(&data);
-                main_rac_big_distance(&c, rounds, &mut conn, n, d, &env, i);
+                main_rac_big_distance(&c, rounds, &mut conn, n, d, &env, i, m);
                 let x_label = {
                     let stem = std::path::Path::new(s).file_stem().unwrap().to_str().unwrap();
                     let num = stem.strip_prefix("circuit").unwrap_or(stem);
