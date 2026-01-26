@@ -1410,7 +1410,7 @@ fn save_tax_id_tables_to_lmdb(
         }
     }
 
-    let batch_size = 100_000;
+    let batch_size = 100;
     let mut batch: Vec<Vec<u8>> = Vec::with_capacity(batch_size);
 
     let flush_batch = |env: &Environment, db: Database, batch: &mut Vec<Vec<u8>>| {
