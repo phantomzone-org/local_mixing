@@ -431,6 +431,10 @@ pub fn get_random_wide_identity(
                     count += 1;
                 } else {
                     let random = min_keys[j];
+                    if used_wires.contains(&random) {
+                        j += 1;
+                        continue;
+                    }
                     used_wires.push(random);
                     count += 1;
                     j += 1;
