@@ -428,6 +428,7 @@ pub fn get_random_wide_identity(
             let mut count = 3;
             let mut j = 1;
             while count < 6 {
+                println!("count {} ", count);
                 if !unused_wires.is_empty() {
                     let random = unused_wires.pop().unwrap();
                     used_wires.push(random);
