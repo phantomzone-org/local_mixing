@@ -426,6 +426,7 @@ pub fn get_random_wide_identity(
     let gp = GatePair::new();
     let mut rng = rand::rng();
     while nwires < 16 {
+        shoot_random_gate(&mut id, 100_000);
         let mut i = match get_random_identity(6, gp, env, dbs) {
             Ok(i) => {
                 i
