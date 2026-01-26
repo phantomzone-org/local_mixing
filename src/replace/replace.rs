@@ -450,11 +450,11 @@ pub fn get_random_wide_identity(
         nwires = uw.len();
     }
 
-    let mut shuf: Vec<usize> = (0..n).collect();
-    shuf.shuffle(&mut rng);
+    // let mut shuf: Vec<usize> = (0..n).collect();
+    // shuf.shuffle(&mut rng);
 
-    let bit_shuf = Permutation { data: shuf };
-    id.rewire(&bit_shuf, n);
+    // let bit_shuf = Permutation { data: shuf };
+    // id.rewire(&bit_shuf, n);
     id
 }
 
@@ -2647,7 +2647,8 @@ pub fn replace_single_pair(
     let mut id_gen = false;
     let mut id = CircuitSeq { gates: Vec::new() };
     while !id_gen {
-        let id_len = rng.random_range(6..=7);
+        // let id_len = rng.random_range(6..=7);
+        let id_len = 16;
         id = match get_random_identity(id_len, tax, env, dbs) {
             Ok(id) => {
                 id_gen = true;

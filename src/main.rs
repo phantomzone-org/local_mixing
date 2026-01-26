@@ -17,7 +17,7 @@ use local_mixing::{
             main_rac_big,
             main_rac_big_distance,
         },
-        replace::{GatePair, gate_pair_taxonomy, random_canonical_id }
+        replace::{GatePair, gate_pair_taxonomy, random_canonical_id, get_random_wide_identity }
     },
 };
 use local_mixing::replace::mixing::open_all_dbs;
@@ -407,6 +407,11 @@ fn main() {
         .subcommand(
             Command::new("lmdbid")
             .about("Generate table for generating canon ids")
+        )
+        .subcommand(
+            Command::new("lmdbnid")
+            .about("Generate table for generating canon ids for n wires")
+            .arg(Arg::new("n").short('n').long("n").required(true).value_parser(clap::value_parser!(usize)))
         )
         .subcommand(
             Command::new("string")
@@ -933,6 +938,10 @@ fn main() {
                 println!("Saved ids_n{}", n);
             }
         }
+        Some(("lmdbnid", sub)) => {
+            let n: usize = *sub.get_one("n").unwrap();
+            fill_n_id(n);
+        }
         Some(("string", sub)) => {
             let from_path = sub.get_one::<String>("source").unwrap();
             let dest_path = sub.get_one::<String>("dest").unwrap();
@@ -1435,4 +1444,59 @@ fn save_tax_id_tables_to_lmdb(
     }
 
     Ok(())
+}
+
+pub fn fill_n_id(n: usize) {
+    let env_path = "./db";
+    let env = Environment::new()
+        .set_max_dbs(155)
+        .set_map_size(800 * 1024 * 1024 * 1024)
+        .open(Path::new(env_path)).expect("Failed to open db");
+    let dbs = open_all_dbs(&env);
+
+    let batch_size = 100_000;
+    let mut batches: HashMap<u8, Vec<Vec<u8>>> = HashMap::new();
+    let mut db_cache: HashMap<u8, Database> = HashMap::new();
+
+    let flush_batch = |env: &Environment, db: Database, batch: &mut Vec<Vec<u8>>| {
+        if batch.is_empty() {
+            return;
+        }
+
+        let mut txn = env.begin_rw_txn().expect("Failed to begin LMDB txn");
+        for key in batch.iter() {
+            txn.put(db, key, &[], WriteFlags::empty())
+                .expect("Failed to write LMDB key");
+        }
+        txn.commit().expect("Failed to commit LMDB txn");
+        batch.clear();
+    };
+
+    loop {
+        let mut id = get_random_wide_identity(n, &env, &dbs);
+        let len = id.gates.len();
+
+        for _ in 0..len {
+            let g1 = id.gates[0];
+            let g2 = id.gates[1];
+            let gp = gate_pair_taxonomy(&g1, &g2);
+            let g = GatePair::to_int(&gp) as u8;
+
+            let db = *db_cache.entry(g).or_insert_with(|| {
+                let name = format!("ids_n{}g{}", n, g);
+                env.create_db(Some(&name), lmdb::DatabaseFlags::empty())
+                    .expect("Failed to create db")
+            });
+
+            let key = id.repr_blob();
+            batches.entry(g).or_default().push(key);
+
+            if batches[&g].len() >= batch_size {
+                flush_batch(&env, db, batches.get_mut(&g).unwrap());
+            }
+
+            let first = id.gates.remove(0);
+            id.gates.push(first);
+        }
+    }
 }
