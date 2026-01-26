@@ -422,13 +422,13 @@ pub fn get_random_wide_identity(
             let mut unused_wires: Vec<u8> = (0..n as u8)
                 .filter(|w| !used_wires.contains(w))
                 .collect();
+            println!("{:?}", unused_wires);
             unused_wires.sort_by_key(|w| {
                 min_keys.iter().position(|k| k == w).map_or(0, |i| i + 1)
             });
             let mut count = 3;
             let mut j = 1;
             while count < 6 {
-                println!("count {} wires {}", count, nwires);
                 if !unused_wires.is_empty() {
                     let random = unused_wires.pop().unwrap();
                     used_wires.push(random);
