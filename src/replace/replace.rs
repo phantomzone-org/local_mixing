@@ -420,12 +420,9 @@ pub fn get_random_wide_identity(
             let min = min_vals[0];
             let mut used_wires = vec![id.gates[min][0], id.gates[min][1], id.gates[min][2]];
             let mut unused_wires: Vec<u8> = (0..n as u8)
-                .filter(|w| !used_wires.contains(w))
+                .filter(|w| !used_wires.contains(w) || !uw.contains(w))
                 .collect();
-            println!("{:?}", unused_wires);
-            unused_wires.sort_by_key(|w| {
-                min_keys.iter().position(|k| k == w).map_or(0, |i| i + 1)
-            });
+            unused_wires.shuffle(rng);
             let mut count = 3;
             let mut j = 1;
             while count < 6 {
