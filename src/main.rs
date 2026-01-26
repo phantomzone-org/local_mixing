@@ -1417,7 +1417,7 @@ fn save_tax_id_tables_to_lmdb(
         if batch.is_empty() {
             return;
         }
-
+        println!("Flushing batch");
         let mut txn = env.begin_rw_txn().expect("Failed to begin LMDB txn");
         for key in batch.iter() {
             txn.put(db, key, &[], WriteFlags::empty())
