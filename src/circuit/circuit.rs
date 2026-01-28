@@ -58,10 +58,26 @@ impl Gate {
     }
 
     #[inline(always)]
+    pub fn evaluate_index_128(state: u128, gate: [u8;3]) -> u128 {
+        let c1 = (state >> gate[1]) & 1;
+        let c2 = (state >> gate[2]) & 1;
+        state ^ (c1 | ((!c2) & 1)) << gate[0]
+    }
+
+    #[inline(always)]
     pub fn evaluate_index_list(state: usize, gates: &Vec<[u8;3]>) -> usize {
         let mut current_wires = state;
         for g in gates {
             current_wires = Self::evaluate_index(current_wires, *g);
+        }
+        current_wires
+    }
+
+    #[inline(always)]
+    pub fn evaluate_index_list_128(state: u128, gates: &Vec<[u8;3]>) -> u128 {
+        let mut current_wires = state;
+        for g in gates {
+            current_wires = Self::evaluate_index_128(current_wires, *g);
         }
         current_wires
     }
@@ -590,20 +606,32 @@ impl CircuitSeq {
         evolution
     }
 
+    pub fn evaluate_evolution_128(&self, input: u128) -> Vec<u128> {
+        let mut state = input;
+        let mut evolution = vec![state];
+
+        for gate in &self.gates {
+            state = Gate::evaluate_index_128(state, *gate);
+            evolution.push(state);
+        }
+
+        evolution
+    }
+
     //no check on num_wires
     pub fn probably_equal(&self, other_circuit: &Self, num_wires: usize, num_inputs: usize) -> Result<(), String> {
         let mut rng = rand::rng();
-        let mask: usize = if num_wires < usize::BITS as usize {
+        let mask: u128 = if num_wires < u128::BITS as usize {
             (1 << num_wires) - 1
         } else {
-            usize::MAX - 1
+            u128::MAX - 1
         };
         for _ in 0..num_inputs {
             // generate u64, then mask to get the lower num_wires bits
-            let random_input = (rng.random::<u64>() as usize) & mask;
+            let random_input = (rng.random::<u64>() as u128) & mask;
 
-            let self_output = Gate::evaluate_index_list( random_input, &self.gates);
-            let other_output = Gate::evaluate_index_list(random_input, &other_circuit.gates);
+            let self_output = Gate::evaluate_index_list_128( random_input, &self.gates);
+            let other_output = Gate::evaluate_index_list_128(random_input, &other_circuit.gates);
 
             if self_output != other_output {
                 return Err("Circuits are not equal".to_string());

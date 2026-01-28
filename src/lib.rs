@@ -39,14 +39,14 @@ fn heatmap(py: Python<'_>, num_wires: usize, num_inputs: usize, flag: bool, c1: 
             println!("{}/{}", i, num_inputs);
             io::stdout().flush().unwrap();
         }
-        let input_bits: usize = if num_wires < usize::BITS as usize {
-            rng.random_range(0..(1usize << num_wires))
+        let input_bits: u128 = if num_wires < u128::BITS as usize {
+            rng.random_range(0..(1u128 << num_wires))
         } else {
-            rng.random_range(0..=usize::MAX)
+            rng.random_range(0..=u128::MAX)
         };
 
-        let evolution_one = circuit_one.evaluate_evolution(input_bits);
-        let evolution_two = circuit_two.evaluate_evolution(input_bits);
+        let evolution_one = circuit_one.evaluate_evolution_128(input_bits);
+        let evolution_two = circuit_two.evaluate_evolution_128(input_bits);
 
         for i1 in 0..=circuit_one_len {
             for i2 in 0..=circuit_two_len {
@@ -107,14 +107,14 @@ fn heatmap_slice(py: Python<'_>, num_wires: usize, num_inputs: usize, flag: bool
             println!("{}/{}", i, num_inputs);
             io::stdout().flush().unwrap();
         }
-        let input_bits: usize = if num_wires < usize::BITS as usize {
-            rng.random_range(0..(1usize << num_wires))
+        let input_bits: u128 = if num_wires < u128::BITS as usize {
+            rng.random_range(0..(1u128 << num_wires))
         } else {
-            rng.random_range(0..=usize::MAX)
+            rng.random_range(0..=u128::MAX)
         };
 
-        let evolution_one = circuit_one.evaluate_evolution(input_bits);
-        let evolution_two = circuit_two.evaluate_evolution(input_bits);
+        let evolution_one = circuit_one.evaluate_evolution_128(input_bits);
+        let evolution_two = circuit_two.evaluate_evolution_128(input_bits);
 
         for i1 in x1..=x2 {
             for i2 in y1..=y2 {

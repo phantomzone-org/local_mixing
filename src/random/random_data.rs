@@ -323,7 +323,6 @@ pub fn find_convex_subcircuit<R: RngCore>(
                                 && curr_wires.len() + num_new_wires <= max_wires
                             {
                                 candidates.push(curr_idx);
-                                break;
                             }
                         }
                     }
@@ -390,7 +389,6 @@ pub fn find_convex_subcircuit<R: RngCore>(
                                 && curr_wires.len() + num_new_wires <= max_wires
                             {
                                 candidates.push(curr_idx);
-                                break;
                             }
                         }
                     }
