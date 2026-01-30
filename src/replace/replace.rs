@@ -3598,10 +3598,10 @@ mod tests {
         let num_inputs = 20;
 
         for i in 0..num_inputs {
-            if i % 10 == 0 {
-                println!("{}/{}", i, num_inputs);
-                io::stdout().flush().unwrap();
-            }
+            // if i % 10 == 0 {
+            //     // println!("{}/{}", i, num_inputs);
+            //     io::stdout().flush().unwrap();
+            // }
 
             let input_bits: u128 = if num_wires < u128::BITS as usize {
                 rng.random_range(0..(1u128 << num_wires))
