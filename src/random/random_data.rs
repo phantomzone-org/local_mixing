@@ -3272,14 +3272,15 @@ mod tests {
 
             for (key_bytes, _) in cursor.iter() {
                 let circuit = CircuitSeq::from_blob(key_bytes);
-
+                let used_wires = circuit.used_wires().len();
                 if circuit.gates.len() % 2 == 1 {
                     writeln!(
                         file,
-                        "table={}, gates_len={}, circuit = {}",
+                        "table={}, gates_len={}, circuit = {}, wire_count = {}",
                         table_name,
                         circuit.gates.len(),
-                        circuit.repr()
+                        circuit.repr(),
+                        used_wires,
                     )
                     .expect("Failed to write");
                 }
