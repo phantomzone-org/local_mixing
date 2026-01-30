@@ -3595,7 +3595,7 @@ mod tests {
                 )
                 .expect("Failed to open read-only connection");
         let env = Environment::new()
-            .set_max_dbs(189)
+            .set_max_dbs(200)
             .set_map_size(800 * 1024 * 1024 * 1024)
             .open(Path::new(env_path))
             .expect("Failed to open lmdb");
