@@ -3584,6 +3584,56 @@ mod tests {
         println!("=================================\n");
     }
 
+    fn gen_mean(circuit: CircuitSeq, num_wires: usize) -> f64 {
+        let circuit_one = circuit.clone();
+        let circuit_two = circuit;
+
+        let circuit_one_len = circuit_one.gates.len();
+        let circuit_two_len = circuit_two.gates.len();
+
+        let num_points = (circuit_one_len + 1) * (circuit_two_len + 1);
+        let mut average = vec![0f64; num_points * 3];
+
+        let mut rng = rand::rng();
+        let num_inputs = 20;
+
+        for i in 0..num_inputs {
+            if i % 10 == 0 {
+                println!("{}/{}", i, num_inputs);
+                io::stdout().flush().unwrap();
+            }
+
+            let input_bits: u128 = if num_wires < u128::BITS as usize {
+                rng.random_range(0..(1u128 << num_wires))
+            } else {
+                rng.random_range(0..=u128::MAX)
+            };
+
+            let evolution_one = circuit_one.evaluate_evolution_128(input_bits);
+            let evolution_two = circuit_two.evaluate_evolution_128(input_bits);
+
+            for i1 in 0..=circuit_one_len {
+                for i2 in 0..=circuit_two_len {
+                    let diff = evolution_one[i1] ^ evolution_two[i2];
+                    let hamming_dist = diff.count_ones() as f64;
+                    let overlap = hamming_dist / num_wires as f64;
+
+                    let index = i1 * (circuit_two_len + 1) + i2;
+                    average[index * 3] = i1 as f64;
+                    average[index * 3 + 1] = i2 as f64;
+                    average[index * 3 + 2] += overlap / num_inputs as f64;
+                }
+            }
+        }
+
+        let mut sum = 0.0;
+        for i in 0..num_points {
+            sum += average[i * 3 + 2];
+        }
+
+        sum / num_points as f64
+    }
+
     #[test]
     pub fn test_gen_id_16() {
         let env_path = "./db";
@@ -3606,7 +3656,8 @@ mod tests {
         })
         .collect();
         let dbs = open_all_dbs(&env);
-        for run in 0..2 {
+        let mut count = 0;
+        while count < 2 {
             let id = get_random_wide_identity(16, &env, &dbs, &mut thread_conn, &bit_shuf_list);
 
             assert!(
@@ -3614,8 +3665,12 @@ mod tests {
                 "Not an identity"
             );
 
+            if gen_mean(id.clone(), 16) < 0.33 {
+                continue
+            }
+
             // write repr() to file
-            let mut file = File::create(format!("id_16{}.txt", run))
+            let mut file = File::create(format!("id_16{}.txt", count))
                 .expect("Failed to create output file");
             writeln!(file, "{}", id.repr()).expect("Failed to write repr");
 
@@ -3627,11 +3682,12 @@ mod tests {
                 }
             }
 
-            println!("Run {}", run);
+            println!("Run {}", count);
             for (k, v) in &wires {
                 println!("wire: {}, # of gates: {}", k, v.len());
             }
             println!("Num wires: {}\n", wires.len());
+            count += 1;
         }
     }
 }
