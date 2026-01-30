@@ -427,11 +427,11 @@ pub fn get_random_wide_identity(
     let mut id = CircuitSeq { gates: Vec::new() };
     let mut uw = id.used_wires();
     let mut nwires = uw.len();
-    let gp = GatePair::new();
     let mut rng = rand::rng();
     let mut len = 0;
     while nwires < 16 || len < 150 {
         shoot_random_gate(&mut id, 100_000);
+        let gp = GatePair::from_int(rng.random_range(0..34));
         let mut i = match get_random_identity(6, gp, env, dbs) {
             Ok(i) => {
                 i
