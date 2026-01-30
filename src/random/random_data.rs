@@ -3114,4 +3114,108 @@ mod tests {
             tables
         );
     }
+
+    fn gen_mean(circuit: CircuitSeq, num_wires: usize) -> f64 {
+        let circuit_one = circuit.clone();
+        let circuit_two = circuit;
+
+        let circuit_one_len = circuit_one.gates.len();
+        let circuit_two_len = circuit_two.gates.len();
+
+        let num_points = (circuit_one_len + 1) * (circuit_two_len + 1);
+        let mut average = vec![0f64; num_points * 3];
+
+        let mut rng = rand::rng();
+        let num_inputs = 20;
+
+        for i in 0..num_inputs {
+            if i % 10 == 0 {
+                println!("{}/{}", i, num_inputs);
+                io::stdout().flush().unwrap();
+            }
+
+            let input_bits: u128 = if num_wires < u128::BITS as usize {
+                rng.random_range(0..(1u128 << num_wires))
+            } else {
+                rng.random_range(0..=u128::MAX)
+            };
+
+            let evolution_one = circuit_one.evaluate_evolution_128(input_bits);
+            let evolution_two = circuit_two.evaluate_evolution_128(input_bits);
+
+            for i1 in 0..=circuit_one_len {
+                for i2 in 0..=circuit_two_len {
+                    let diff = evolution_one[i1] ^ evolution_two[i2];
+                    let hamming_dist = diff.count_ones() as f64;
+                    let overlap = hamming_dist / num_wires as f64;
+
+                    let index = i1 * (circuit_two_len + 1) + i2;
+                    average[index * 3] = i1 as f64;
+                    average[index * 3 + 1] = i2 as f64;
+                    average[index * 3 + 2] += overlap / num_inputs as f64;
+                }
+            }
+        }
+
+        let mut sum = 0.0;
+        for i in 0..num_points {
+            sum += average[i * 3 + 2];
+        }
+
+        sum / num_points as f64
+    }
+
+
+    #[test]
+    fn test_means() -> Result<(), Box<dyn std::error::Error>> {
+        use lmdb::{Environment, Cursor, Transaction};
+        use std::collections::HashMap;
+        use std::fs::File;
+        use std::io::{BufWriter, Write};
+
+        let num_wires = 16;
+
+        let db_names = [
+            "ids_n16g0", "ids_n16g1", "ids_n16g2", "ids_n16g3", "ids_n16g4",
+            "ids_n16g5", "ids_n16g6", "ids_n16g7", "ids_n16g8", "ids_n16g9",
+            "ids_n16g10", "ids_n16g11", "ids_n16g12", "ids_n16g13", "ids_n16g14",
+            "ids_n16g15", "ids_n16g16", "ids_n16g17", "ids_n16g18", "ids_n16g19",
+            "ids_n16g20", "ids_n16g21", "ids_n16g22", "ids_n16g23", "ids_n16g24",
+            "ids_n16g25", "ids_n16g26", "ids_n16g27", "ids_n16g28", "ids_n16g29",
+            "ids_n16g30", "ids_n16g31", "ids_n16g32", "ids_n16g33",
+        ];
+
+        let env = Environment::new()
+            .set_max_dbs(64)
+            .open(Path::new("./db"))?; // adjust path
+
+        let mut dbs = HashMap::new();
+        for name in db_names {
+            let db = env.open_db(Some(name))?;
+            dbs.insert(name, db);
+        }
+
+        let file = File::create("means.txt")?;
+        let mut writer = BufWriter::new(file);
+
+        let txn = env.begin_ro_txn()?;
+
+        for (db_name, db) in dbs {
+            println!("Processing DB {}", db_name);
+
+            let mut cursor = txn.open_ro_cursor(db)?;
+
+            for (c_bytes, _) in cursor.iter() {
+                let circuit = CircuitSeq::from_blob(&c_bytes);
+            
+                let mean = gen_mean(circuit, num_wires);
+
+                writeln!(writer, "{}", mean)?;
+                
+            }
+        }
+
+        writer.flush()?;
+        Ok(())
+    }
 }
