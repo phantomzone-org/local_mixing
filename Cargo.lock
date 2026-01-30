@@ -727,6 +727,7 @@ dependencies = [
  "bincode",
  "clap",
  "crossbeam",
+ "crossbeam-channel",
  "ctrlc",
  "dashmap",
  "fastrand",
