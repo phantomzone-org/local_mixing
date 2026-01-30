@@ -430,7 +430,7 @@ pub fn get_random_wide_identity(
     let gp = GatePair::new();
     let mut rng = rand::rng();
     let mut len = 0;
-    while nwires < 16 || len < 150 {
+    while nwires < 16 || len < 500 {
         shoot_random_gate(&mut id, 100_000);
         let mut i = match get_random_identity(6, gp, env, dbs) {
             Ok(i) => {
@@ -3688,6 +3688,62 @@ mod tests {
             }
             println!("Num wires: {}\n", wires.len());
             count += 1;
+        }
+    }
+
+    #[test]
+    pub fn test_max_mean_16() {
+        let env_path = "./db";
+        let mut thread_conn = Connection::open_with_flags(
+                    "circuits.db",
+                    OpenFlags::SQLITE_OPEN_READ_ONLY,
+                )
+                .expect("Failed to open read-only connection");
+        let env = Environment::new()
+            .set_max_dbs(200)
+            .set_map_size(800 * 1024 * 1024 * 1024)
+            .open(Path::new(env_path))
+            .expect("Failed to open lmdb");
+        let bit_shuf_list = (3..=7)
+        .map(|n| {
+            (0..n)
+                .permutations(n)
+                .filter(|p| !p.iter().enumerate().all(|(i, &x)| i == x))
+                .collect::<Vec<Vec<usize>>>()
+        })
+        .collect();
+        let dbs = open_all_dbs(&env);
+        let mut curr_mean = 0.0;
+        loop {
+            let id = get_random_wide_identity(16, &env, &dbs, &mut thread_conn, &bit_shuf_list);
+
+            assert!(
+                id.probably_equal(&CircuitSeq { gates: Vec::new() }, 16, 100_000).is_ok(),
+                "Not an identity"
+            );
+            let mean = gen_mean(id.clone(), 16);
+            if mean < curr_mean {
+                continue
+            }
+            curr_mean = mean;
+
+            // write repr() to file
+            let mut file = File::create(format!("id_16currmean.txt"))
+                .expect("Failed to create output file");
+            writeln!(file, "{}", id.repr()).expect("Failed to write repr");
+
+            // wire statistics
+            let mut wires: HashMap<u8, Vec<usize>> = HashMap::new();
+            for (i, gates) in id.gates.iter().enumerate() {
+                for &pins in gates {
+                    wires.entry(pins).or_insert_with(Vec::new).push(i);
+                }
+            }
+            for (k, v) in &wires {
+                println!("wire: {}, # of gates: {}", k, v.len());
+            }
+            println!("Num wires: {}\n", wires.len());
+            println!("Curr mean: {}", curr_mean);
         }
     }
 }
