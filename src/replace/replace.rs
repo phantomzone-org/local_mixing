@@ -2461,22 +2461,22 @@ pub fn replace_sequential_pairs(
 
             while produced.is_none() && fail < 100 {
                 fail += 1;
-                let mut id_len = if GatePair::is_none(&tax) {
-                    rng.random_range(4..=8)
+                let id_len = if GatePair::is_none(&tax) {
+                    let r = rng.random_range(0..100);
+                    match r { 
+                        0..45 => 6,   
+                        45..90 => 7,   
+                        _       => 16, 
+                    }
                 } else {
-                    rng.random_range(2..=8)
+                    let r = rng.random_range(0..100);
+                    match r {
+                        0..30  => 5,   
+                        30..60 => 6,   
+                        60..90 => 7,   
+                        _       => 16, 
+                    }
                 };
-                if id_len < 4 {
-                    id_len = 5;
-                } else if id_len < 6 {
-                    id_len = 6;
-                } else if id_len < 8 {
-                    id_len = 7;
-                } else if id_len == 8 {
-                    id_len = 16;
-                } else {
-                    panic!("unexpected id_len");
-                }
                 let t_id = Instant::now();
                 let id = match get_random_identity(id_len, tax, env, dbs) {
                     Ok(id) => {
@@ -2704,22 +2704,22 @@ pub fn replace_single_pair(
     let mut id_gen = false;
     let mut id = CircuitSeq { gates: Vec::new() };
     while !id_gen {
-        let mut id_len = if GatePair::is_none(&tax) {
-            rng.random_range(4..=8)
+        let id_len = if GatePair::is_none(&tax) {
+            let r = rng.random_range(0..100);
+            match r { 
+                0..45 => 6,   
+                45..90 => 7,   
+                _       => 16, 
+            }
         } else {
-            rng.random_range(2..=8)
+            let r = rng.random_range(0..100);
+            match r {
+                0..30  => 5,   
+                30..60 => 6,   
+                60..90 => 7,   
+                _       => 16, 
+            }
         };
-        if id_len < 4 {
-            id_len = 5;
-        } else if id_len < 6 {
-            id_len = 6;
-        } else if id_len < 8 {
-            id_len = 7;
-        } else if id_len == 8 {
-            id_len = 16;
-        } else {
-            panic!("unexpected id_len");
-        }
         id = match get_random_identity(id_len, tax, env, dbs) {
             Ok(id) => {
                 id_gen = true;
