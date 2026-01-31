@@ -359,40 +359,41 @@ fn get_random_identity(
         "ids_n7g32" => 18_903,
         "ids_n7g33" => 1_433,
         // n16
-        "ids_n16g0"  => 41_500,
-        "ids_n16g1"  => 11_600,
-        "ids_n16g2"  => 19_400,
-        "ids_n16g3"  => 16_300,
-        "ids_n16g4"  => 19_100,
-        "ids_n16g5"  => 8_700,
-        "ids_n16g6"  => 9_600,
-        "ids_n16g7"  => 16_500,
-        "ids_n16g8"  => 9_700,
-        "ids_n16g9"  => 9_600,
-        "ids_n16g10" => 12_700,
-        "ids_n16g11" => 4_000,
-        "ids_n16g12" => 4_100,
-        "ids_n16g13" => 16_000,
-        "ids_n16g14" => 17_600,
-        "ids_n16g15" => 3_600,
-        "ids_n16g16" => 6_700,
-        "ids_n16g17" => 34_300,
-        "ids_n16g18" => 2_700,
-        "ids_n16g19" => 12_500,
-        "ids_n16g20" => 4_800,
-        "ids_n16g21" => 2_900,
-        "ids_n16g22" => 2_700,
-        "ids_n16g23" => 9_700,
-        "ids_n16g24" => 6_000,
-        "ids_n16g25" => 26_200,
-        "ids_n16g26" => 2_800,
-        "ids_n16g27" => 4_000,
-        "ids_n16g28" => 34_600,
-        "ids_n16g29" => 12_600,
-        "ids_n16g30" => 9_700,
-        "ids_n16g31" => 4_400,
-        "ids_n16g32" => 26_400,
-        "ids_n16g33" => 3_400,
+        "ids_n16g0"  => 36_070,
+        "ids_n16g1"  => 5_140,
+        "ids_n16g2"  => 11_660,
+        "ids_n16g3"  => 11_050,
+        "ids_n16g4"  => 12_000,
+        "ids_n16g5"  => 5_460,
+        "ids_n16g6"  => 5_700,
+        "ids_n16g7"  => 11_250,
+        "ids_n16g8"  => 5_590,
+        "ids_n16g9"  => 5_470,
+        "ids_n16g10" => 5_450,
+        "ids_n16g11" => 2_720,
+        "ids_n16g12" => 2_860,
+        "ids_n16g13" => 7_430,
+        "ids_n16g14" => 9_360,
+        "ids_n16g15" => 2_310,
+        "ids_n16g16" => 3_960,
+        "ids_n16g17" => 16_400,
+        "ids_n16g18" => 2_420,
+        "ids_n16g19" => 7_810,
+        "ids_n16g20" => 3_290,
+        "ids_n16g21" => 2_520,
+        "ids_n16g22" => 2_570,
+        "ids_n16g23" => 6_410,
+        "ids_n16g24" => 3_750,
+        "ids_n16g25" => 13_370,
+        "ids_n16g26" => 2_580,
+        "ids_n16g27" => 2_800,
+        "ids_n16g28" => 16_260,
+        "ids_n16g29" => 7_880,
+        "ids_n16g30" => 6_420,
+        "ids_n16g31" => 2_700,
+        "ids_n16g32" => 13_290,
+        "ids_n16g33" => 2_360,
+
         _ => panic!("DB {} not in hardcoded max_entries", db_name),
     };
 
@@ -2461,12 +2462,20 @@ pub fn replace_sequential_pairs(
             while produced.is_none() && fail < 100 {
                 fail += 1;
                 let mut id_len = if GatePair::is_none(&tax) {
-                    rng.random_range(6..=7)
+                    rng.random_range(4..=8)
                 } else {
-                    rng.random_range(5..=7)
+                    rng.random_range(2..=8)
                 };
-                if id_len == 8 {
+                if id_len < 4 {
+                    id_len = 5;
+                } else if id_len < 6 {
+                    id_len = 6;
+                } else if id_len < 8 {
+                    id_len = 7;
+                } else if id_len == 8 {
                     id_len = 16;
+                } else {
+                    panic!("unexpected id_len");
                 }
                 let t_id = Instant::now();
                 let id = match get_random_identity(id_len, tax, env, dbs) {
@@ -2695,8 +2704,22 @@ pub fn replace_single_pair(
     let mut id_gen = false;
     let mut id = CircuitSeq { gates: Vec::new() };
     while !id_gen {
-        let id_len = rng.random_range(6..=7);
-        // let id_len = 16;
+        let mut id_len = if GatePair::is_none(&tax) {
+            rng.random_range(4..=8)
+        } else {
+            rng.random_range(2..=8)
+        };
+        if id_len < 4 {
+            id_len = 5;
+        } else if id_len < 6 {
+            id_len = 6;
+        } else if id_len < 8 {
+            id_len = 7;
+        } else if id_len == 8 {
+            id_len = 16;
+        } else {
+            panic!("unexpected id_len");
+        }
         id = match get_random_identity(id_len, tax, env, dbs) {
             Ok(id) => {
                 id_gen = true;

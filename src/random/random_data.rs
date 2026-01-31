@@ -1411,7 +1411,7 @@ pub fn shoot_random_gate(circuit: &mut CircuitSeq, rounds: usize) {
                 }
                 target -= 1;
             }
-
+            target = rng.random_range(target..=gate_idx);
             if target != gate_idx {
                 let gate = circuit.gates.remove(gate_idx);
                 circuit.gates.insert(target, gate);
@@ -1425,7 +1425,7 @@ pub fn shoot_random_gate(circuit: &mut CircuitSeq, rounds: usize) {
                 }
                 target += 1;
             }
-
+            target = rng.random_range(gate_idx..=target);
             if target != gate_idx {
                 let gate = circuit.gates.remove(gate_idx);
                 circuit.gates.insert(target, gate);
