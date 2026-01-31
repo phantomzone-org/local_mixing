@@ -878,7 +878,6 @@ pub fn replace_and_compress_big(
                 MADE_LEFT.fetch_add(zero, Ordering::SeqCst);
                 TRAVERSE_LEFT.fetch_add(trav, Ordering::SeqCst);
                 shoot_random_gate(&mut sub, 200_000);
-                sub.gates.reverse();
                 // let (col, shoot, zero, trav) = replace_sequential_pairs(&mut sub, n, &mut thread_conn, &env, &bit_shuf_list, dbs);
                 // ALREADY_COLLIDED.fetch_add(col, Ordering::SeqCst);
                 // SHOOT_COUNT.fetch_add(shoot, Ordering::SeqCst);
@@ -890,6 +889,7 @@ pub fn replace_and_compress_big(
             .collect();
             let new_gates: Vec<[u8;3]> = replaced_chunks.into_iter().flatten().collect();
             c.gates = new_gates;
+            c.gates.reverse();
     }
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
     println!(
