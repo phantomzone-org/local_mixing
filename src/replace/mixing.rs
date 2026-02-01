@@ -1025,6 +1025,7 @@ pub fn interleave_sequential_big(
     println!("Butterfly start: {} gates", circuit.gates.len());
     let mut c = interleave(circuit, n);
     let t0 = Instant::now();
+    let n = 2n;
     shoot_random_gate(&mut c, 200_000);
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
     
