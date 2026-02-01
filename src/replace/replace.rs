@@ -548,7 +548,7 @@ pub fn get_random_wide_identity_via_pairs(
                 min -= 1;
             }
             let tax = gate_pair_taxonomy(&id.gates[min], &id.gates[min+1]);
-            let mut i = CircuitSeq {gates: Vec::new()};
+            i = CircuitSeq {gates: Vec::new()};
             let mut id_gen = false;
             let mut i = CircuitSeq { gates: Vec::new() };
             while !id_gen {
