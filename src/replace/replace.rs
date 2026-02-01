@@ -526,6 +526,7 @@ pub fn get_random_wide_identity_via_pairs(
         };
         if id.clone().gates.is_empty() {
             id = i;
+            println!("beginning");
         } else {
             let mut wires: HashMap<u8, Vec<usize>> = HashMap::new();
             for (idx, gates) in id.clone().gates.into_iter().enumerate() {
