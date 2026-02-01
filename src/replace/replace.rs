@@ -2592,16 +2592,16 @@ pub fn replace_sequential_pairs(
                 let id_len = if GatePair::is_none(&tax) {
                     let r = rng.random_range(0..100);
                     match r { 
-                        0..33 => 6,   
-                        33..66 => 7,   
+                        0..45 => 6,   
+                        45..90 => 7,   
                         _       => 16, 
                     }
                 } else {
                     let r = rng.random_range(0..100);
                     match r {
-                        0..14  => 5,   
-                        14..40 => 6,   
-                        40..66 => 7,   
+                        0..30  => 5,   
+                        30..60 => 6,   
+                        60..90 => 7,   
                         _       => 16, 
                     }
                 };
@@ -3358,6 +3358,23 @@ pub fn random_gate_replacements(c: &mut CircuitSeq, x: usize, n: usize, _conn: &
             c.gates.splice(i..i+1, id.gates);
         } 
     }
+}
+
+pub fn interleave(circuit: &CircuitSeq, n: usize) -> CircuitSeq {
+    let m = circuit.gates.len();
+    let mut random = random_circuit(n as u8, m);
+    let mut gates = Vec::new();
+    for gate in random.gates.iter_mut() {
+        for pin in gate.iter_mut() {
+            *pin += n as u8;
+        }
+    }
+    for i in 0..m {
+        gates.push(circuit.gates[i]);
+        gates.push(random.gates[i]);
+    }
+
+    CircuitSeq{ gates }
 }
 
 pub fn print_compress_timers() {
