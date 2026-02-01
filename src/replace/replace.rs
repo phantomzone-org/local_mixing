@@ -551,23 +551,7 @@ pub fn get_random_wide_identity_via_pairs(
             let mut id_gen = false;
             let mut i = CircuitSeq { gates: Vec::new() };
             while !id_gen {
-                let id_len = if GatePair::is_none(&tax) {
-                    let r = rng.random_range(0..100);
-                    match r { 
-                        0..45 => 6,   
-                        45..90 => 7,   
-                        _       => 16, 
-                    }
-                } else {
-                    let r = rng.random_range(0..100);
-                    match r {
-                        0..30  => 5,   
-                        30..60 => 6,   
-                        60..90 => 7,   
-                        _       => 16, 
-                    }
-                };
-                i = match get_random_identity(id_len, tax, env, dbs) {
+                i = match get_random_identity(6, tax, env, dbs) {
                     Ok(i) => {
                         id_gen = true;
                         i
