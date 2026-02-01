@@ -624,7 +624,7 @@ impl CircuitSeq {
         let mask: u128 = if num_wires < u128::BITS as usize {
             (1 << num_wires) - 1
         } else {
-            u128::MAX - 1
+            u128::MAX
         };
         for _ in 0..num_inputs {
             // generate u64, then mask to get the lower num_wires bits
@@ -633,7 +633,7 @@ impl CircuitSeq {
             let self_output = Gate::evaluate_index_list_128( random_input, &self.gates);
             let other_output = Gate::evaluate_index_list_128(random_input, &other_circuit.gates);
 
-            if self_output != other_output {
+            if (self_output & mask) != (other_output & mask) {
                 return Err("Circuits are not equal".to_string());
             }
         }
