@@ -526,7 +526,6 @@ pub fn get_random_wide_identity_via_pairs(
         };
         if id.clone().gates.is_empty() {
             id = i;
-            println!("beginning");
         } else {
             let mut wires: HashMap<u8, Vec<usize>> = HashMap::new();
             for (idx, gates) in id.clone().gates.into_iter().enumerate() {
@@ -548,9 +547,9 @@ pub fn get_random_wide_identity_via_pairs(
                 min -= 1;
             }
             let tax = gate_pair_taxonomy(&id.gates[min], &id.gates[min+1]);
+            println!("{:?}", tax);
             i = CircuitSeq {gates: Vec::new()};
             let mut id_gen = false;
-            let mut i = CircuitSeq { gates: Vec::new() };
             while !id_gen {
                 i = match get_random_identity(6, tax, env, dbs) {
                     Ok(i) => {
