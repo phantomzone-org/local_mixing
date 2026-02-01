@@ -3870,10 +3870,10 @@ mod tests {
             let id = get_random_wide_identity(128, &env, &dbs, &mut thread_conn, &bit_shuf_list);
 
             assert!(
-                id.probably_equal(&CircuitSeq { gates: Vec::new() }, 16, 100_000).is_ok(),
+                id.probably_equal(&CircuitSeq { gates: Vec::new() }, 128, 100_000).is_ok(),
                 "Not an identity"
             );
-            let mean = gen_mean(id.clone(), 16);
+            let mean = gen_mean(id.clone(), 128);
             if mean < curr_mean {
                 continue
             }
