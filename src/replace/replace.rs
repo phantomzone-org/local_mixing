@@ -460,6 +460,7 @@ pub fn get_random_wide_identity(
             let mut min_keys: Vec<u8> = wires.keys().cloned().collect();
             min_keys.sort_by_key(|k| wires.get(k).map(|v| v.len()).unwrap_or(0));
             let min = min_vals[0];
+            let min = id.gates.len()/2;
             let mut used_wires = vec![id.gates[min][0], id.gates[min][1], id.gates[min][2]];
             let mut unused_wires: Vec<u8> = (0..n as u8)
                 .filter(|w| !used_wires.contains(w) && !uw.contains(w))
@@ -546,7 +547,62 @@ pub fn get_random_wide_identity_via_pairs(
             if min == id.gates.len() - 1 {
                 min -= 1;
             }
-            let mut used_wires = vec![id.gates[min][0], id.gates[min][1], id.gates[min][2]];
+            let tax = gate_pair_taxonomy(&id.gates[min], &id.gates[min+1]);
+            let mut i = CircuitSeq {gates: Vec::new()};
+            let mut id_gen = false;
+            let mut i = CircuitSeq { gates: Vec::new() };
+            while !id_gen {
+                let id_len = if GatePair::is_none(&tax) {
+                    let r = rng.random_range(0..100);
+                    match r { 
+                        0..45 => 6,   
+                        45..90 => 7,   
+                        _       => 16, 
+                    }
+                } else {
+                    let r = rng.random_range(0..100);
+                    match r {
+                        0..30  => 5,   
+                        30..60 => 6,   
+                        60..90 => 7,   
+                        _       => 16, 
+                    }
+                };
+                i = match get_random_identity(id_len, tax, env, dbs) {
+                    Ok(i) => {
+                        id_gen = true;
+                        i
+                    },
+                    Err(_) => {
+                        continue;
+                    }
+                };
+            }
+            let new_circuit = i.gates[2..].to_vec();
+            let replacement_circ = CircuitSeq { gates: new_circuit };
+            let mut used_wires: Vec<u8> = vec![
+                (n + 1) as u8;
+                std::cmp::max(
+                    replacement_circ.max_wire(),
+                    CircuitSeq {
+                        gates: vec![i.gates[0], i.gates[1]],
+                    }
+                    .max_wire(),
+                ) + 1
+            ];
+            
+            used_wires[i.gates[0][0] as usize] = id.gates[min][0];
+            used_wires[i.gates[0][1] as usize] = id.gates[min][1];
+            used_wires[i.gates[0][2] as usize] = id.gates[min][2];
+
+            let mut k = 0;
+            for collision in &[tax.a, tax.c1, tax.c2] {
+                if *collision == CollisionType::OnNew {
+                    used_wires[i.gates[1][k] as usize] = id.gates[min+1][k];
+                }
+                k += 1;
+            }
+
             let mut unused_wires: Vec<u8> = (0..n as u8)
                 .filter(|w| !used_wires.contains(w) && !uw.contains(w))
                 .collect();
@@ -568,17 +624,18 @@ pub fn get_random_wide_identity_via_pairs(
                     j += 1;
                 }
             }
-            let rewired_g = CircuitSeq::rewire_subcircuit(&id, &vec![min], &used_wires);
-            i.rewire_first_gate(rewired_g.gates[0], 6);
-            i = CircuitSeq::unrewire_subcircuit(&i, &used_wires);
-            i.gates.remove(0);
-            id.gates.splice(min..=min, i.gates);
+            i.gates = CircuitSeq::unrewire_subcircuit(&replacement_circ, &used_wires)
+            .gates
+            .into_iter()
+            .rev()
+            .collect();
+            id.gates.splice(min..=min+1, i.gates);
         }
         uw = id.used_wires();
         nwires = uw.len();
         len = id.gates.len();
     }
-
+    
     let mut shuf: Vec<usize> = (0..n).collect();
     shuf.shuffle(&mut rng);
 
