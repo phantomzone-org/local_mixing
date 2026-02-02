@@ -857,7 +857,7 @@ pub fn replace_and_compress_big(
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
     let t1 = Instant::now();
-    for _ in 0..1 {
+    for _ in 0..2 {
         let t0 = Instant::now();
         shoot_random_gate(&mut c, 200_000);
         SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
@@ -924,6 +924,7 @@ pub fn replace_and_compress_big(
         let last = replaced_chunks.last().unwrap();
         new_gates.extend_from_slice(&last[1..]);
         c.gates = new_gates;
+        c.gates.reverse();
     }
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
     println!(
@@ -1053,7 +1054,7 @@ pub fn interleave_sequential_big(
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
     
     let t1 = Instant::now();
-    for _ in 0..1 {
+    for _ in 0..2 {
         let t0 = Instant::now();
         shoot_random_gate(&mut c, 200_000);
         SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
@@ -1120,6 +1121,7 @@ pub fn interleave_sequential_big(
         let last = replaced_chunks.last().unwrap();
         new_gates.extend_from_slice(&last[1..]);
         c.gates = new_gates;
+        c.gates.reverse();
     }
     REPLACE_PAIRS_TIME.fetch_add(t1.elapsed().as_nanos() as u64, Ordering::Relaxed);
     println!(
