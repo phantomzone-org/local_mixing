@@ -878,6 +878,7 @@ pub fn replace_and_compress_big(
             .into_par_iter()
             .map(|chunk| {
                 let mut sub = CircuitSeq { gates: chunk };
+                let start = sub.clone();
                 let mut thread_conn = Connection::open_with_flags(
                     "circuits.db",
                     OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -889,6 +890,9 @@ pub fn replace_and_compress_big(
                 MADE_LEFT.fetch_add(zero, Ordering::SeqCst);
                 TRAVERSE_LEFT.fetch_add(trav, Ordering::SeqCst);
                 shoot_random_gate(&mut sub, 200_000);
+                if sub.probably_equal(&start, n, 100_000).is_err() {
+                    panic!("lost functionality during seq sweep");
+                }
                 sub.gates
             })
             .collect();
