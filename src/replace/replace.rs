@@ -430,7 +430,7 @@ pub fn get_random_wide_identity(
     let mut nwires = uw.len();
     let mut rng = rand::rng();
     let mut len = 0;
-    while nwires < n || len < 1000 {
+    while nwires < n || len < 500 {
         shoot_random_gate(&mut id, 100_000);
         let gp = GatePair::from_int(rng.random_range(0..34));
         let mut i = match get_random_identity(6, gp, env, dbs) {
@@ -3516,7 +3516,7 @@ mod tests {
 
             let env = Environment::new()
                 .set_max_readers(10000) 
-                .set_max_dbs(155)      
+                .set_max_dbs(257)      
                 .set_map_size(700 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -3579,7 +3579,7 @@ mod tests {
     fn test_random_canon_id() {
         let env = Environment::new()
                 .set_max_readers(10000) 
-                .set_max_dbs(155)      
+                .set_max_dbs(257)      
                 .set_map_size(700 * 1024 * 1024 * 1024) 
                 .open(Path::new("./db"))
                 .expect("Failed to open lmdb");
@@ -3597,7 +3597,7 @@ mod tests {
         let db_name = "perm_tables_n6";
 
         let env = Environment::new()
-            .set_max_dbs(155)
+            .set_max_dbs(257)
             .open(Path::new(env_path))?;
 
         let db = env.open_db(Some(db_name))?;
@@ -3618,7 +3618,7 @@ mod tests {
         let env_path = "./db";
         let db_name = "n4m2";
         let env = Environment::new()
-            .set_max_dbs(155)
+            .set_max_dbs(257)
             .open(Path::new(env_path)).expect("Failed to open db");
         let db = env.open_db(Some(&db_name))
                 .unwrap_or_else(|e| panic!("LMDB DB '{}' failed to open: {:?}", db_name, e));
@@ -3648,7 +3648,7 @@ mod tests {
         let env_path = "./db";
         let _conn = Connection::open("circuits.db").expect("Failed to open DB");
         let env = Environment::new()
-            .set_max_dbs(155)
+            .set_max_dbs(257)
             .open(Path::new(env_path)).expect("Failed to open db");
         let data2 = fs::read_to_string("./tempcirc.txt").expect("Failed to read circuitF.txt");
         let mut circuit = CircuitSeq::from_string(&data2);
@@ -3725,7 +3725,7 @@ mod tests {
         let env_path = "./db";
         
         let env = Environment::new()
-            .set_max_dbs(155)
+            .set_max_dbs(257)
             .set_map_size(800 * 1024 * 1024 * 1024)
             .open(Path::new(env_path))
             .expect("Failed to open lmdb");
