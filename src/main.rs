@@ -1680,6 +1680,15 @@ pub fn fill_n_id(n: usize) {
             batch.push(key);
 
             if batch.len() >= BATCH_SIZE {
+                let already_written = written_per_g
+                    .get(&(g, tower))
+                    .copied()
+                    .unwrap_or(0);
+
+                if already_written >= 10_000{
+                    batch.clear();
+                    continue;
+                }
                 let mut txn = env_flush.begin_rw_txn().unwrap();
                 for v in batch.iter() {
                     let k = key_counter_flush.fetch_add(1, Ordering::Relaxed);
