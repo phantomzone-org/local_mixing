@@ -1650,7 +1650,7 @@ pub fn fill_n_id(n: usize) {
     let key_counter = Arc::new(AtomicU64::new(0));
     let total_written = Arc::new(AtomicU64::new(0));
 
-    let (tx, rx): (Sender<(u8, Vec<u8>)>, Receiver<(u8, Vec<u8>)>) =
+    let (tx, rx): (Sender<((u8, bool), Vec<u8>)>, Receiver<((u8, bool), Vec<u8>)>) =
         bounded(100_000);
 
     //flush
@@ -1659,22 +1659,24 @@ pub fn fill_n_id(n: usize) {
     let total_written_flush = total_written.clone();
     let key_counter_flush = key_counter.clone();
     let flush_handle = thread::spawn(move || {
-        let mut batches: HashMap<u8, Vec<Vec<u8>>> = HashMap::new();
-        let mut db_cache: HashMap<u8, Database> = HashMap::new();
-        let mut written_per_g: HashMap<u8, u64> = HashMap::new();
+        let mut batches: HashMap<(u8, bool), Vec<Vec<u8>>> = HashMap::new();
+        let mut db_cache: HashMap<(u8, bool), Database> = HashMap::new();
+        let mut written_per_g: HashMap<(u8, bool), u64> = HashMap::new();
         let mut last_print = Instant::now();
 
         loop {
-            let (g, key) = rx.recv().expect("worker hung up");
+            let ((g, tower), key) = rx.recv().expect("worker hung up");
 
-            let db = *db_cache.entry(g).or_insert_with(|| {
-                let name = format!("ids_n{}g{}single", n, g);
+            let db = *db_cache.entry((g, tower)).or_insert_with(|| {
+                let suffix = if tower { "tower" } else { "single" };
+                let name = format!("ids_n{}g{}{}", n, g, suffix);
+
                 env_flush
                     .create_db(Some(&name), lmdb::DatabaseFlags::empty())
                     .expect("create db")
             });
 
-            let batch = batches.entry(g).or_default();
+            let batch = batches.entry((g, tower)).or_default();
             batch.push(key);
 
             if batch.len() >= BATCH_SIZE {
@@ -1690,14 +1692,23 @@ pub fn fill_n_id(n: usize) {
                 batch.clear();
 
                 total_written_flush.fetch_add(written, Ordering::Relaxed);
-                *written_per_g.entry(g).or_insert(0) += written;
+                *written_per_g.entry((g, tower)).or_insert(0) += written;
             }
 
             if last_print.elapsed().as_secs() >= 60 {
                 println!("total written: {}", total_written_flush.load(Ordering::Relaxed));
                 for g in 0..34 {
-                    let c = written_per_g.get(&(g as u8)).copied().unwrap_or(0);
-                    println!("g {:02}: {}", g, c);
+                    let single = written_per_g
+                        .get(&(g as u8, false))
+                        .copied()
+                        .unwrap_or(0);
+
+                    let tower = written_per_g
+                        .get(&(g as u8, true))
+                        .copied()
+                        .unwrap_or(0);
+
+                    println!("g {:02}: single {:>8} | tower {:>8}", g, single, tower);
                 }
                 last_print = Instant::now();
             }
@@ -1726,12 +1737,14 @@ pub fn fill_n_id(n: usize) {
                 .expect("Failed to open db");
             let dbs = open_all_dbs(&env);
             loop {
+                let tower = rand::rng().random_bool(0.5);
                 let mut id = get_random_wide_identity(
                     n,
                     &env,
                     &dbs,
                     &mut conn,
                     &bit_shuf_list,
+                    tower,
                 );
 
                 let len = id.gates.len();
@@ -1749,7 +1762,7 @@ pub fn fill_n_id(n: usize) {
                     let g = GatePair::to_int(&gp) as u8;
 
                     let key = id.repr_blob();
-                    tx.send((g, key)).unwrap();
+                    tx.send(((g, tower), key)).unwrap();
 
                     let first = id.gates.remove(0);
                     id.gates.push(first);
