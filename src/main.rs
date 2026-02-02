@@ -1627,14 +1627,14 @@ pub fn fill_n_id(n: usize) {
         .expect("Failed to open db");
 
     // Drop existing DBs
-    for g in 0..34 {
-        let db_name = format!("ids_n{}g{}", n, g);
-        if let Ok(db) = env.open_db(Some(&db_name)) {
-            let mut txn = env.begin_rw_txn().unwrap();
-            unsafe { txn.drop_db(db).unwrap() };
-            txn.commit().unwrap();
-        }
-    }
+    // for g in 0..34 {
+    //     let db_name = format!("ids_n{}g{}", n, g);
+    //     if let Ok(db) = env.open_db(Some(&db_name)) {
+    //         let mut txn = env.begin_rw_txn().unwrap();
+    //         unsafe { txn.drop_db(db).unwrap() };
+    //         txn.commit().unwrap();
+    //     }
+    // }
 
     let bit_shuf_list = Arc::new(
         (3..=7)
@@ -1647,6 +1647,7 @@ pub fn fill_n_id(n: usize) {
             .collect::<Vec<_>>(),
     );
 
+    let key_counter = Arc::new(AtomicU64::new(0));
     let total_written = Arc::new(AtomicU64::new(0));
 
     let (tx, rx): (Sender<(u8, Vec<u8>)>, Receiver<(u8, Vec<u8>)>) =
@@ -1656,7 +1657,7 @@ pub fn fill_n_id(n: usize) {
 
     let env_flush = env;
     let total_written_flush = total_written.clone();
-
+    let key_counter_flush = key_counter.clone();
     let flush_handle = thread::spawn(move || {
         let mut batches: HashMap<u8, Vec<Vec<u8>>> = HashMap::new();
         let mut db_cache: HashMap<u8, Database> = HashMap::new();
@@ -1667,7 +1668,7 @@ pub fn fill_n_id(n: usize) {
             let (g, key) = rx.recv().expect("worker hung up");
 
             let db = *db_cache.entry(g).or_insert_with(|| {
-                let name = format!("ids_n{}g{}", n, g);
+                let name = format!("ids_n{}g{}single", n, g);
                 env_flush
                     .create_db(Some(&name), lmdb::DatabaseFlags::empty())
                     .expect("create db")
@@ -1678,8 +1679,10 @@ pub fn fill_n_id(n: usize) {
 
             if batch.len() >= BATCH_SIZE {
                 let mut txn = env_flush.begin_rw_txn().unwrap();
-                for k in batch.iter() {
-                    txn.put(db, k, &[], WriteFlags::empty()).unwrap();
+                for v in batch.iter() {
+                    let k = key_counter_flush.fetch_add(1, Ordering::Relaxed);
+                    let key_bytes = k.to_be_bytes();
+                    txn.put(db, &key_bytes, v, WriteFlags::empty()).unwrap();
                 }
                 txn.commit().unwrap();
 
@@ -1734,7 +1737,7 @@ pub fn fill_n_id(n: usize) {
                 let len = id.gates.len();
 
                 for _ in 0..len {
-                    if gen_mean(&id, n) < 0.333 {
+                    if gen_mean(&id, n) < 0.235 {
                         let first = id.gates.remove(0);
                         id.gates.push(first);
                         continue;
