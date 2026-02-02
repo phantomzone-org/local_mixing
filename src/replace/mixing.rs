@@ -931,6 +931,9 @@ pub fn replace_and_compress_big(
         "Finished replace_sequential_pairs, new length: {}",
         c.gates.len()
     );
+    if c.probably_equal(circuit, n, 100_000).is_err() {
+        panic!("replacing changed functionality");
+    }
     let mut f = OpenOptions::new()
         .create(true)
         .append(true)
