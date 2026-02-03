@@ -1017,7 +1017,7 @@ pub fn mix_seams(
     for i in 0..len - 1 {
         let chunk = &gates[i];
         let next  = &gates[i + 1];
-
+        println!("{}", chunk.len());
         if i == 0 {
             new_gates.extend_from_slice(&chunk[..chunk.len() - 1]);
         } else {
