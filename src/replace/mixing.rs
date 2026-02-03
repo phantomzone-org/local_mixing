@@ -922,7 +922,7 @@ pub fn replace_and_compress_big(
 
         // let last = replaced_chunks.last().unwrap();
         // new_gates.extend_from_slice(&last[1..]);
-        let new_gates = replaced_chunks.into_iter().flatten().collect();
+        let new_gates = mix_seams(replaced_chunks, _conn, n, env, bit_shuf_list, dbs);
         c.gates = new_gates;
         c.gates.reverse();
     }
@@ -1032,6 +1032,52 @@ pub fn replace_and_compress_big(
         MADE_LEFT.load(Ordering::SeqCst),
         TRAVERSE_LEFT.load(Ordering::SeqCst),
     )
+}
+
+pub fn mix_seams(
+    gates: Vec<Vec<[u8;3]>>,
+    _conn: &mut Connection,
+    n: usize,
+    env: &lmdb::Environment,
+    bit_shuf_list: &Vec<Vec<Vec<usize>>>,
+    dbs: &HashMap<String, lmdb::Database>,
+) -> Vec<[u8;3]> {
+    let mut new_gates: Vec<[u8; 3]> = Vec::new();
+    let len = gates.len();
+    for i in 0..len - 1 {
+        let chunk = &gates[i];
+        let next  = &gates[i + 1];
+
+        if i == 0 {
+            new_gates.extend_from_slice(&chunk[..chunk.len() - 1]);
+        } else {
+            new_gates.extend_from_slice(&chunk[1..chunk.len() - 1]);
+        }
+
+        let left  = chunk.last().unwrap();
+        let right = next.first().unwrap();
+
+        let (replaced, _) = replace_single_pair(
+            left,
+            right,
+            n,
+            _conn,
+            &env,
+            &bit_shuf_list,
+            dbs,
+        );
+        new_gates.extend_from_slice(&replaced);
+    }
+
+    let last = gates.last().unwrap();
+    new_gates.extend_from_slice(&last[1..]);
+    let temp: Vec<[u8;3]> = gates.into_iter().flatten().collect();
+    let c1 = CircuitSeq { gates: temp };
+    let c2 = CircuitSeq { gates: new_gates.clone() };
+    if c1.probably_equal(&c2, n, 1_000).is_err() {
+        panic!("Failed to mix seams");
+    }
+    new_gates
 }
 
 pub fn interleave_sequential_big(
