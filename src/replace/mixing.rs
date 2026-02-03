@@ -1078,8 +1078,8 @@ pub fn mix_seams(
     let mut c2 = CircuitSeq { gates: new_gates.clone() };
     let mut c2rev = c2.clone();
     c2rev.gates.reverse();
-    c1.concat(&c1rev);
-    c2.concat(&c2rev);
+    c1 = c1.concat(&c1rev);
+    c2 = c2.concat(&c2rev);
     if c1.probably_equal(&c2, n, 1_000).is_err() {
         panic!("Failed to mix seams");
     }
