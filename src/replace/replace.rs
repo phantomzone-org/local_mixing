@@ -479,11 +479,17 @@ fn get_random_identity(
     let txn = env.begin_ro_txn()?;
     let mut cursor = txn.open_ro_cursor(*db)?;
 
-    let value_bytes = cursor.iter_start()
+    let value_bytes = if n != 128 {
+        cursor.iter_start()
         .nth(random_index)
         .map(|(k, _v)| k)
-        .expect("Failed to get random key");
-
+        .expect("Failed to get random key")
+    } else {
+        cursor.iter_start()
+        .nth(random_index)
+        .map(|(_k, v)| v)
+        .expect("Failed to get random val")
+    };
     let out = CircuitSeq::from_blob(value_bytes);
 
     GET_ID_TOTAL_TIME.fetch_add(
