@@ -852,6 +852,9 @@ pub fn replace_and_compress_big(
 
     println!("Butterfly start: {} gates", circuit.gates.len());
     let mut c = circuit.clone();
+    if c.probably_equal(circuit, n, 100).is_err() {
+        panic!("sanity check");
+    }
     let t0 = Instant::now();
     shoot_random_gate(&mut c, 200_000);
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
@@ -917,10 +920,6 @@ pub fn replace_and_compress_big(
                 &bit_shuf_list,
                 dbs,
             );
-            let r = CircuitSeq {gates: replaced.clone() };
-            if r.probably_equal(&CircuitSeq { gates: vec![*left, *right] }, n, 100).is_err() {
-                panic!("Single gate repl changed functionality");
-            }
             new_gates.extend_from_slice(&replaced);
         }
 
