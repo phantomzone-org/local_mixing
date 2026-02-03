@@ -852,9 +852,6 @@ pub fn replace_and_compress_big(
 
     println!("Butterfly start: {} gates", circuit.gates.len());
     let mut c = circuit.clone();
-    if c.probably_equal(circuit, n, 100).is_err() {
-        panic!("sanity check");
-    }
     let t0 = Instant::now();
     shoot_random_gate(&mut c, 200_000);
     SHOOT_RANDOM_GATE_TIME.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
@@ -895,36 +892,37 @@ pub fn replace_and_compress_big(
                 sub.gates
             })
             .collect();
-        let mut new_gates: Vec<[u8; 3]> = Vec::new();
-        let len = replaced_chunks.len();
+        // let mut new_gates: Vec<[u8; 3]> = Vec::new();
+        // let len = replaced_chunks.len();
 
-        for i in 0..len - 1 {
-            let chunk = &replaced_chunks[i];
-            let next  = &replaced_chunks[i + 1];
+        // for i in 0..len - 1 {
+        //     let chunk = &replaced_chunks[i];
+        //     let next  = &replaced_chunks[i + 1];
 
-            if i == 0 {
-                new_gates.extend_from_slice(&chunk[..chunk.len() - 1]);
-            } else {
-                new_gates.extend_from_slice(&chunk[1..chunk.len() - 1]);
-            }
+        //     if i == 0 {
+        //         new_gates.extend_from_slice(&chunk[..chunk.len() - 1]);
+        //     } else {
+        //         new_gates.extend_from_slice(&chunk[1..chunk.len() - 1]);
+        //     }
 
-            let left  = chunk.last().unwrap();
-            let right = next.first().unwrap();
+        //     let left  = chunk.last().unwrap();
+        //     let right = next.first().unwrap();
 
-            let (replaced, _) = replace_single_pair(
-                left,
-                right,
-                n,
-                _conn,
-                &env,
-                &bit_shuf_list,
-                dbs,
-            );
-            new_gates.extend_from_slice(&replaced);
-        }
+        //     let (replaced, _) = replace_single_pair(
+        //         left,
+        //         right,
+        //         n,
+        //         _conn,
+        //         &env,
+        //         &bit_shuf_list,
+        //         dbs,
+        //     );
+        //     new_gates.extend_from_slice(&replaced);
+        // }
 
-        let last = replaced_chunks.last().unwrap();
-        new_gates.extend_from_slice(&last[1..]);
+        // let last = replaced_chunks.last().unwrap();
+        // new_gates.extend_from_slice(&last[1..]);
+        let new_gates = replaced_chunks.into_iter().flatten().collect();
         c.gates = new_gates;
         c.gates.reverse();
     }
