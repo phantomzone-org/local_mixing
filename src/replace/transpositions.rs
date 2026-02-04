@@ -303,13 +303,10 @@ mod tests {
             let b = t.evaluate(gate[1]);
             let c = t.evaluate(gate[2]);
             gates.push([a, b, c]);
-            let tc = t.to_circuit(128, &env, &dbs);
-            // println!("c: {}", tc.gates.len());
-            gates.extend(tc.gates.into_iter().rev());
             last = t;
             last.transpositions.reverse();
         }
-
+        gates.extend(last.to_circuit(128, &env, &dbs).gates);
         let new_circuit = CircuitSeq { gates };
         if base.probably_equal(&new_circuit, 128, 1_000).is_err() {
             panic!("Failed to retain functionality");
