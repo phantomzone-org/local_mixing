@@ -101,8 +101,10 @@ fn heatmap_slice(py: Python<'_>, num_wires: usize, num_inputs: usize, flag: bool
     let mut circuit_two = CircuitSeq::from_string(&circuit_two_str);
     circuit_one.canonicalize();
     circuit_two.canonicalize();
-    circuit_one.gates = circuit_one.gates[..x2].to_vec();
-    circuit_two.gates = circuit_one.gates[..y2].to_vec();
+    let len_1 = circuit_one.gates.len();
+    let len_2 = circuit_two.gates.len();
+    circuit_one.gates = circuit_one.gates[..std::cmp::min(len_1, x2)].to_vec();
+    circuit_two.gates = circuit_one.gates[..std::cmp::min(len_2, y2)].to_vec();
     let num_points = (x2 - x1 + 1) * (y2 - y1 + 1);
     let mut average = vec![0f64; num_points * 3]; // flat 2D array: [x, y, value] per point
     let mut rng = rand::rng();
