@@ -180,17 +180,12 @@ impl Transpositions {
         let txn = env.begin_ro_txn().expect("Failed to start txn");
         let mut cursor = txn.open_ro_cursor(*db).expect("Failed to open ro cursor");
 
-        let value_bytes = if n != 128 {
+        let value_bytes = 
             cursor.iter_start()
             .nth(random_index)
             .map(|(k, _v)| k)
-            .expect("Failed to get random key")
-        } else {
-            cursor.iter_start()
-            .nth(random_index)
-            .map(|(_k, v)| v)
-            .expect("Failed to get random val")
-        };
+            .expect("Failed to get random key");
+        
         let out = CircuitSeq::from_blob(value_bytes);
 
         let mut c;
