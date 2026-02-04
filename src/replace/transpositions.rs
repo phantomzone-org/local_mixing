@@ -238,6 +238,12 @@ impl Transpositions {
 
         val
     }
+
+    pub fn concat(&self, other: &Transpositions) -> Transpositions {
+        let mut new = self.clone();
+        new.transpositions.extend_from_slice(&other.transpositions);
+        new
+    }
 }
 
 #[cfg(test)]
@@ -279,12 +285,20 @@ mod tests {
         let dbs = open_all_dbs(&env);
 
         let mut gates: Vec<[u8; 3]> = Vec::new();
-
+        let mut last = Transpositions { transpositions: Vec::new() };
         for &gate in &base.gates {
 
             let t = Transpositions::gen_random(128, 100);
             println!("t: {}", t.transpositions.len());
-            gates.extend(t.to_circuit(128, &env, &dbs).gates);
+            if last.transpositions.is_empty() {
+                gates.extend(t.to_circuit(128, &env, &dbs).gates);
+            } else {
+                let mut combined = last.concat(&t);
+                combined.canonicalize();
+                combined.filter_repeats();
+                Transpositions::shoot_random_transpositions(&mut combined, 100_000);
+                gates.extend(combined.to_circuit(128, &env, &dbs).gates);
+            }
             let a = t.evaluate(gate[0]);
             let b = t.evaluate(gate[1]);
             let c = t.evaluate(gate[2]);
@@ -292,6 +306,8 @@ mod tests {
             let tc = t.to_circuit(128, &env, &dbs);
             println!("c: {}", tc.gates.len());
             gates.extend(tc.gates.into_iter().rev());
+            last = t;
+            last.transpositions.reverse();
         }
 
         let new_circuit = CircuitSeq { gates };
