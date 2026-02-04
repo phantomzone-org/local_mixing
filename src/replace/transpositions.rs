@@ -352,13 +352,19 @@ mod tests {
 
         let dbs = open_all_dbs(&env);
 
-        let mut t = Transpositions::gen_random(128, 100);
+        let mut t = Transpositions::gen_random(128, 500);
         let base = t.to_circuit(128, &env, &dbs);
         Transpositions::shoot_random_transpositions(&mut t, 100_000);
         let new_circuit = t.to_circuit(128, &env, &dbs);
         if base.probably_equal(&new_circuit, 128, 1_000).is_err() {
-            panic!("Failed to retain functionality");
+            panic!("Failed to retain functionality after shooting");
         }
-        println!("They are equal even after shooting");
+        t.canonicalize();
+        t.filter_repeats();
+        let new_circuit = t.to_circuit(128, &env, &dbs);
+        if base.probably_equal(&new_circuit, 128, 1_000).is_err() {
+            panic!("Failed to retain functionality after filtering");
+        }
+        println!("They are equal");
     }
 }
