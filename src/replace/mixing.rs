@@ -39,6 +39,7 @@ use std::{
     },
     time::Instant,
 };
+
 fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
     let (mut final_circuit, inverse_starts) = obfuscate(c, n);
@@ -1446,6 +1447,7 @@ pub fn open_all_dbs(env: &lmdb::Environment) -> HashMap<String, lmdb::Database> 
         "ids_n128g24tower", "ids_n128g25tower", "ids_n128g26tower", "ids_n128g27tower",
         "ids_n128g28tower", "ids_n128g29tower", "ids_n128g30tower", "ids_n128g31tower",
         "ids_n128g32tower", "ids_n128g33tower",
+        "swaps"
     ];
 
     for name in db_names.iter() {
