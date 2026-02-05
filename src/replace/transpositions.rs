@@ -357,4 +357,50 @@ mod tests {
         }
         println!("They are equal");
     }
+
+    #[test]
+    fn test_wire_shifting2() {
+        use crate::replace::mixing::open_all_dbs;
+        let file = File::open("initial.txt").expect("failed to open initial.txt");
+        let reader = BufReader::new(file);
+
+        let circuits: Vec<String> = reader
+            .lines()
+            .map(|l| l.unwrap())
+            .filter(|l| !l.trim().is_empty())
+            .collect();
+
+        let mut rng = rand::rng();
+        let circuit_str = circuits
+            .choose(&mut rng)
+            .expect("no circuits found");
+
+        let base = CircuitSeq::from_string(circuit_str);
+
+        let env = Environment::new()
+            .set_max_dbs(258)
+            .set_map_size(800 * 1024 * 1024 * 1024)
+            .open(Path::new("./db"))
+            .expect("failed to open lmdb");
+
+        let dbs = open_all_dbs(&env);
+        let t = Transpositions::gen_random(64, 1000);
+        let mut gates: Vec<[u8; 3]> = Vec::new();
+        gates.extend(t.to_circuit(64, &env, &dbs).gates);
+        for &gate in &base.gates {
+            let a = t.evaluate(gate[0]);
+            let b = t.evaluate(gate[1]);
+            let c = t.evaluate(gate[2]);
+            gates.push([a, b, c]);
+        }
+        let mut tc = t.to_circuit(64, &env, &dbs).gates;
+        tc.reverse();
+        gates.extend(&tc);
+        let new_circuit = CircuitSeq { gates };
+        if base.probably_equal(&new_circuit, 64, 1_000).is_err() {
+            panic!("Failed to retain functionality");
+        }
+        std::fs::write("test.txt", new_circuit.repr())
+            .expect("failed to write test.txt");
+    }
 }
