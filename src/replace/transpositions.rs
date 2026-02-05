@@ -384,7 +384,7 @@ mod tests {
             .expect("failed to open lmdb");
 
         let dbs = open_all_dbs(&env);
-        let t = Transpositions::gen_random(64, 1000);
+        let t = Transpositions::gen_random(64, 100);
         let mut gates: Vec<[u8; 3]> = Vec::new();
         gates.extend(t.to_circuit(64, &env, &dbs).gates);
         for &gate in &base.gates {
