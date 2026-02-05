@@ -2921,23 +2921,23 @@ pub fn replace_single_pair(
     let mut id_gen = false;
     let mut id = CircuitSeq { gates: Vec::new() };
     while !id_gen {
-        // let id_len = if GatePair::is_none(&tax) {
-        //     let r = rng.random_range(0..100);
-        //     match r { 
-        //         0..45 => 6,   
-        //         45..90 => 7,   
-        //         _       => 16, 
-        //     }
-        // } else {
-        //     let r = rng.random_range(0..100);
-        //     match r {
-        //         0..30  => 5,   
-        //         30..60 => 6,   
-        //         60..90 => 7,   
-        //         _       => 16, 
-        //     }
-        // };
-        let id_len = 128;
+        let id_len = if GatePair::is_none(&tax) {
+            let r = rng.random_range(0..100);
+            match r { 
+                0..45 => 6,   
+                45..90 => 7,   
+                _       => 16, 
+            }
+        } else {
+            let r = rng.random_range(0..100);
+            match r {
+                0..30  => 5,   
+                30..60 => 6,   
+                60..90 => 7,   
+                _       => 16, 
+            }
+        };
+        // let id_len = 128;
         id = match get_random_identity(id_len, tax, env, dbs, tower) {
             Ok(id) => {
                 id_gen = true;
