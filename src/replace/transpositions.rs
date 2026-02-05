@@ -288,16 +288,16 @@ mod tests {
         let mut last = Transpositions { transpositions: Vec::new() };
         for &gate in &base.gates {
 
-            let t = Transpositions::gen_random(128, 100);
+            let t = Transpositions::gen_random(64, 100);
             // println!("t: {}", t.transpositions.len());
             if last.transpositions.is_empty() {
-                gates.extend(t.to_circuit(128, &env, &dbs).gates);
+                gates.extend(t.to_circuit(64, &env, &dbs).gates);
             } else {
                 let mut combined = last.concat(&t);
                 combined.canonicalize();
                 combined.filter_repeats();
                 Transpositions::shoot_random_transpositions(&mut combined, 100_000);
-                gates.extend(combined.to_circuit(128, &env, &dbs).gates);
+                gates.extend(combined.to_circuit(64, &env, &dbs).gates);
             }
             let a = t.evaluate(gate[0]);
             let b = t.evaluate(gate[1]);
@@ -306,9 +306,9 @@ mod tests {
             last = t;
             last.transpositions.reverse();
         }
-        gates.extend(last.to_circuit(128, &env, &dbs).gates);
+        gates.extend(last.to_circuit(64, &env, &dbs).gates);
         let new_circuit = CircuitSeq { gates };
-        if base.probably_equal(&new_circuit, 128, 1_000).is_err() {
+        if base.probably_equal(&new_circuit, 64, 1_000).is_err() {
             panic!("Failed to retain functionality");
         }
         std::fs::write("test.txt", new_circuit.repr())
