@@ -255,7 +255,7 @@ pub fn insert_wire_shuffles(
     }
     let p = t_list.to_perm(n);
     let t = Transpositions::from_perm(&p);
-    let mut c = t.to_circuit(n, env, dbs).gates;
+    let mut c = t_list.to_circuit(n, env, dbs).gates;
     c.reverse();
     gates.extend_from_slice(&c);
     circuit.gates = gates;
@@ -406,7 +406,7 @@ mod tests {
         let mut new_circuit = base.clone();
         insert_wire_shuffles(&mut new_circuit, 64, &env, &dbs);
         if base.probably_equal(&new_circuit, 64, 1_000).is_err() {
-            panic!("Failed to retain functionality after filtering");
+            panic!("Failed to retain functionality");
         }
         println!("They are equal");
     }
