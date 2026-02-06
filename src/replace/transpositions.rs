@@ -249,10 +249,11 @@ pub fn insert_wire_shuffles(
         t_list.transpositions.extend_from_slice(&t.transpositions);
         gates.push(gate);
     }
-    t_list.transpositions.reverse();
     let p = t_list.to_perm(n);
     let t = Transpositions::from_perm(&p);
-    gates.extend_from_slice(&t.to_circuit(n, env, dbs).gates);
+    let mut c = t.to_circuit(n, env, dbs).gates;
+    c.reverse();
+    gates.extend_from_slice(&c);
     circuit.gates = gates;
     println!("Complete. Ending len: {} gates", circuit.gates.len());
 }
