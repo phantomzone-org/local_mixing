@@ -247,6 +247,10 @@ pub fn insert_wire_shuffles(
         let t = Transpositions::gen_random(n, 150);
         gates.extend_from_slice(&t.to_circuit(n, env, dbs).gates);
         t_list.transpositions.extend_from_slice(&t.transpositions);
+        let a = t_list.evaluate(gate[0]);
+        let b = t_list.evaluate(gate[1]);
+        let c = t_list.evaluate(gate[2]);
+        let gate = [a, b, c];
         gates.push(gate);
     }
     let p = t_list.to_perm(n);
