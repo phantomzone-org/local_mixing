@@ -39,14 +39,23 @@ impl Transpositions {
     }
 
     pub fn from_perm(perm: &Permutation) -> Self {
-        let mut perm = perm.clone();
         let n = perm.data.len();
+        let mut p = perm.data.clone();
+
+        let mut inv = vec![0usize; n];
+        for i in 0..n {
+            inv[p[i]] = i;
+        }
+
         let mut swaps = Vec::new();
 
         for i in (0..n).rev() {
-            if perm.data[i] != i {
-                let j = perm.data.iter().position(|&x| x == i).unwrap();
-                perm.data.swap(i, j);
+            if p[i] != i {
+                let j = inv[i];
+                p.swap(i, j);
+                inv[p[j]] = j;
+                inv[p[i]] = i;
+
                 swaps.push((i as u8, j as u8));
             }
         }
