@@ -22,7 +22,7 @@ impl Transpositions {
         let mut rng = rand::rng();
         let mut transpositions = Vec::with_capacity(n);
 
-        for i in (0..n).rev() {
+        for i in (1..n).rev() {
             let j = rng.random_range(0..i as u8);
             transpositions.push((j, i as u8));
         }
