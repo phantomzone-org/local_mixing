@@ -263,10 +263,6 @@ pub fn insert_wire_shuffles(
     }
     let p = t_list.to_perm(n);
     let t = Transpositions::from_perm(&p);
-    let p1 = t.to_perm(n);
-    if p != p1 {
-        panic!("Permutations do not match")
-    }
     let mut c = t.to_circuit(n, env, dbs).gates;
     c.reverse();
     gates.extend_from_slice(&c);
