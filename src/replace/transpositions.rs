@@ -18,13 +18,15 @@ pub struct Transpositions {
 impl Transpositions {
     pub fn gen_random(n: usize, _m: usize) -> Self {
         assert!(n >= 2, "n must be at least 2");
-
         let mut rng = rand::rng();
         let mut transpositions = Vec::with_capacity(n);
-
+        let n = n as u8;
         for i in (1..n).rev() {
-            let j = rng.random_range(0..i as u8);
-            transpositions.push((j, i as u8));
+            let j = rng.random_range(0..=i);
+            if i == j {
+                continue;
+            }
+            transpositions.push((j, i));
         }
 
         Self { transpositions }
