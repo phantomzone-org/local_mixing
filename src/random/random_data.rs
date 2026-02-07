@@ -3293,10 +3293,10 @@ mod tests {
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open("swap12n2.txt")
-            .expect("Failed to open swap12n2.txt");
+            .open("swap12n12.txt")
+            .expect("Failed to open swap12n12.txt");
         let mut circuits: HashSet<CircuitSeq> = HashSet::new();
-        let perm = Permutation { data: vec![4,5,0,1,6,7,2,3]};
+        let perm = Permutation { data: vec![6,7,2,3,4,5,0,1]};
         for m in 6..20 {
             for _ in 0..100000 {
                 let mut random = random_circuit(3, m);
@@ -3317,7 +3317,7 @@ mod tests {
         }
 
         for c in circuits {
-            writeln!(file, "{}", c.repr()).expect("Failed to write to swap12n2.txt");
+            writeln!(file, "{}", c.repr()).expect("Failed to write to swap12n12.txt");
         }
     }
 
