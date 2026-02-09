@@ -347,8 +347,8 @@ pub fn insert_wire_shuffles(
     let mut wire_transpositions: HashMap<u8, (usize, usize)> = HashMap::new();
 
     for (i, (a, b, _)) in t.transpositions.iter().enumerate() {
-        wire_transpositions.entry(*a).or_insert((i, 0));
-        wire_transpositions.entry(*b).or_insert((i, 1));
+        wire_transpositions.insert(*a, (i, 0));
+        wire_transpositions.insert(*b, (i, 1));
     }
 
     const TRANSITION: [[u8; 4]; 2] = [
