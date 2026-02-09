@@ -344,17 +344,11 @@ pub fn insert_wire_shuffles(
     }
     let p = t_list.to_perm(n);
     let mut t = Transpositions::from_perm(&p);
-    let mut wire_transpositions: HashMap<u8, Vec<(usize, usize)>> = HashMap::new();
-    for (i, (a, b, _)) in t.transpositions.clone().into_iter().enumerate() {
-        wire_transpositions
-        .entry(a)
-        .or_default()
-        .push((i, 0));
+    let mut wire_transpositions: HashMap<u8, (usize, usize)> = HashMap::new();
 
-        wire_transpositions
-            .entry(b)
-            .or_default()
-            .push((i, 1));
+    for (i, (a, b, _)) in t.transpositions.iter().enumerate() {
+        wire_transpositions.entry(*a).or_insert((i, 0));
+        wire_transpositions.entry(*b).or_insert((i, 1));
     }
 
     const TRANSITION: [[u8; 4]; 2] = [
@@ -367,13 +361,13 @@ pub fn insert_wire_shuffles(
     for (i, val) in negation_mask.into_iter().enumerate() {
         if val == 1 {
             if let Some(swaps) = wire_transpositions.get(&(i as u8)) {
-                if let Some(&(swap_idx, pos)) = swaps.choose(&mut rng) {
-                    let curr_neg_type = t.transpositions[swap_idx].2;
-                    if pos > 1 || curr_neg_type > 3 {
-                        panic!("Invalid pos or curr_neg_type");
-                    }
-                    t.transpositions[swap_idx].2 = TRANSITION[pos][curr_neg_type as usize];
+                let &(swap_idx, pos) = swaps;
+                let curr_neg_type = t.transpositions[swap_idx].2;
+                if pos > 1 || curr_neg_type > 3 {
+                    panic!("Invalid pos or curr_neg_type");
                 }
+                t.transpositions[swap_idx].2 = TRANSITION[pos][curr_neg_type as usize];
+                
             }
         }
     }
