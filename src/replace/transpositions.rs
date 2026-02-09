@@ -589,6 +589,11 @@ mod tests {
         let mut c = t.to_circuit(n, &env, &dbs).gates;
         c.reverse();
         gates.extend_from_slice(&c);
+
+        let c = CircuitSeq { gates };
+        if c.probably_equal(&CircuitSeq{ gates: Vec::new() }, 64, 1_000).is_err() {
+            panic!("Lost functionality");
+        }
     }
     #[test]
     fn test_wire_shifting2() {
