@@ -580,7 +580,11 @@ mod tests {
                 gates.extend_from_slice(&Transpositions::gen_gates_not(n, i as u8, &env, &dbs));
             }
         }
-
+        let mut tr: Vec<(u8, u8, u8)> = Vec::new();
+        for (a,b,_) in t.transpositions{
+            tr.push((a,b,0));
+        }
+        let t = Transpositions { transpositions: tr }; 
         let mut c = t.to_circuit(n, &env, &dbs).gates;
         c.reverse();
         gates.extend_from_slice(&c);
