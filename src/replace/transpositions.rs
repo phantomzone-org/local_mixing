@@ -176,7 +176,7 @@ impl Transpositions {
         } else if negation_type == 3 {
             ("swapsnot12", 36)
         } else {
-            panic!("Unvalid negation type")
+            panic!("Invalid negation type")
         };
 
         let db = dbs.get(db_name).unwrap_or_else(|| {
@@ -323,12 +323,15 @@ pub fn insert_wire_shuffles(
         let gate = [a, b, c];
         if negation_mask[a as usize] == 1 {
             gates.extend_from_slice(&Transpositions::gen_gates_not(n, a, env, dbs));
+            negation_mask[a as usize] = 0;
         }
         if negation_mask[b as usize] == 1 {
             gates.extend_from_slice(&Transpositions::gen_gates_not(n, b, env, dbs));
+            negation_mask[b as usize] = 0;
         }
         if negation_mask[c as usize] == 1 {
             gates.extend_from_slice(&Transpositions::gen_gates_not(n, c, env, dbs));
+            negation_mask[c as usize] = 0;
         }
         gates.push(gate);
     }
