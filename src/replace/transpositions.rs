@@ -183,8 +183,6 @@ impl Transpositions {
             panic!("Failed to get DB with name: {}", db_name);
         });
 
-        let max_entries: usize = 51;
-
         let mut rng = rand::rng();
         let random_index = rng.random_range(0..max_entries);
 
