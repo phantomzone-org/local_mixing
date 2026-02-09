@@ -642,7 +642,7 @@ fn main() {
                 ).unwrap();
                 let lmdb = "./db";
                 let env = Environment::new()
-                .set_max_dbs(257)      
+                .set_max_dbs(262)      
                 .set_map_size(700 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -732,7 +732,7 @@ fn main() {
             let _ = std::fs::create_dir_all(lmdb);
 
             let env = Environment::new()
-                .set_max_dbs(257)      
+                .set_max_dbs(262)      
                 .set_map_size(700 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -767,7 +767,7 @@ fn main() {
 
             let env = Environment::new()
                 .set_max_readers(10000) 
-                .set_max_dbs(257)      
+                .set_max_dbs(262)      
                 .set_map_size(800 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -811,7 +811,7 @@ fn main() {
 
             let env = Environment::new()
                 .set_max_readers(10000) 
-                .set_max_dbs(257)      
+                .set_max_dbs(262)      
                 .set_map_size(800 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -869,7 +869,7 @@ fn main() {
 
             let env = Environment::new()
                 .set_max_readers(10000) 
-                .set_max_dbs(257)      
+                .set_max_dbs(262)      
                 .set_map_size(800 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -927,7 +927,7 @@ fn main() {
 
             let env = Environment::new()
                 .set_max_readers(10000) 
-                .set_max_dbs(257)      
+                .set_max_dbs(262)      
                 .set_map_size(800 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -986,7 +986,7 @@ fn main() {
 
             let env = Environment::new()
                 .set_max_readers(10000) 
-                .set_max_dbs(257)      
+                .set_max_dbs(262)      
                 .set_map_size(800 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -1044,7 +1044,7 @@ fn main() {
             let _ = std::fs::create_dir_all(lmdb);
 
             let env = Environment::new()
-                .set_max_dbs(257)      
+                .set_max_dbs(262)      
                 .set_map_size(800 * 1024 * 1024 * 1024) 
                 .open(Path::new(lmdb))
                 .expect("Failed to open lmdb");
@@ -1116,7 +1116,7 @@ fn main() {
             let env_path = "./db";
 
             let env = Environment::new()
-                .set_max_dbs(257)
+                .set_max_dbs(262)
                 .set_map_size(64 * 1024 * 1024 * 1024)
                 .open(Path::new(env_path))
                 .expect("Failed to open lmdb");
@@ -1150,7 +1150,7 @@ fn main() {
             let env_path = "./db";
 
             let env = Environment::new()
-                .set_max_dbs(257)
+                .set_max_dbs(262)
                 .set_map_size(800 * 1024 * 1024 * 1024)
                 .open(Path::new(env_path))
                 .expect("Failed to open lmdb");
@@ -1300,7 +1300,7 @@ pub fn sql_to_lmdb(n: usize, m: usize) -> Result<(), ()> {
 
     fs::create_dir_all(lmdb_path).expect("Failed to create LMDB directory");
     let env = Environment::new()
-        .set_max_dbs(257)
+        .set_max_dbs(262)
         .set_map_size(map_size_bytes)
         .open(Path::new(lmdb_path))
         .expect("Failed to open LMDB environment");
@@ -1386,7 +1386,7 @@ pub fn sql_to_lmdb_perms(n: usize, m: usize) -> Result<(), ()> {
     // Open LMDB
     fs::create_dir_all(lmdb_path).expect("Failed to create LMDB directory");
     let env = Environment::new()
-        .set_max_dbs(257)
+        .set_max_dbs(262)
         .set_map_size(map_size_bytes)
         .open(Path::new(lmdb_path))
         .expect("Failed to open LMDB environment");
@@ -1487,7 +1487,7 @@ fn save_perm_tables_to_lmdb(
 
     std::fs::create_dir_all(env_path)?;
     let env = Environment::new()
-        .set_max_dbs(257)
+        .set_max_dbs(262)
         .set_map_size(800 * 1024 * 1024 * 1024)
         .open(Path::new(env_path))?;
 
@@ -1621,7 +1621,7 @@ fn save_tax_id_tables_to_lmdb(
 
     // Open environment
     let env = Environment::new()
-        .set_max_dbs(257)
+        .set_max_dbs(262)
         .set_map_size(800 * 1024 * 1024 * 1024)
         .open(Path::new(env_path))?;
 
@@ -1759,7 +1759,7 @@ pub fn fill_n_id(n: usize) {
 
     let env_path = "./db";
     let env = Environment::new()
-        .set_max_dbs(257)
+        .set_max_dbs(262)
         .set_map_size(800 * 1024 * 1024 * 1024)
         .open(Path::new(env_path))
         .expect("Failed to open db");
@@ -1878,7 +1878,7 @@ pub fn fill_n_id(n: usize) {
             .expect("sqlite open");
             let env_path = "./db";
             let env = Environment::new()
-                .set_max_dbs(257)
+                .set_max_dbs(262)
                 .set_map_size(800 * 1024 * 1024 * 1024)
                 .open(Path::new(env_path))
                 .expect("Failed to open db");
