@@ -1973,7 +1973,13 @@ pub fn main_shuffle_rcs_big(c: &CircuitSeq, rounds: usize, conn: &mut Connection
     // Repeat obfuscate + compress 'rounds' times
     let mut post_len = 0;
     let mut count = 0;
-    insert_wire_shuffles(&mut circuit, n, env, &dbs);
+    loop {
+        insert_wire_shuffles(&mut circuit, n, env, &dbs);
+        if c.probably_equal(&circuit, n, 1_000).is_ok() {
+            break;
+        }
+        circuit = c.clone();
+    }
     for i in 0..rounds {
         let _stop = 1000;
         let (new_circuit, _, _, _, _) = 
