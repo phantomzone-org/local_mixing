@@ -1,3 +1,7 @@
+// Used to compute canonicalizations up to gate ordering and wire relabeling
+// A lot of this code is legacy and unused
+// See /local_mixing/src/random/random_data.rs
+
 use crate::circuit::{Gate, Permutation, CircuitSeq};
 use smallvec::SmallVec;
 use itertools::Itertools;
@@ -11,7 +15,7 @@ use std::{
     sync::atomic::Ordering
 };
 
-
+// Wire relabeling canonicalization
 #[derive(Clone, Debug)]
 pub struct Canonicalization
 {
@@ -19,7 +23,7 @@ pub struct Canonicalization
     pub shuffle: Permutation,
 }
 
-
+// Structs to assist computing canonicalizations
 #[derive(Clone, Debug)]
 pub struct CandSet
 {
@@ -47,13 +51,12 @@ const CACHE_SIZE: usize = 32768;
 //Use least recently updated cache for efficiency as we don't need unpopular perms
 //Cache will hold permutations and their associated canonicalizations, so if we see a permutation again, we do not need to recompute the canon perm
 
-//TODO: Can we remove this lock on BIT_SHUF
 static BIT_SHUF: Lazy<Mutex<Vec<Vec<usize>>>> = Lazy::new(|| Mutex::new(Vec::new()));
-//TODO: Computing strings is inefficient
 static CACHE: Lazy<Mutex<LruCache<String, Canonicalization>>> = Lazy::new(|| {
     Mutex::new(LruCache::new(NonZeroUsize::new(CACHE_SIZE).unwrap()))
 });
 
+// Initialize base states
 pub fn init(n: usize) {
     let perms: Vec<Vec<usize>> = (0..n).permutations(n).collect();
     let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
@@ -102,14 +105,11 @@ pub fn index_set(s: usize, n: usize) -> Vec<usize> {
     p
 }
 
-
-
 static PERM_CACHED: AtomicI64 = AtomicI64::new(0);
 static PERM_BF_COMPUTED: AtomicI64 = AtomicI64::new(0);
 static PERM_FAST_COMPUTED: AtomicI64 = AtomicI64::new(0);
 
-
-
+// Wire labeling canonicalizations
 impl Permutation {
     pub fn canonical_with_retry(&self, retry: bool) -> Canonicalization {
         // Panic if BIT_SHUF hasn't been initialized
@@ -667,7 +667,7 @@ impl PermStore {
     }
 }
 
-//TODO createa a reverse canon idea
+// Choose the smallest lexigraphical ordering
 impl CircuitSeq {
     pub fn canonicalize(&mut self) {
         for i in 1..self.gates.len() {

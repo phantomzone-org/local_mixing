@@ -1,4 +1,5 @@
-//Basic implementation for circuit, gate, and permutations
+// Basic implementation for circuit, gate, and permutations
+
 use rand::{seq::SliceRandom, Rng};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -6,34 +7,43 @@ use std::{
     collections::{HashSet, HashMap},
 };
 
+// pins are [active, control1, control2] for Toffoli gates
+// We are only concerned with gate r57
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Gate{
     pub pins: [usize;3], //one active wire (0) and two control wires (1,2)
 }
 
+// Circuits stored as a sequence of gates [u8;3]
+// Gate type is legacy
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Eq, Hash, PartialEq)]
 pub struct CircuitSeq {
     pub gates: Vec<[u8;3]>, 
 }
 
-//Permutations are all the possible outputs of a circuit
+// Permutations are all the possible outputs of a circuit
+// On n wires permutation length is 1 << n
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Permutation {
     pub data: Vec<usize>,
 }
 
+// Functions on Gate struct and [u8;3]
 impl Gate {
+    // Returns the largest wire used
     pub fn bottom(&self) -> usize {
         // println!("bottom is {}", std_max((std_max(self.pins[0], self.pins[1])), self.pins[2]));
         std_max(std_max(self.pins[0], self.pins[1]), self.pins[2])
     }
 
+    // Gates collide iff either active pin shares a wire with any other pin
     pub fn collides_index(gate: &[u8;3], other: &[u8;3]) -> bool {
         gate[0] == other[1] 
             || gate[0] == other[2]
             || gate[1] == other[0] 
             || gate[2] == other[0]
     }
+
     //b is "larger"
     pub fn ordered_index(gate: &[u8;3], other: &[u8;3]) -> bool {
         if gate[0] > other[0] {
@@ -50,6 +60,7 @@ impl Gate {
         true
     }
 
+    // Evaluate a bit string after a single gate under gate r57
     #[inline(always)]
     pub fn evaluate_index(state: usize, gate: [u8;3]) -> usize {
         let c1 = (state >> gate[1]) & 1;
@@ -57,6 +68,7 @@ impl Gate {
         state ^ (c1 | ((!c2) & 1)) << gate[0]
     }
 
+    // Evaluate up to 128 bits
     #[inline(always)]
     pub fn evaluate_index_128(state: u128, gate: [u8;3]) -> u128 {
         let c1 = (state >> gate[1]) & 1;
@@ -64,6 +76,7 @@ impl Gate {
         state ^ (c1 | ((!c2) & 1)) << gate[0]
     }
 
+    // Evaluate a list of gates
     #[inline(always)]
     pub fn evaluate_index_list(state: usize, gates: &Vec<[u8;3]>) -> usize {
         let mut current_wires = state;
@@ -102,6 +115,7 @@ impl Permutation {
         }
     }
 
+    // n is the length of the permutation. For a random permutation on n bits, do 1 << n
     pub fn rand_perm(n:usize) -> Permutation {
         let mut p = Permutation::id_perm(n);
         let mut rng = rand::rng();
@@ -131,6 +145,7 @@ impl Permutation {
         Permutation { data }
     }
 
+    // string representation is just the elements of the permutation separated by a ,
     pub fn repr(&self) -> String {
         self.data.iter()
             .map(|&x| x.to_string())
@@ -138,6 +153,7 @@ impl Permutation {
             .join(",")
     }
 
+    // u8 representation for db
     pub fn repr_blob(&self) -> Vec<u8> {
         self.data.iter().map(|&x| x as u8).collect()
     }
@@ -147,29 +163,13 @@ impl Permutation {
         Permutation { data }
     }
 
+    // Returns the number of bits needed to represent the permutation
     pub fn bits(&self) -> usize {
         let n = self.data.len();
         ((n - 1) as usize).ilog2() as usize + 1
     }
 
-    pub fn to_string(&self) -> String {
-        const MAX_LEN: isize = -1;
-
-        // Format the inner vector as a string
-        let s = format!("{:?}", self.data);
-
-        //In case we deal with very long permutations
-        if MAX_LEN > 0 && (s.len() as isize) > MAX_LEN {
-            // Truncate and append "...]"
-            let end = (MAX_LEN - 5) as usize;
-            let mut truncated = s[..end].to_string();
-            truncated.push_str("...]");
-            truncated
-        } else {
-            s
-        }
-    }
-
+    // Cycle representation of a permutation
     pub fn to_cycle(&self) -> Vec<Vec<usize>> {
         let n = self.data.len();
         let mut visited = vec![false; n];
@@ -202,6 +202,7 @@ impl Permutation {
         cycles
     }
 
+    // On permutation of len 1 << n with n bits, take a bit shuffle on n bits and apply 
     pub fn bit_shuffle(&self, shuf: &Vec<usize>) -> Permutation {
         let n = self.data.len();
         let mut q_raw = vec![0; n];
@@ -224,6 +225,7 @@ impl Permutation {
 }
 
 impl CircuitSeq {
+    // Checks for the presence of two identical gates
     pub fn adjacent_id(&self) -> bool {
         for i in 0..(self.gates.len()-1) {
             if self.gates[i] == self.gates[i+1] {
@@ -233,6 +235,7 @@ impl CircuitSeq {
         false
     }
 
+    // Evaluate the entire circuit with a starting input
     pub fn evaluate(&self, input: usize) -> usize {
         Gate::evaluate_index_list(input, &self.gates)
     }
@@ -241,7 +244,7 @@ impl CircuitSeq {
         Gate::evaluate_index_list_128(input, &self.gates)
     }
 
-    //small vec is okay since this is never called for num > 32
+    // Find the permutation computed by the circuit. Permutation is on 2^n
     pub fn permutation(&self, num_wires: usize) -> Permutation {
         let size = 1 << num_wires;
         
@@ -254,6 +257,7 @@ impl CircuitSeq {
         Permutation { data: output }
     }
 
+    // Store as sequence of u8 for dbs
     pub fn repr_blob(&self) -> Vec<u8> {
         let mut blob = Vec::with_capacity(self.gates.len() * 3);
         for &gate in &self.gates {
@@ -261,14 +265,6 @@ impl CircuitSeq {
             blob.push(gate[1] as u8);
             blob.push(gate[2] as u8);
         }
-        blob
-    }
-
-    pub fn repr_blob_gate(gate: &[u8;3]) -> Vec<u8> {
-        let mut blob = Vec::with_capacity(3);
-        blob.push(gate[0] as u8);
-        blob.push(gate[1] as u8);
-        blob.push(gate[2] as u8);
         blob
     }
 
@@ -282,7 +278,7 @@ impl CircuitSeq {
         CircuitSeq { gates }
     }
 
-    // wire i -> perm[i]
+    // Rewire wire i -> perm[i]
     pub fn rewire(&mut self, perm: &Permutation, n: usize) {
         if perm.data.is_empty() {
             return;
@@ -344,6 +340,7 @@ impl CircuitSeq {
         self.rewire(&Permutation { data: perm }, num_wires);
     }
 
+    // Representing circuit as a string
     pub fn repr(&self) -> String {
         fn wire_to_char(w: u8) -> char {
             match w {
@@ -471,6 +468,7 @@ impl CircuitSeq {
         CircuitSeq { gates }
     }
 
+    // Gives a "pretty" circuit representation. Does not support over 83 wires
     pub fn to_string(&self, num_wires: usize) -> String {
         let mut result = String::new();
 
@@ -520,12 +518,14 @@ impl CircuitSeq {
         result
     }
 
+    // Combine two circuits
     pub fn concat(&self, other: &CircuitSeq) -> CircuitSeq {
         let mut gates = self.gates.clone();
         gates.extend_from_slice(&other.gates);
         CircuitSeq { gates }
     }
 
+    // Returns the wires touched by a circuit
     pub fn used_wires(&self) -> Vec<u8> {
         let mut used: HashSet<u8> = HashSet::new();
         for gates in &self.gates {
@@ -542,6 +542,7 @@ impl CircuitSeq {
         Self::used_wires(&self).len()
     }
 
+    // "Bottom" function for gates
     pub fn max_wire(&self) -> usize {
         self.gates.iter().flatten().copied().max().unwrap_or(0) as usize
     }
@@ -598,6 +599,7 @@ impl CircuitSeq {
         CircuitSeq { gates: new_gates }
     }
 
+    // Evaluates how a state changes throughout the entirety of a circuit
     pub fn evaluate_evolution(&self, input: usize) -> Vec<usize> {
         let mut state = input;
         let mut evolution = vec![state];
@@ -622,7 +624,7 @@ impl CircuitSeq {
         evolution
     }
 
-    //no check on num_wires
+    // Probablistic check on circuit equality
     pub fn probably_equal(&self, other_circuit: &Self, num_wires: usize, num_inputs: usize) -> Result<(), String> {
         let mut rng = rand::rng();
         let mask: u128 = if num_wires < u128::BITS as usize {
@@ -646,6 +648,7 @@ impl CircuitSeq {
     }
 }
 
+// Possible gates on n wires
 pub fn base_gates(n: usize) -> Vec<[u8; 3]> {
     let n = n as u8;
     let mut gates: Vec<[u8;3]> = Vec::new();

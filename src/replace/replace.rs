@@ -1,3 +1,5 @@
+// Replacement code used in the mixing methods
+
 use crate::{
     circuit::circuit::{CircuitSeq, Permutation}, rainbow::canonical::Canonicalization, random::random_data::{
         contiguous_convex, 
@@ -43,6 +45,8 @@ use libc::{fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 use std::sync::atomic::{AtomicU64, Ordering};
 // use rand::prelude::IndexedRandom;
 
+// Old iterator method for cursor fails if the given key is not found
+// This does not unwrap a None value in that case
 pub struct Iter<'txn> {
     cursor: *mut ffi::MDB_cursor,
     op: c_uint,
@@ -92,7 +96,6 @@ impl<'txn> Iterator for Iter<'txn> {
     }
 }
 
-
 pub trait RoCursorExt<'txn> {
     fn iter_from_safe<K>(&mut self, key: K) -> Iter<'txn>
     where
@@ -128,6 +131,7 @@ impl<'txn> RoCursorExt<'txn> for RoCursor<'txn> {
     }
 }
 
+// Select a random permutation 
 fn random_perm_from_perm_table(
     txn: &RoTransaction,
     db: Database,
@@ -148,6 +152,7 @@ fn random_perm_from_perm_table(
 }
 
 // Returns a nontrivial identity circuit built from two "friend" circuits
+// This is legacy now that we have ids_nNgK tables
 pub fn random_canonical_id(
     env: &lmdb::Environment,
     _conn: &Connection,
@@ -228,6 +233,7 @@ pub fn random_canonical_id(
     }
 }
 
+// Timing variables for benchmarking
 static GET_ID_TOTAL_TIME: AtomicU64 = AtomicU64::new(0);
 // static DB_NAME_TIME: AtomicU64 = AtomicU64::new(0);
 // static DB_LOOKUP_TIME: AtomicU64 = AtomicU64::new(0);
@@ -237,6 +243,7 @@ static GET_ID_TOTAL_TIME: AtomicU64 = AtomicU64::new(0);
 // static DESERIALIZE_LIST_TIME: AtomicU64 = AtomicU64::new(0);
 // static RNG_CHOOSE_TIME: AtomicU64 = AtomicU64::new(0);
 
+// New method to get a random identity
 fn get_random_identity(
     n: usize,
     gate_pair: GatePair,
@@ -259,7 +266,7 @@ fn get_random_identity(
         panic!("Failed to get DB with name: {}", db_name);
     });
 
-    // Hardcoded max entries for all DBs
+    // Hardcoded max entries for all DBs for efficient sampling
     let max_entries: usize = match db_name.as_str() {
         // n5
         "ids_n5g1" => 100_235,
@@ -500,12 +507,15 @@ fn get_random_identity(
     Ok(out)
 }
 
+// Generate identities on more wires
+// Our original tables only support up to 7 wires
+// Our LMDB currently stores some 16 and 128 wire identities
 pub fn get_random_wide_identity(
     n: usize, 
     env: &lmdb::Environment,
     dbs: &HashMap<String, Database>,
-    conn: &mut Connection,
-    bit_shuf_list: &Vec<Vec<Vec<usize>>>,
+    _conn: &mut Connection,
+    _bit_shuf_list: &Vec<Vec<Vec<usize>>>,
     tower: bool,
 ) -> CircuitSeq {
     let mut id = CircuitSeq { gates: Vec::new() };
@@ -587,12 +597,13 @@ pub fn get_random_wide_identity(
     id
 }
 
+// Unsupported method of generating more random looking identities on more wires
 pub fn get_random_wide_identity_via_pairs(
     n: usize, 
     env: &lmdb::Environment,
     dbs: &HashMap<String, Database>,
-    conn: &mut Connection,
-    bit_shuf_list: &Vec<Vec<Vec<usize>>>,
+    _conn: &mut Connection,
+    _bit_shuf_list: &Vec<Vec<Vec<usize>>>,
 ) -> CircuitSeq {
     let mut id = CircuitSeq { gates: Vec::new() };
     let mut uw = id.used_wires();
@@ -729,7 +740,7 @@ pub fn random_id(n: u8, m: usize) -> (CircuitSeq, CircuitSeq) {
     (circuit, rev)
 }
 
-// Return a random subcircuit, its starting index (gate), and ending index
+// Return a random contiguous subcircuit, its starting index (gate), and ending index
 pub fn random_subcircuit(circuit: &CircuitSeq) -> (CircuitSeq, usize, usize) {
     let len = circuit.gates.len();
     
@@ -794,6 +805,7 @@ pub fn random_subcircuit_max(circuit: &CircuitSeq, max_len: usize) -> (CircuitSe
     (CircuitSeq { gates: subcircuit }, start, end)
 }
 
+// Timing variables for benchmarking
 static PERMUTATION_TIME: AtomicU64 = AtomicU64::new(0);
 static SQL_TIME: AtomicU64 = AtomicU64::new(0);
 static CANON_TIME: AtomicU64 = AtomicU64::new(0);
@@ -818,6 +830,8 @@ static SPLICE_TIME: AtomicU64 = AtomicU64::new(0);
 static TRIAL_TIME: AtomicU64 = AtomicU64::new(0);
 static IDENTITY_TIME: AtomicU64 = AtomicU64::new(0);
 
+// Unsupported compression code
+// See compress_lmdb
 pub fn compress(
     c: &CircuitSeq,
     trials: usize,
@@ -980,6 +994,7 @@ pub fn compress(
     compressed
 }
 
+// Expand with ancilla wires or gates
 pub fn expand_lmdb<'a>(
     c: &CircuitSeq,
     trials: usize,
@@ -1165,6 +1180,8 @@ pub fn expand_lmdb<'a>(
     compressed
 }
 
+// Attempt to compress every possible subcircuit
+// Fast for small subcircuits
 pub fn compress_exhaust(
     c: &CircuitSeq,
     conn: &mut Connection,
@@ -1312,6 +1329,7 @@ pub fn compress_exhaust(
     compressed
 }
 
+// Compress on larger number of wires
 pub fn compress_big(
     c: &CircuitSeq, 
     trials: usize, 
@@ -1437,6 +1455,7 @@ pub fn compress_big(
     circuit
 }
 
+// Sequential compression method
 pub fn sequential_compress_big(
     c: &CircuitSeq, 
     num_wires: usize, 
@@ -1570,6 +1589,7 @@ pub fn sequential_compress_big(
     circuit
 }
 
+// Allow ancillas in compression
 pub fn sequential_compress_big_ancillas( 
     c: &CircuitSeq, 
     num_wires: usize, 
@@ -2080,6 +2100,7 @@ pub fn expand_big(
     circuit
 }
 
+// Old legacy code to obfuscate/inflate
 pub fn obfuscate(c: &CircuitSeq, num_wires: usize) -> (CircuitSeq, Vec<usize>) {
     if c.gates.len() == 0 {
         return (CircuitSeq { gates: Vec::new() }, Vec::new() )
@@ -2120,6 +2141,7 @@ pub fn obfuscate(c: &CircuitSeq, num_wires: usize) -> (CircuitSeq, Vec<usize>) {
     (obfuscated, inverse_starts)
 }
 
+// Expand as we compress to try and get more randomness in the butterfly methods
 pub fn outward_compress(g: &CircuitSeq, r: &CircuitSeq, trials: usize, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     let mut g = g.clone();
     for gate in r.gates.iter() {
@@ -2262,6 +2284,9 @@ pub fn compress_big_ancillas(
     circuit
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Gate taxonomy and Replacement Pair 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CollisionType {
     OnActive,
@@ -2440,6 +2465,7 @@ fn gate_tri_taxonomy(g0: &[u8;3], g1: &[u8;3], g2: &[u8;3]) -> GateTri {
     }
 }
 
+// Partitions circuit into pairs and then replaces each pair
 pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Connection, env: &lmdb::Environment) {
     println!("Starting replace_pairs, circuit length: {}", circuit.gates.len());
     // let start = circuit.clone();
@@ -2630,10 +2656,11 @@ fn make_stdin_nonblocking() {
     }
 }
 
+// Do sequential method of replacing pairs
 pub fn replace_sequential_pairs(
     circuit: &mut CircuitSeq,
     num_wires: usize,
-    conn: &mut Connection,
+    _conn: &mut Connection,
     env: &lmdb::Environment,
     _bit_shuf_list: &Vec<Vec<Vec<usize>>>,
     dbs: &HashMap<String, lmdb::Database>,
@@ -2648,9 +2675,12 @@ pub fn replace_sequential_pairs(
     }
 
     let mut already_collided = 0;
-    let mut shoot_count = 0;
-    let mut curr_zero = 0;
-    let mut traverse_left = 0;
+    let shoot_count = 0;
+    let curr_zero = 0;
+    let traverse_left = 0;
+    // let mut shoot_count = 0;
+    // let mut curr_zero = 0;
+    // let mut traverse_left = 0;
 
     let mut rng = rand::rng();
     let mut out: Vec<[u8; 3]> = Vec::new();
@@ -2769,6 +2799,7 @@ pub fn replace_sequential_pairs(
 
             fail = 0;
             i += 1;
+        // Old code to use if the two gates do not touch in any way
         // } else {
         //     shoot_count += 1;
         //     out.push(gates[i]);
@@ -3001,9 +3032,7 @@ pub fn replace_single_pair(
     id.gates.len() - 2)
 }
 
-//TODO maybe parallelize this
-// do smarter scans for updating the bounds by tracking as we go. also only update if left or right is replaced
-// don't splice, just rebuild at the end
+// replace pairs for RCD method
 pub fn replace_pair_distances(
     circuit: &mut CircuitSeq,
     num_wires: usize,
@@ -3088,6 +3117,9 @@ pub fn replace_pair_distances(
     }
 }
 
+// Move the bounds inwards
+// Left bound is when the ascending stops
+// Right bound is when the descending begins
 fn update_bounds(distances: &[usize]) -> (usize, usize) {
     let mut left = 0;
     while left + 1 < distances.len()
@@ -3106,6 +3138,7 @@ fn update_bounds(distances: &[usize]) -> (usize, usize) {
     (left, right)
 }
 
+// Update distances after a pair is replaced
 pub fn update_distance(
     distances: &mut Vec<usize>,
     didx: usize,
@@ -3127,7 +3160,7 @@ pub fn update_distance(
     distances.splice(didx..=didx, replacement);
 }
 
-//TODO make rb smarter by making it a subtraction from total len rather than always updating
+// Faster method for RCD
 pub fn replace_pair_distances_linear(
     circuit: &mut CircuitSeq,
     num_wires: usize,
@@ -3224,6 +3257,8 @@ pub fn replace_pair_distances_linear(
     circuit.gates = gates;
 }
 
+// Replace triple of gates
+// Largely unused as if replacing pairs is effective, replacing triples would largely be the same
 pub fn replace_tri(
     circuit: &mut CircuitSeq,
     num_wires: usize,
@@ -3421,6 +3456,7 @@ pub fn replace_tri(
     println!("Finished replace_tri");
 }
 
+// Replace a single gate
 pub fn random_gate_replacements(c: &mut CircuitSeq, x: usize, n: usize, _conn: &Connection, env: &lmdb::Environment) {
     let mut rng = rand::rng();
     for _ in 0..x {
@@ -3454,6 +3490,8 @@ pub fn random_gate_replacements(c: &mut CircuitSeq, x: usize, n: usize, _conn: &
     }
 }
 
+// Used in the interleave method
+// Create a circuit on n..2n wires and then interleave them
 pub fn interleave(circuit: &CircuitSeq, n: usize) -> CircuitSeq {
     let m = circuit.gates.len();
     let mut random = random_circuit(n as u8, m);
@@ -3471,6 +3509,7 @@ pub fn interleave(circuit: &CircuitSeq, n: usize) -> CircuitSeq {
     CircuitSeq{ gates }
 }
 
+// For timing and benchmarking purposes
 pub fn print_compress_timers() {
     let perm = PERMUTATION_TIME.load(Ordering::Relaxed);
     let sql = SQL_TIME.load(Ordering::Relaxed);
@@ -3859,7 +3898,7 @@ mod tests {
         let mut rng = rand::rng();
         let num_inputs = 20;
 
-        for i in 0..num_inputs {
+        for _ in 0..num_inputs {
             // if i % 10 == 0 {
             //     // println!("{}/{}", i, num_inputs);
             //     io::stdout().flush().unwrap();

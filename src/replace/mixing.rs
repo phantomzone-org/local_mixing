@@ -2,7 +2,7 @@ use crate::{
     circuit::circuit::CircuitSeq,
     random::random_data::shoot_random_gate,
     replace::replace::{
-        compress, 
+        compress,
         compress_big, 
         compress_big_ancillas, 
         expand_big, 
@@ -42,6 +42,7 @@ use std::{
     time::Instant,
 };
 
+// Old legacy method of replace -> compress
 fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf: &Vec<Vec<usize>>, n: usize) -> CircuitSeq {
     // Obfuscate circuit, get positions of inverses
     let (mut final_circuit, inverse_starts) = obfuscate(c, n);
@@ -85,6 +86,7 @@ fn obfuscate_and_target_compress(c: &CircuitSeq, conn: &mut Connection, bit_shuf
     final_circuit
 }
 
+// Find how many gates are on each wire
 pub fn pin_counts(circuit: &CircuitSeq, num_wires: usize) -> Vec<usize> {
     let mut counts = vec![0; num_wires];
     for gate in &circuit.gates {
@@ -95,6 +97,11 @@ pub fn pin_counts(circuit: &CircuitSeq, num_wires: usize) -> Vec<usize> {
     counts
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Butterfly Methods 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Butterfly method on low number of wires
 pub fn butterfly(
     c: &CircuitSeq,
     conn: &mut Connection,
@@ -199,6 +206,7 @@ pub fn butterfly(
     acc
 }
 
+// Merges blocks and compresses them along to way to "mix the seams"
 pub fn merge_combine_blocks(
     blocks: &[CircuitSeq],
     n: usize,
@@ -337,6 +345,7 @@ pub fn merge_combine_blocks(
 //     }
 // }
 
+// Butterfly method for more wires
 pub fn butterfly_big(
     c: &CircuitSeq,
     _conn: &mut Connection,
@@ -480,6 +489,7 @@ pub fn butterfly_big(
     acc
 }
 
+// Timing variables for benchmarking
 pub static SHOOT_RANDOM_GATE_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 pub static REPLACE_PAIRS_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
 pub static RANDOM_ID_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(0));
@@ -491,6 +501,7 @@ pub static MERGE_COMBINE_BLOCKS_TIME: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::
 static CURRENT_ACC: Lazy<Mutex<Option<CircuitSeq>>> =
     Lazy::new(|| Mutex::new(None));
 
+// Help with early stops without losing all data
 static SHOULD_DUMP: AtomicBool = AtomicBool::new(false);
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
@@ -518,6 +529,7 @@ fn dump_and_exit() -> ! {
     exit(1);
 }
 
+// Asymmetric butterfly method on more wires
 pub fn abutterfly_big(
     c: &CircuitSeq,
     _conn: &mut Connection,
@@ -694,6 +706,9 @@ pub fn abutterfly_big(
     acc
 }
 
+// Asymmetric butterfly but delay compression and addition of the bookends
+// Hope is to slow down the blowup in the number of gates
+// Currently unsupported
 // pub fn abutterfly_big_delay_bookends(
 //     c: &CircuitSeq,
 //     _conn: &mut Connection,
@@ -828,11 +843,21 @@ pub fn abutterfly_big(
 //     (acc, first_r, prev_r_inv)
 // }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Pair Replacmeent Methods
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Some legacy statistics for the types of pairs we are replacing
 static ALREADY_COLLIDED: AtomicUsize = AtomicUsize::new(0);
 static SHOOT_COUNT: AtomicUsize = AtomicUsize::new(0);
 static MADE_LEFT: AtomicUsize = AtomicUsize::new(0);
 static TRAVERSE_LEFT: AtomicUsize = AtomicUsize::new(0);
 
+// RCS
+// Original version would attempt to choose pairs that collided
+// New version does not care for the type of pairs it is replacing
 pub fn replace_and_compress_big(
     circuit: &CircuitSeq,
     _conn: &mut Connection,
@@ -872,6 +897,8 @@ pub fn replace_and_compress_big(
         };
         let k = std::cmp::min(k, 60);
         let mut rng = rand::rng();
+        // For parallelization
+        // The seams will remain unmixed, so need to address this later
         let chunks = split_into_random_chunks(&c.gates, k, &mut rng);
         println!(
             "Starting replace_sequential_pairs , circuit length: {} , num_wires: {}",
@@ -887,6 +914,7 @@ pub fn replace_and_compress_big(
                     OpenFlags::SQLITE_OPEN_READ_ONLY,
                 )
                 .expect("Failed to open read-only connection");
+                // Only do a forward sequential pass. A reverse pass afterwards could be useful
                 let (col, shoot, zero, trav) = replace_sequential_pairs(&mut sub, n, &mut thread_conn, &env, &bit_shuf_list, dbs, tower);
                 ALREADY_COLLIDED.fetch_add(col, Ordering::SeqCst);
                 SHOOT_COUNT.fetch_add(shoot, Ordering::SeqCst);
@@ -904,6 +932,7 @@ pub fn replace_and_compress_big(
         "Finished replace_sequential_pairs, new length: {}",
         c.gates.len()
     );
+    // Sanity check
     if c.probably_equal(circuit, n, 100).is_err() {
         panic!("replacing changed functionality");
     }
@@ -1007,6 +1036,8 @@ pub fn replace_and_compress_big(
     )
 }
 
+// To address the problem of seams being unmixed after doing rcs with parallelization
+// Returns [..chunk.len() - 1][replace_pair(last, next)][1..chunk.len()-1][replace_pair(last, next)]...[1..]
 pub fn mix_seams(
     gates: Vec<Vec<[u8;3]>>,
     _conn: &mut Connection,
@@ -1061,6 +1092,9 @@ pub fn mix_seams(
     new_gates
 }
 
+// Interleaving method
+// Same as RCS, but start by interleaving a circuit on n..2n wires, rather than 0..n, and then interleaving them like a deck of cards
+// Every pair is going to be non colliding, and in fact, will not touch at all
 pub fn interleave_sequential_big(
     circuit: &CircuitSeq,
     _conn: &mut Connection,
@@ -1248,6 +1282,7 @@ pub fn interleave_sequential_big(
     )
 }
 
+// RCD method
 pub fn replace_and_compress_big_distance(
     circuit: &CircuitSeq,
     _conn: &mut Connection,
@@ -1363,6 +1398,7 @@ pub fn replace_and_compress_big_distance(
     acc
 }
 
+// For paralellization. Split a circuit into many random chunks for threads to each work on
 pub fn split_into_random_chunks(
     v: &Vec<[u8;3]>,
     k: usize,
@@ -1402,6 +1438,15 @@ pub fn split_into_random_chunks(
     out
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Open all dbs ahead of time in the LMDB
+// LMDB used for fast reads
+// nXmY store the canonicalized (up to gate ordering and wire relabeling) version of all the circuits
+// perms_tables_nX store a list of tables that share a permutation. Legacy use for building random identities
+// nXmYperms stores all circuits canonicalized only up to gate ordering
+// ids_nXgK stores identities on X wires with gate pair taxonomy K on the first two gates. See Taxonomies to_int to see
+// Last row of tables is used for swapping wires, CNOTS, NOTS
 pub fn open_all_dbs(env: &lmdb::Environment) -> HashMap<String, lmdb::Database> {
     let mut dbs = HashMap::new();
     let db_names = [
@@ -1463,6 +1508,9 @@ pub fn open_all_dbs(env: &lmdb::Environment) -> HashMap<String, lmdb::Database> 
     dbs
 }
 
+// All the main code take a circuit and do repeated rounds of whatever method is chosen
+// In between each round, store a progress circuit and a sanity check
+// Finally, record the circuit in the chosen file destination
 pub fn main_mix(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize) {
     // Start with the input circuit
     println!("Starting len: {}", c.gates.len());
@@ -2139,6 +2187,7 @@ pub fn main_rac_big_distance(c: &CircuitSeq, rounds: usize, conn: &mut Connectio
     println!("Final circuit written to recent_circuit.txt");
 }
 
+// Currently unsupported
 // pub fn main_butterfly_big_bookendsless(c: &CircuitSeq, rounds: usize, conn: &mut Connection, n: usize, _asymmetric: bool, save: &str ,env: &lmdb::Environment,) {
 //     // Start with the input circuit
 //     let dbs = open_all_dbs(env);

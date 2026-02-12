@@ -1,3 +1,4 @@
+// For adding wire shuffles and bit flips
 use crate::{
     circuit::circuit::CircuitSeq,
 };
@@ -8,7 +9,6 @@ use lmdb::Database;
 use std::{
     collections::HashMap,
 };
-use rand::prelude::IndexedRandom;
 use crate::circuit::Permutation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -17,6 +17,7 @@ pub struct Transpositions {
 }
 
 impl Transpositions {
+    // Use Knuth Shuffle to get a random wire shuffle and then choose a random negation
     pub fn gen_random(n: usize, _m: usize, negation_mask: &mut Vec<u8>) -> Self {
         assert!(n >= 2, "n must be at least 2");
         let mut rng = rand::rng();
@@ -85,6 +86,8 @@ impl Transpositions {
         b1 == b2
     }
 
+    // Simple randomization
+    // Unused
     pub fn shoot_random_transpositions(transpositions: &mut Transpositions, rounds: usize) {
         let mut rng = rand::rng();
         let len = transpositions.transpositions.len();
@@ -143,6 +146,8 @@ impl Transpositions {
         true
     }
 
+    // Unused
+    // Smallest lexicographical ordering
     pub fn canonicalize(&mut self) {
         for i in 1..self.transpositions.len() {
             let ti = self.transpositions[i];
@@ -167,6 +172,9 @@ impl Transpositions {
         }
     }
 
+    // Generate from the LMDB
+    // LMDB swaps wire 1 and wire 2
+    // This relabels wire 1 to swap.0 and and wire 2 to swap.1
     pub fn gen_gates_swap(
         n: usize, 
         swap: (u8, u8, u8), 
@@ -215,6 +223,7 @@ impl Transpositions {
         CircuitSeq::unrewire_subcircuit(&out, &used_wires).gates
     }
 
+    // LMDB wire 1 gets flipped
     pub fn gen_gates_not(
         n: usize, 
         wire: u8,
@@ -261,6 +270,7 @@ impl Transpositions {
         CircuitSeq::unrewire_subcircuit(&out, &used_wires).gates
     }
 
+    // LMDB wire 2 gets flipped if wire 1 is true
     pub fn gen_gates_cnot(
         n: usize, 
         con: u8,
@@ -357,7 +367,6 @@ pub fn insert_wire_shuffles(
     println!("Starting len: {} gates", circuit.gates.len());
     let mut t_list: Transpositions = Transpositions { transpositions: Vec::new() };
     let mut gates: Vec<[u8;3]> = Vec::new();
-    let mut rng = rand::rng();
     let mut negation_mask = vec![0u8; n];
     for &gate in &circuit.gates {
         let t = Transpositions::gen_random(n, 150, &mut negation_mask);
@@ -367,6 +376,8 @@ pub fn insert_wire_shuffles(
         let b = t_list.evaluate(gate[1]);
         let c = t_list.evaluate(gate[2]);
         let gate = [a, b, c];
+        // Unnecessary
+        // Before removing, do sanity check
         if negation_mask[a as usize] == 1 {
             gates.extend_from_slice(&Transpositions::gen_gates_not(n, a, env, dbs));
             negation_mask[a as usize] = 0;
@@ -418,6 +429,7 @@ pub fn insert_wire_shuffles(
     println!("Complete. Ending len: {} gates", circuit.gates.len());
 }
 
+// Generate a circuit R R*, but then insert a series of CNOTS in between so that the first n wires are reversible, but the last n wires can be used to compute R
 pub fn generate_reversible(
     c: &CircuitSeq,
     n: usize,
@@ -599,12 +611,11 @@ mod tests {
         let dbs = open_all_dbs(&env);
         let n = 64;
         let mut gates: Vec<[u8;3]> = Vec::new();
-        let mut rng = rand::rng();
         let mut negation_mask = vec![0u8; n];
         let t = Transpositions::gen_random(n, 150, &mut negation_mask);
         gates.extend_from_slice(&t.to_circuit(n, &env, &dbs).gates);
         let p = t.to_perm(n);
-        let mut t = Transpositions::from_perm(&p);
+        let t = Transpositions::from_perm(&p);
         let mut wire_transpositions: HashMap<u8, Vec<(usize, usize)>> = HashMap::new();
         for (i, (a, b, _)) in t.transpositions.clone().into_iter().enumerate() {
             wire_transpositions
@@ -617,13 +628,6 @@ mod tests {
                 .or_default()
                 .push((i, 1));
         }
-
-        const TRANSITION: [[u8; 4]; 2] = [
-            // pos = 0
-            [1, 0, 3, 2],
-            // pos = 1
-            [2, 3, 0, 1],
-        ];
 
         for (i, val) in negation_mask.into_iter().enumerate() {
             if val == 1 {

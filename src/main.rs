@@ -1261,6 +1261,7 @@ fn main() {
     }
 }
 
+// Simply reverse a circuit and then save it to a given path
 pub fn reverse(from_path: &str, dest_path: &str) {
     if !Path::new(from_path).exists() {
         panic!("Source file {} does not exist", from_path);
@@ -1286,6 +1287,7 @@ pub fn reverse(from_path: &str, dest_path: &str) {
     println!("Reversed circuit written to {}", dest_path);
 }
 
+// Find the number of gates on a particular pin
 pub fn analyze_gate_to_wires(circuit: &CircuitSeq, num_wires: usize, x: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut total_counts = vec![0u32; num_wires];
     let mut active_counts = vec![0u32; num_wires];
@@ -1335,10 +1337,15 @@ pub fn analyze_gate_to_wires(circuit: &CircuitSeq, num_wires: usize, x: &str) ->
     Ok(())
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Helper code to create LMDB
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 use lmdb::{Environment, Database, WriteFlags, Transaction};
 use local_mixing::circuit::Permutation;
 use lmdb::Cursor;
 
+// Helper code to convert to lmdb from the old sql db
 pub fn sql_to_lmdb(n: usize, m: usize) -> Result<(), ()> {
     let sqlite_path = "circuits.db";
     let lmdb_path = "./db";
@@ -1754,7 +1761,7 @@ fn gen_mean(circuit: &CircuitSeq, num_wires: usize) -> f64 {
     let mut rng = rand::rng();
     let num_inputs = 20;
 
-    for i in 0..num_inputs {
+    for _ in 0..num_inputs {
         // if i % 10 == 0 {
         //     // println!("{}/{}", i, num_inputs);
         //     io::stdout().flush().unwrap();

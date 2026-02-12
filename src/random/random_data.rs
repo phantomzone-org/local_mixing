@@ -1,3 +1,5 @@
+// Updated canonicalization methods and new randomizations
+
 use crate::{
     circuit::{CircuitSeq, Gate, Permutation},
     rainbow::canonical::{self, CandSet, Canonicalization},
@@ -18,7 +20,7 @@ use rayon::{
 use rusqlite::{params, Connection, Result};
 use smallvec::SmallVec;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
     sync::{
@@ -28,8 +30,10 @@ use std::{
     thread,
 };
 
+// Store permutation canonicalizations (wire relabeling) in a cache for speed
 pub static CANON_CACHE: Lazy<DashMap<Vec<u8>, (Vec<u8>, Vec<u8>)>> = Lazy::new(|| DashMap::new());
 
+// Used to keep track of "Indirect" collisions when searching for convex subcircuits
 pub struct PathConnectedWires {
     wires: Vec<bool>,
     count: usize,
@@ -63,6 +67,7 @@ impl PathConnectedWires {
     }
 }
 
+// Computes a completely random circuit on n wires and m gates
 pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
     let mut circuit = Vec::with_capacity(m);
 
@@ -100,8 +105,8 @@ pub fn random_circuit(n: u8, m: usize) -> CircuitSeq {
     CircuitSeq { gates: circuit }
 }
 
-use std::collections::HashMap;
-
+// Attempts to find two random but equivalent circuits on n wires and m = 100..300 gates
+// Very unlikely to succeed
 pub fn random_equivalent_circuits_until_found(n: u8) -> (CircuitSeq, CircuitSeq) {
     // final_state → list of circuits producing that state
     let mut state_map: HashMap<u64, Vec<CircuitSeq>> = HashMap::new();
@@ -139,6 +144,7 @@ pub fn random_equivalent_circuits_until_found(n: u8) -> (CircuitSeq, CircuitSeq)
     }
 }
 
+// Checks if a subcircuit (stored as indicies) is convex
 pub fn is_convex(num_wires: usize, circuit: &CircuitSeq, convex_gate_ids: &[usize]) -> bool {
     // early exit for too few gates
     if convex_gate_ids.len() < 2 {
@@ -190,6 +196,7 @@ pub fn is_convex(num_wires: usize, circuit: &CircuitSeq, convex_gate_ids: &[usiz
     is_convex
 }
 
+// Samples a contiguous subcircuit
 pub fn find_random_subcircuit<R: Rng>(
     circuit: &CircuitSeq,
     min_wires: usize,
@@ -295,7 +302,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
                                 break;
                             }
                         }
-                        //TODO is this needed?
+                        // Optional condition to not allow repeat gates
                         for i in 0..selected_gate_ctr {
                             if curr_gate == circuit.gates[selected_gate_idx[i]] {
                                 repeat_wires = true;
@@ -303,6 +310,9 @@ pub fn find_convex_subcircuit<R: RngCore>(
                             }
                         }
 
+                        // Keep track of indirect collisions
+                        // Indirect collisions are gates that collide with a gate that may not have collided with a gate in our list, but a gate that we have already scanned
+                        // Ensures that we don't add a gate that would break convexity as it could follow the rules imposed by our chosen gates, but not the overall circuit
                         let [t, c1, c2] = curr_gate;
                         let indirect_path_connected = path_connected_control_wires.wire_hit(t as usize)
                             || path_connected_target_wires.wire_hit(c1 as usize)
@@ -453,6 +463,7 @@ pub fn find_convex_subcircuit<R: RngCore>(
     }
 }
 
+// Same as above but instead of scanning an entire candidate list, just take the first candidate from the left and right and choose randomly from those two
 pub fn simple_find_convex_subcircuit<R: RngCore>(
     _set_size: usize,
     max_wires: usize,
@@ -518,7 +529,7 @@ pub fn simple_find_convex_subcircuit<R: RngCore>(
                                 break;
                             }
                         }
-                        // //TODO is this needed?
+                        // 
                         // for i in 0..selected_gate_ctr {
                         //     if curr_gate == circuit.gates[selected_gate_idx[i]] {
                         //         repeat_wires = true;
@@ -678,6 +689,8 @@ pub fn simple_find_convex_subcircuit<R: RngCore>(
     }
 }
 
+// Instead of choosing a random candidate, prioritize candidates that add less wires
+// Hope to get "deeper" subcircuits
 pub fn find_convex_subcircuit_deep<R: RngCore>(
     _set_size: usize,
     max_wires: usize,
@@ -880,6 +893,7 @@ pub fn find_convex_subcircuit_deep<R: RngCore>(
     }
 }
 
+// Same subcircuit algorithm as the first, but now we decide which gate to start from
 pub fn targeted_convex_subcircuit<R: RngCore>(
     set_size: usize,
     max_wires: usize,
@@ -1389,7 +1403,7 @@ pub fn contiguous_convex(
     Some((start, end))
 }
 
-/// Shoots a random gate left or right as far as possible without colliding
+// Shoots a random gate left or right without collisions
 pub fn shoot_random_gate(circuit: &mut CircuitSeq, rounds: usize) {
     let mut rng = rand::rng();
     let len = circuit.gates.len();
@@ -1455,7 +1469,7 @@ pub fn shoot_random_gate_gate_ver(circuit: &mut Vec<[u8;3]>, rounds: usize) {
                 }
                 target -= 1;
             }
-
+            target = rng.random_range(target..=gate_idx);
             if target != gate_idx {
                 let gate = circuit.remove(gate_idx);
                 circuit.insert(target, gate);
@@ -1469,7 +1483,7 @@ pub fn shoot_random_gate_gate_ver(circuit: &mut Vec<[u8;3]>, rounds: usize) {
                 }
                 target += 1;
             }
-
+            target = rng.random_range(gate_idx..=target);
             if target != gate_idx {
                 let gate = circuit.remove(gate_idx);
                 circuit.insert(target, gate);
@@ -1495,6 +1509,8 @@ pub fn shoot_left_vec(circuit: &mut Vec<[u8;3]>, gate_idx: usize) -> usize {
     target
 }
 
+// true is shoot left goes all the way to the beginning of the circuit
+// In other words, the gate commutes with all the earlier gates and is hence, level zero on the skeleton graph
 pub fn is_level_zero(circuit: &CircuitSeq, index: usize) -> bool {
     let mut target = index;
     while target > 0 {
@@ -1507,6 +1523,7 @@ pub fn is_level_zero(circuit: &CircuitSeq, index: usize) -> bool {
     target == 0
 }
 
+// Assist in creating random_walking
 pub fn left_ordering(circuit: &CircuitSeq) -> CircuitSeq{
     let mut circuit = circuit.clone();
     circuit.canonicalize();
@@ -1533,6 +1550,7 @@ pub fn left_ordering(circuit: &CircuitSeq) -> CircuitSeq{
     new
 }
 
+// Below used to help construct a skeleton graph representation of a circuit
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Node {
     key: usize,
@@ -1599,6 +1617,8 @@ pub fn create_skeleton(circuit: &CircuitSeq) -> (CircuitSeq, Skeleton) {
     (c, skel)
 }
 
+// Supposed to be a more random version of random_shooting
+// Not shown to be much more effective and so not used at the moment
 pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitSeq {
     let orig_circuit = circuit.clone();
     let (circuit, skeleton) = create_skeleton(&circuit);
@@ -1654,6 +1674,7 @@ pub fn random_walking<R: RngCore>(circuit: &CircuitSeq, rng: &mut R) -> CircuitS
     new_gates
 }
 
+// Random walking algorithm without needing to reconstruct the skeleton graph each time
 pub fn random_walk_no_skeleton<R: RngCore>(
     circuit: &CircuitSeq,
     rng: &mut R,
@@ -1700,6 +1721,10 @@ fn is_level_zero_raw(c: &CircuitSeq, idx: usize, remaining: &[bool]) -> bool {
     }
     true
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Below is used for db storing
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 pub fn create_table(conn: &mut Connection, table_name: &str) -> Result<()> {
     // Table name includes n and m
@@ -1763,6 +1788,11 @@ pub fn insert_circuits_batch(
     Ok(inserted)
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// 1) Try to use the cache to get permutation canonicalization
+// 2) If fails, try to use fast method
+// 3) If fails, use brute force
 pub fn get_canonical(perm: &Permutation, bit_shuf: &Vec<Vec<usize>>) -> Canonicalization {
     // Use a simple hash of the subcircuit as the key
     let key = perm.repr_blob(); 
@@ -2030,6 +2060,9 @@ impl Permutation {
     }
 }
 
+// Testing code to look at sql db
+// sql db is mostly unused, outside of n6m5 and n7m4
+// Switched over to lmdb
 pub fn check_cycles(n: usize, m: usize) -> Result<()> {
     // Open the database
     let conn = Connection::open("circuits.db")?;
@@ -2116,6 +2149,7 @@ pub fn base_gates(n: usize) -> Vec<[u8; 3]> {
     gates
 }
 
+// Given nXmY, attempt to build the corresponding table for nXm{Y+1}
 pub fn build_from_sql(
     conn: &mut Connection,
     n: usize,
@@ -2289,6 +2323,7 @@ pub fn build_from_sql(
 
 //Speed up SQL queries
 //Should not see for a particular size query, the speed should not vary across multiple runs
+// Attempt to add a random circuit to the SQL db
 pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
     let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
     let table_name = format!("n{}m{}", n, m);
@@ -2311,7 +2346,6 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
         r.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
-    //TODO: test speed here
     while running.load(Ordering::SeqCst) && (!stop && inserted < count || stop) {
         let start = std::time::Instant::now(); // start timing this iteration
         total_attempts += 1;
@@ -2382,7 +2416,6 @@ pub fn main_random(n: usize, m: usize, count: usize, stop: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::Connection;
     #[test]
     fn test_check_cycles_n3m3() -> Result<()> {
         let now = std::time::Instant::now();
@@ -2463,23 +2496,7 @@ mod tests {
         println!("start and end designated: {:?}", &circ.gates[start..=end]);
     }
 
-    use crate::replace::replace::{compress, gate_pair_taxonomy};
-    #[test]
-    fn test_compression_speed() {
-        // Hard-coded random circuit
-        let c = random_circuit(7,30);
-
-        let mut conn = Connection::open("./circuits.db").expect("Failed to open DB");
-
-        // Run the profiling version of compress_big
-        let perms: Vec<Vec<usize>> = (0..7).permutations(7).collect();
-        let bit_shuf = perms.into_iter().skip(1).collect::<Vec<_>>();
-        let start = std::time::Instant::now();
-        let _result = compress(&c, 100000, &mut conn, &bit_shuf, 7);
-        let total_time = start.elapsed();
-
-        println!("Total compress_big runtime: {:?} ms", total_time);
-    }
+    use crate::replace::replace::{gate_pair_taxonomy};
 
     // #[test]
     // fn test_compression_big() {
