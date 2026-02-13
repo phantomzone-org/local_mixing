@@ -378,10 +378,10 @@ pub fn insert_wire_shuffles(
         let gate = [a, b, c];
         // Unnecessary
         // Before removing, do sanity check
-        if negation_mask[a as usize] == 1 {
-            gates.extend_from_slice(&Transpositions::gen_gates_not(n, a, env, dbs));
-            negation_mask[a as usize] = 0;
-        }
+        // if negation_mask[a as usize] == 1 {
+        //     gates.extend_from_slice(&Transpositions::gen_gates_not(n, a, env, dbs));
+        //     negation_mask[a as usize] = 0;
+        // }
         if negation_mask[b as usize] == 1 {
             gates.extend_from_slice(&Transpositions::gen_gates_not(n, b, env, dbs));
             negation_mask[b as usize] = 0;
