@@ -1,11 +1,17 @@
 // Basic implementation for circuit, gate, and permutations
-
-use rand::{seq::SliceRandom, Rng};
+use primitive_types::U256 as u256;
+use rand::{seq::SliceRandom, Rng, RngCore, rngs::ThreadRng};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max as std_max,
     collections::{HashSet, HashMap},
 };
+
+fn random_u256(rng: &mut ThreadRng) -> u256 {
+    let mut bytes = [0u8; 32];
+    rng.fill_bytes(&mut bytes);
+    u256::from_little_endian(&bytes)
+}
 
 // pins are [active, control1, control2] for Toffoli gates
 // We are only concerned with gate r57
@@ -76,6 +82,15 @@ impl Gate {
         state ^ (c1 | ((!c2) & 1)) << gate[0]
     }
 
+    // Evaluate up to 256 bits
+    #[inline(always)]
+    pub fn evaluate_index_256(state: u256, gate: [u8;3]) -> u256 {
+        let one = u256::one();
+        let c1 = (state >> gate[1]) & one;
+        let c2 = (state >> gate[2]) & one;
+        state ^ ((c1 | (one ^ c2)) << gate[0])
+    }
+
     // Evaluate a list of gates
     #[inline(always)]
     pub fn evaluate_index_list(state: usize, gates: &Vec<[u8;3]>) -> usize {
@@ -91,6 +106,15 @@ impl Gate {
         let mut current_wires = state;
         for g in gates {
             current_wires = Self::evaluate_index_128(current_wires, *g);
+        }
+        current_wires
+    }
+
+    #[inline(always)]
+    pub fn evaluate_index_list_256(state: u256, gates: &Vec<[u8;3]>) -> u256 {
+        let mut current_wires = state;
+        for g in gates {
+            current_wires = Self::evaluate_index_256(current_wires, *g);
         }
         current_wires
     }
@@ -242,6 +266,10 @@ impl CircuitSeq {
 
     pub fn evaluate_128(&self, input: u128) -> u128 {
         Gate::evaluate_index_list_128(input, &self.gates)
+    }
+
+    pub fn evaluate_256(&self, input: u256) -> u256 {
+        Gate::evaluate_index_list_256(input, &self.gates)
     }
 
     // Find the permutation computed by the circuit. Permutation is on 2^n
@@ -624,20 +652,70 @@ impl CircuitSeq {
         evolution
     }
 
-    // Probablistic check on circuit equality
-    pub fn probably_equal(&self, other_circuit: &Self, num_wires: usize, num_inputs: usize) -> Result<(), String> {
-        let mut rng = rand::rng();
-        let mask: u128 = if num_wires < u128::BITS as usize {
-            (1 << num_wires) - 1
-        } else {
-            u128::MAX
-        };
-        for _ in 0..num_inputs {
-            // generate u64, then mask to get the lower num_wires bits
-            let random_input = (rng.random::<u64>() as u128) & mask;
+    pub fn evaluate_evolution_256(&self, input: u256) -> Vec<u256> {
+        let mut state = input;
+        let mut evolution = vec![state];
 
-            let self_output = Gate::evaluate_index_list_128( random_input, &self.gates);
-            let other_output = Gate::evaluate_index_list_128(random_input, &other_circuit.gates);
+        for gate in &self.gates {
+            state = Gate::evaluate_index_256(state, *gate);
+            evolution.push(state);
+        }
+
+        evolution
+    }
+
+    // Probablistic check on circuit equality
+    // pub fn probably_equal(&self, other_circuit: &Self, num_wires: usize, num_inputs: usize) -> Result<(), String> {
+    //     let mut rng = rand::rng();
+    //     let mask: u128 = if num_wires < u128::BITS as usize {
+    //         (1 << num_wires) - 1
+    //     } else {
+    //         u128::MAX
+    //     };
+    //     for _ in 0..num_inputs {
+    //         // generate u64, then mask to get the lower num_wires bits
+    //         let random_input = (rng.random::<u64>() as u128) & mask;
+
+    //         let self_output = Gate::evaluate_index_list_128( random_input, &self.gates);
+    //         let other_output = Gate::evaluate_index_list_128(random_input, &other_circuit.gates);
+
+    //         if (self_output & mask) != (other_output & mask) {
+    //             return Err("Circuits are not equal".to_string());
+    //         }
+    //     }
+
+    //     Ok(())
+    // }
+
+    // Probabilistic check on circuit equality
+    pub fn probably_equal(
+        &self,
+        other_circuit: &Self,
+        num_wires: usize,
+        num_inputs: usize
+    ) -> Result<(), String> {
+
+        let mut rng = rand::rng();
+
+        // build mask with lowest num_wires bits set
+        let mask = if num_wires < 256 {
+            (u256::one() << num_wires) - u256::one()
+        } else {
+            u256::MAX
+        };
+
+        for _ in 0..num_inputs {
+
+            // generate random 256-bit input
+            let mut bytes = [0u8; 32];
+            rng.fill_bytes(&mut bytes);
+            let random_input = u256::from_little_endian(&bytes) & mask;
+
+            let self_output =
+                Gate::evaluate_index_list_256(random_input, &self.gates);
+
+            let other_output =
+                Gate::evaluate_index_list_256(random_input, &other_circuit.gates);
 
             if (self_output & mask) != (other_output & mask) {
                 return Err("Circuits are not equal".to_string());
