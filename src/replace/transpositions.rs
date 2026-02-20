@@ -207,7 +207,7 @@ impl Transpositions {
 
         let mut c;
         loop {
-            c = rng.random_range(0..n as u8);
+            c = rng.random_range(0..=(n-1) as u8);
             if c != a && c != b {
                 break;
             }
@@ -247,7 +247,7 @@ impl Transpositions {
 
         let mut a;
         loop {
-            a = rng.random_range(0..n as u8);
+            a = rng.random_range(0..=(n-1) as u8);
             if a != wire {
                 break;
             }
@@ -294,7 +294,7 @@ impl Transpositions {
 
         let mut c;
         loop {
-            c = rng.random_range(0..n as u8);
+            c = rng.random_range(0..=(n-1) as u8);
             if c != con && c != not {
                 break;
             }

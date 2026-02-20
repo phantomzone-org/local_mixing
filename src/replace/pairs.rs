@@ -352,7 +352,7 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         for i in 0..used_wires.len() {
             if used_wires[i] == (num_wires + 1) as u8 {
                 loop {
-                    let wire = rng.random_range(0..num_wires) as u8;
+                    let wire = rng.random_range(0..=(num_wires-1) as u8);
                     if used_wires.contains(&wire) {
                         continue
                     }
@@ -502,7 +502,7 @@ pub fn replace_sequential_pairs(
                     k += 1;
                 }
 
-                let mut available_wires: Vec<u8> = (0..num_wires as u8)
+                let mut available_wires: Vec<u8> = (0..=(num_wires-1) as u8)
                     .filter(|w| !used_wires.contains(w))
                     .collect();
 
@@ -747,7 +747,7 @@ pub fn replace_single_pair(
         k += 1;
     }
 
-    let mut available_wires: Vec<u8> = (0..num_wires as u8)
+    let mut available_wires: Vec<u8> = (0..=(num_wires-1) as u8)
         .filter(|w| !used_wires.contains(w))
         .collect();
     
@@ -1171,7 +1171,7 @@ pub fn replace_tri(
         for i in 0..used_wires.len() {
             if used_wires[i] == (num_wires + 1) as u8 {
                 loop {
-                    let wire = rng.random_range(0..num_wires) as u8;
+                    let wire = rng.random_range(0..=(num_wires-1) as u8);
                     if used_wires.contains(&wire) {
                         continue
                     }

@@ -556,7 +556,7 @@ pub fn get_random_wide_identity(
                 min = id.gates.len()/2;
             }
             let mut used_wires = vec![id.gates[min][0], id.gates[min][1], id.gates[min][2]];
-            let mut unused_wires: Vec<u8> = (0..n as u8)
+            let mut unused_wires: Vec<u8> = (0..=(n-1) as u8)
                 .filter(|w| !used_wires.contains(w) && !uw.contains(w))
                 .collect();
             let mut count = 3;
@@ -588,7 +588,7 @@ pub fn get_random_wide_identity(
         len = id.gates.len();
     }
 
-    let mut shuf: Vec<usize> = (0..n).collect();
+    let mut shuf: Vec<usize> = (0..=(n-1)).collect();
     shuf.shuffle(&mut rng);
 
     let bit_shuf = Permutation { data: shuf };
@@ -684,7 +684,7 @@ pub fn get_random_wide_identity_via_pairs(
                 k += 1;
             }
 
-            let mut unused_wires: Vec<u8> = (0..n as u8)
+            let mut unused_wires: Vec<u8> = (0..=(n-1) as u8)
                 .filter(|w| !used_wires.contains(w) && !uw.contains(w))
                 .collect();
             let mut count = 3;
@@ -717,7 +717,7 @@ pub fn get_random_wide_identity_via_pairs(
         len = id.gates.len();
     }
     
-    let mut shuf: Vec<usize> = (0..n).collect();
+    let mut shuf: Vec<usize> = (0..=(n-1)).collect();
     shuf.shuffle(&mut rng);
 
     let bit_shuf = Permutation { data: shuf };

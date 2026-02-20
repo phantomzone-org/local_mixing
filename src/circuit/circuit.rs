@@ -1,17 +1,11 @@
 // Basic implementation for circuit, gate, and permutations
 use primitive_types::U256 as u256;
-use rand::{seq::SliceRandom, Rng, RngCore, rngs::ThreadRng};
+use rand::{seq::SliceRandom, Rng, RngCore,};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::max as std_max,
     collections::{HashSet, HashMap},
 };
-
-fn random_u256(rng: &mut ThreadRng) -> u256 {
-    let mut bytes = [0u8; 32];
-    rng.fill_bytes(&mut bytes);
-    u256::from_little_endian(&bytes)
-}
 
 // pins are [active, control1, control2] for Toffoli gates
 // We are only concerned with gate r57
