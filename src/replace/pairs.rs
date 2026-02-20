@@ -324,14 +324,12 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         let index = 2 * i;
         let (g1, g2) = (circuit.gates[index], circuit.gates[index + 1]);
         let replacement_circ = CircuitSeq { gates: replacement.0 };
-        let mut used_wires: Vec<u8> = vec![(num_wires + 1) as u8; max(replacement_circ.max_wire(), CircuitSeq { gates: replacement.1.clone() }.max_wire()) + 1];
-        let mut used = vec![0u8; max(replacement_circ.max_wire(), CircuitSeq { gates: replacement.1.clone() }.max_wire()) + 1];
-        used_wires[replacement.1[0][0] as usize] = g1[0];
-        used_wires[replacement.1[0][1] as usize] = g1[1];
-        used_wires[replacement.1[0][2] as usize] = g1[2];
-        used[replacement.1[0][0] as usize] = 1;
-        used[replacement.1[0][1] as usize] = 1;
-        used[replacement.1[0][2] as usize] = 1;
+        let mut used_wires: Vec<u16> = vec![(num_wires + 1) as u16; max(replacement_circ.max_wire(), CircuitSeq { gates: replacement.1.clone() }.max_wire()) + 1];
+
+        used_wires[replacement.1[0][0] as usize] = g1[0] as u16;
+        used_wires[replacement.1[0][1] as usize] = g1[1] as u16;
+        used_wires[replacement.1[0][2] as usize] = g1[2] as u16;
+
         // println!("Original wires: {:?}, used_wires initialized", used_wires);
 
         // println!("Gates g1: {:?} g2: {:?}", g1, g2);
@@ -345,21 +343,20 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         let mut i = 0;
         for collision in &[tax.a, tax.c1, tax.c2] {
             if *collision == CollisionType::OnNew {
-                used_wires[replacement.1[1][i] as usize] = g2[i]
+                used_wires[replacement.1[1][i] as usize] = g2[i] as u16
             }
             i += 1;
         }
 
         // Fill any remaining placeholders
         for i in 0..used_wires.len() {
-            if used[i] == 0 {
+            if used_wires[i] == (num_wires + 1) as u16 {
                 loop {
-                    let wire = rng.random_range(0..=(num_wires-1) as u8);
+                    let wire = rng.random_range(0..num_wires) as u16;
                     if used_wires.contains(&wire) {
                         continue
                     }
                     used_wires[i] = wire;
-                    used[i]=1;
                     break
                 }
             }
@@ -370,6 +367,10 @@ pub fn replace_pairs(circuit: &mut CircuitSeq, num_wires: usize, conn: &mut Conn
         // if replacement.probably_equal(&CircuitSeq { gates: vec![[1,2,3], [1,2,3]]}, 64, 100000).is_err() {
         //     panic!("Replacement is not an id");
         // }
+        let used_wires: Vec<u8> = used_wires.into_iter()
+            .map(|x| u8::try_from(x).expect("value too big for u8"))
+            .collect();
+
         circuit.gates.splice(
             index..=index + 1,
             CircuitSeq::unrewire_subcircuit(&replacement_circ, &used_wires)
@@ -482,8 +483,8 @@ pub fn replace_sequential_pairs(
                 let new_circuit = id.gates[2..].to_vec();
                 let replacement_circ = CircuitSeq { gates: new_circuit };
 
-                let mut used_wires: Vec<u8> = vec![
-                    (num_wires + 1) as u8;
+                let mut used_wires: Vec<u16> = vec![
+                    (num_wires + 1) as u16;
                     std::cmp::max(
                         replacement_circ.max_wire(),
                         CircuitSeq {
@@ -492,39 +493,28 @@ pub fn replace_sequential_pairs(
                         .max_wire(),
                     ) + 1
                 ];
-                let mut used = vec![
-                    0u8;
-                    std::cmp::max(
-                        replacement_circ.max_wire(),
-                        CircuitSeq {
-                            gates: vec![id.gates[0], id.gates[1]],
-                        }
-                        .max_wire(),
-                    ) + 1];
-                used_wires[id.gates[0][0] as usize] = left[0];
-                used_wires[id.gates[0][1] as usize] = left[1];
-                used_wires[id.gates[0][2] as usize] = left[2];
-                used[id.gates[0][0] as usize] = 1;
-                used[id.gates[0][1] as usize] = 1;
-                used[id.gates[0][2] as usize] = 1;
+
+                used_wires[id.gates[0][0] as usize] = left[0] as u16;
+                used_wires[id.gates[0][1] as usize] = left[1] as u16;
+                used_wires[id.gates[0][2] as usize] = left[2] as u16;
+
                 let mut k = 0;
                 for collision in &[tax.a, tax.c1, tax.c2] {
                     if *collision == CollisionType::OnNew {
-                        used_wires[id.gates[1][k] as usize] = right[k];
+                        used_wires[id.gates[1][k] as usize] = right[k] as u16;
                     }
                     k += 1;
                 }
 
-                let mut available_wires: Vec<u8> = (0..=(num_wires-1) as u8)
+                let mut available_wires: Vec<u16> = (0..num_wires as u16)
                     .filter(|w| !used_wires.contains(w))
                     .collect();
 
                 available_wires.shuffle(&mut rng);
                 for w in 0..used_wires.len() {
-                    if used[w] == 0 {
+                    if used_wires[w] == (num_wires + 1) as u16 {
                         if let Some(&wire) = available_wires.get(0) {
                             used_wires[w] = wire;
-                            used[w] = 1;
                             available_wires.remove(0);
                         } else {
                             panic!("No available wires left to assign!");
@@ -532,6 +522,10 @@ pub fn replace_sequential_pairs(
                     }
                 }
 
+                let used_wires: Vec<u8> = used_wires.into_iter()
+                    .map(|x| u8::try_from(x).expect("value too big for u8"))
+                    .collect();
+                
                 produced = Some(
                     CircuitSeq::unrewire_subcircuit(&replacement_circ, &used_wires)
                         .gates
@@ -738,8 +732,8 @@ pub fn replace_single_pair(
 
     let replacement_circ = CircuitSeq { gates: new_circuit };
 
-    let mut used_wires: Vec<u8> = vec![
-        (num_wires + 1) as u8;
+    let mut used_wires: Vec<u16> = vec![
+        (num_wires + 1) as u16;
         std::cmp::max(
             replacement_circ.max_wire(),
             CircuitSeq {
@@ -748,40 +742,28 @@ pub fn replace_single_pair(
             .max_wire(),
         ) + 1
     ];
-    let mut used = vec![
-        0u8; 
-        std::cmp::max(
-            replacement_circ.max_wire(),
-            CircuitSeq {
-                gates: vec![id.gates[0], id.gates[1]],
-            }
-            .max_wire(),
-        ) + 1
-    ];
-    used_wires[id.gates[0][0] as usize] = left[0];
-    used_wires[id.gates[0][1] as usize] = left[1];
-    used_wires[id.gates[0][2] as usize] = left[2];
-    used[id.gates[0][0] as usize] = 1;
-    used[id.gates[0][1] as usize] = 1;
-    used[id.gates[0][2] as usize] = 1;
+
+    used_wires[id.gates[0][0] as usize] = left[0] as u16;
+    used_wires[id.gates[0][1] as usize] = left[1] as u16;
+    used_wires[id.gates[0][2] as usize] = left[2] as u16;
+
     let mut k = 0;
     for collision in &[tax.a, tax.c1, tax.c2] {
         if *collision == CollisionType::OnNew {
-            used_wires[id.gates[1][k] as usize] = right[k];
+            used_wires[id.gates[1][k] as usize] = right[k] as u16;
         }
         k += 1;
     }
 
-    let mut available_wires: Vec<u8> = (0..=(num_wires-1) as u8)
+    let mut available_wires: Vec<u16> = (0..num_wires as u16)
         .filter(|w| !used_wires.contains(w))
         .collect();
     
     available_wires.shuffle(&mut rng);
     for w in 0..used_wires.len() {
-        if used[w] == 0 {
+        if used_wires[w] == (num_wires + 1) as u16 {
             if let Some(&wire) = available_wires.get(0) {
                 used_wires[w] = wire;
-                used[w] = 1;
                 available_wires.remove(0);
             } else {
                 panic!("No available wires left to assign!");
@@ -789,6 +771,9 @@ pub fn replace_single_pair(
         }
     }
 
+    let used_wires: Vec<u8> = used_wires.into_iter()
+    .map(|x| u8::try_from(x).expect("value too big for u8"))
+    .collect();
 
     (CircuitSeq::unrewire_subcircuit(&replacement_circ, &used_wires)
         .gates
@@ -1197,7 +1182,7 @@ pub fn replace_tri(
         for i in 0..used_wires.len() {
             if used_wires[i] == (num_wires + 1) as u8 {
                 loop {
-                    let wire = rng.random_range(0..=(num_wires-1) as u8);
+                    let wire = rng.random_range(0..num_wires) as u8;
                     if used_wires.contains(&wire) {
                         continue
                     }
